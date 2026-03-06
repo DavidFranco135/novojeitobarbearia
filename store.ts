@@ -23,12 +23,11 @@ import {
 
 // ── WhatsApp Cloud API ────────────────────────────────────────
 import {
-  wppNovoAgendamento,
-  wppLembreteAgendamento,
-  wppLembrete15min,
-  wppReagendamento,
-  wppAssinaturaAtivada,
-  wppAssinaturaVencendo,
+  wppConfirmacaoAgendamento,
+  wppLembrete24h,
+  wppLembrete1h,
+  wppPosAtendimento,
+  wppVencimentoVip3dias,
 } from './services/whatsapp';
 
 interface BarberContextType {
@@ -241,12 +240,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, '1');
 
-      await wppLembreteAgendamento(
+      await wppLembrete24h(
         a.clientPhone,
         a.clientName,
         a.serviceName,
-        a.startTime,
-        a.professionalName
+        a.professionalName,
+        a.startTime
       );
     });
 
@@ -265,12 +264,11 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       const phone = client?.phone || '';
       if (!phone) return;
 
-      await wppAssinaturaVencendo(
+      await wppVencimentoVip3dias(
         phone,
         s.clientName,
-        s.planName,
-        3,
-        s.endDate.split('T')[0]
+        s.endDate.split('T')[0],
+        'https://novojeitobarbearia.pages.dev'
       );
     });
 
@@ -311,12 +309,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         if (localStorage.getItem(key)) return; // já enviado
         localStorage.setItem(key, '1');
 
-        await wppLembrete15min(
+        await wppLembrete1h(
           a.clientPhone,
           a.clientName,
           a.serviceName,
-          a.startTime,
-          a.professionalName
+          a.professionalName,
+          a.startTime
         );
       });
     };
@@ -396,13 +394,13 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
 
     // ── WhatsApp: confirmação de agendamento ──────────────────
-    await wppNovoAgendamento(
+    await wppConfirmacaoAgendamento(
       data.clientPhone,
       data.clientName,
       data.serviceName,
+      data.professionalName,
       data.date,
-      data.startTime,
-      data.professionalName
+      data.startTime
     );
   };
 
@@ -521,10 +519,11 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     // ── WhatsApp: avisa sobre o reagendamento ─────────────────
     const appointment = appointments.find(a => a.id === id);
     if (appointment) {
-      await wppReagendamento(
+      await wppConfirmacaoAgendamento(
         appointment.clientPhone,
         appointment.clientName,
         appointment.serviceName,
+        appointment.professionalName,
         date,
         startTime
       );
@@ -592,11 +591,10 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     const client = clients.find(c => c.id === data.clientId);
     const phone = client?.phone || '';
     if (phone) {
-      await wppAssinaturaAtivada(
+      await wppPosAtendimento(
         phone,
         data.clientName,
-        data.planName,
-        data.endDate.split('T')[0]
+        'https://novojeitobarbearia.pages.dev'
       );
     }
   };
