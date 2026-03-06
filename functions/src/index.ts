@@ -1,6 +1,6 @@
 // ============================================================
 // functions/src/index.ts — Cloud Functions Firebase v2
-// Barbearia Novo Jeito — Automação WhatsApp Business API
+// Barbearia Novo Jeito — Automação WhatsApp Business APIi
 // ============================================================
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
