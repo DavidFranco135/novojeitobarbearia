@@ -193,7 +193,7 @@ const Professionals: React.FC = () => {
 
   const emptyForm: ProfFormData = {
     name:'', specialties:[], avatar:'https://i.pravatar.cc/150?u=temp',
-    commission:50, workingHours:{start:'08:00',end:'20:00'}, description:'', isMaster:false as boolean, masterSurcharge:0,
+    commission:50, workingHours:{start:'08:00',end:'20:00'}, description:'', isMaster:false as boolean, masterSurcharge:0, phone:'',
     weekSchedule:{...DEFAULT_WEEK}, offDays:[],
   };
   const [formData, setFormData] = useState<ProfFormData>(emptyForm);
@@ -304,6 +304,11 @@ const Professionals: React.FC = () => {
                   {(p as any).isMaster && (
                     <span className="inline-flex items-center gap-1 bg-[#C58A4A]/20 text-[#C58A4A] border border-[#C58A4A]/40 text-[8px] font-black px-2 py-0.5 rounded-lg uppercase">★ Master{(p as any).masterSurcharge>0?` +R$${(p as any).masterSurcharge}`:''}</span>
                   )}
+                  {(p as any).phone && (
+                    <span className={`inline-flex items-center gap-1 text-[8px] font-black px-2 py-0.5 rounded-lg border ${isDark?'bg-emerald-500/10 text-emerald-400 border-emerald-500/20':'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                      📱 WhatsApp ativo
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -381,6 +386,26 @@ const Professionals: React.FC = () => {
               <div className="col-span-2 space-y-2">
                 <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${isDark?'text-zinc-500':'text-zinc-600'}`}>Nome Artístico</label>
                 <input type="text" value={formData.name} onChange={e=>setFormData(p=>({...p,name:e.target.value}))} className={inputCls}/>
+              </div>
+              <div className="col-span-2 space-y-2">
+                <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${isDark?'text-zinc-500':'text-zinc-600'}`}>
+                  WhatsApp do Barbeiro <span className={`normal-case font-medium ${isDark?'text-zinc-600':'text-zinc-400'}`}>(para receber agenda diária)</span>
+                </label>
+                <div className="relative">
+                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black ${isDark?'text-zinc-400':'text-zinc-500'}`}>+55</span>
+                  <input
+                    type="tel"
+                    placeholder="21 99999-9999"
+                    value={(formData as any).phone||''}
+                    onChange={e=>setFormData(p=>({...p,phone:e.target.value.replace(/\D/g,'')}))}
+                    className={inputCls + ' pl-12'}
+                  />
+                </div>
+                {(formData as any).phone && (
+                  <p className="text-[9px] font-black text-emerald-500 flex items-center gap-1 ml-1">
+                    ✓ Receberá agenda diária às 07:00 via WhatsApp
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${isDark?'text-zinc-500':'text-zinc-600'}`}>Comissão (%)</label>

@@ -1,19 +1,26 @@
 // ============================================================
-// services/whatsapp.ts — Integração WhatsApp Cloud API (Meta)
+// src/services/whatsapp.ts — Integração WhatsApp Cloud API (Meta)
 // ============================================================
-// Variáveis de ambiente necessárias no .env:
+// Configure no arquivo .env na raiz do projeto:
 //   VITE_WHATSAPP_TOKEN=seu_token_aqui
 //   VITE_WHATSAPP_PHONE_ID=seu_phone_number_id_aqui
 // ============================================================
 
-const WHATSAPP_TOKEN   = import.meta.env.VITE_WHATSAPP_TOKEN   as string;
-const PHONE_NUMBER_ID  = import.meta.env.VITE_WHATSAPP_PHONE_ID as string;
-const API_URL          = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+const WHATSAPP_TOKEN  = import.meta.env.VITE_WHATSAPP_TOKEN   as string;
+const PHONE_NUMBER_ID = import.meta.env.VITE_WHATSAPP_PHONE_ID as string;
+const API_URL         = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
 
 // ── Formata número para padrão E.164 (55 + DDD + número) ─────
 function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '');
   return digits.startsWith('55') ? digits : `55${digits}`;
+}
+
+// ── Formata data YYYY-MM-DD → DD/MM/YYYY ─────────────────────
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 // ── Função base de envio de template ─────────────────────────
@@ -23,7 +30,7 @@ async function sendTemplate(
   params: string[]
 ): Promise<void> {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
-    console.warn('[WhatsApp] Token ou Phone ID não configurados. Mensagem não enviada.');
+    console.warn('[WhatsApp] Token ou Phone ID não configurados no .env');
     return;
   }
 
@@ -55,146 +62,189 @@ async function sendTemplate(
 
     if (!res.ok) {
       const err = await res.json();
-      console.error('[WhatsApp] Erro ao enviar mensagem:', err);
+      console.error(`[WhatsApp] Erro ao enviar "${templateName}" para ${phone}:`, err);
+    } else {
+      console.log(`[WhatsApp] ✅ "${templateName}" enviado para ${phone}`);
     }
   } catch (error) {
-    console.error('[WhatsApp] Falha na requisição:', error);
+    console.error(`[WhatsApp] Falha na requisição "${templateName}":`, error);
   }
 }
 
 // ============================================================
-// FUNÇÕES PÚBLICAS — uma por template
+// FUNÇÕES PÚBLICAS — disparadas pelo store.ts e Subscriptions
 // ============================================================
 
 /**
- * Template: novo_agendamento
- * Disparado quando: cliente faz um novo agendamento
- * Params: {{1}} Nome, {{2}} Serviço, {{3}} Data, {{4}} Horário, {{5}} Profissional
+ * confirmacao_agendamento
+ * Dispara: quando um agendamento é criado
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{data}} {{horario}}
  */
-export async function wppNovoAgendamento(
+export async function wppConfirmacaoAgendamento(
   phone: string,
   clientName: string,
   serviceName: string,
+  professionalName: string,
   date: string,
-  time: string,
-  professionalName: string
+  time: string
 ): Promise<void> {
-  // Formata a data de YYYY-MM-DD para DD/MM/YYYY
-  const [y, m, d] = date.split('-');
-  const formattedDate = `${d}/${m}/${y}`;
-
-  await sendTemplate(phone, 'novo_agendamento', [
+  await sendTemplate(phone, 'confirmacao_agendamento', [
     clientName,
     serviceName,
-    formattedDate,
-    time,
     professionalName,
+    formatDate(date),
+    time,
   ]);
 }
 
 /**
- * Template: lembrete_agendamento
- * Disparado quando: 24h antes do agendamento (cron no store)
- * Params: {{1}} Nome, {{2}} Serviço, {{3}} Horário, {{4}} Profissional
+ * lembrete_24h
+ * Dispara: 24h antes do agendamento (Cloud Function scheduled)
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{horario}}
  */
-export async function wppLembreteAgendamento(
+export async function wppLembrete24h(
   phone: string,
   clientName: string,
   serviceName: string,
-  time: string,
-  professionalName: string
+  professionalName: string,
+  time: string
 ): Promise<void> {
-  await sendTemplate(phone, 'lembrete_agendamento', [
+  await sendTemplate(phone, 'lembrete_24h', [
     clientName,
     serviceName,
-    time,
     professionalName,
+    time,
   ]);
 }
 
 /**
- * Template: reagendamento_confirmado
- * Disparado quando: agendamento é remarcado
- * Params: {{1}} Nome, {{2}} Serviço, {{3}} Nova Data, {{4}} Novo Horário
+ * lembrete_1h
+ * Dispara: 1h antes do agendamento (Cloud Function scheduled)
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{horario}}
  */
-export async function wppReagendamento(
+export async function wppLembrete1h(
   phone: string,
   clientName: string,
   serviceName: string,
-  newDate: string,
-  newTime: string
+  professionalName: string,
+  time: string
 ): Promise<void> {
-  const [y, m, d] = newDate.split('-');
-  const formattedDate = `${d}/${m}/${y}`;
-
-  await sendTemplate(phone, 'reagendamento_confirmado', [
+  await sendTemplate(phone, 'lembrete_1h', [
     clientName,
     serviceName,
-    formattedDate,
-    newTime,
+    professionalName,
+    time,
   ]);
 }
 
 /**
- * Template: assinatura_ativada
- * Disparado quando: nova assinatura é criada
- * Params: {{1}} Nome, {{2}} Plano, {{3}} Data de vencimento
+ * pos_atendimento
+ * Dispara: quando status muda para CONCLUIDO_PAGO
+ * Vars: {{cliente_nome}} {{link_avaliacao}}
  */
-export async function wppAssinaturaAtivada(
+export async function wppPosAtendimento(
   phone: string,
   clientName: string,
-  planName: string,
-  endDate: string
+  linkAvaliacao: string
 ): Promise<void> {
-  const [y, m, d] = endDate.split('-');
-  const formattedDate = `${d}/${m}/${y}`;
-
-  await sendTemplate(phone, 'assinatura_ativada', [
+  await sendTemplate(phone, 'pos_atendimento', [
     clientName,
-    planName,
-    formattedDate,
+    linkAvaliacao,
   ]);
 }
 
 /**
- * Template: lembrete_15min
- * Disparado quando: 15 minutos antes do agendamento (setInterval no store)
- * Params: {{1}} Nome, {{2}} Serviço, {{3}} Horário, {{4}} Profissional
+ * vencimento_plano_vip_3dias
+ * Dispara: 3 dias antes do vencimento da assinatura (Cloud Function scheduled)
+ * Vars: {{cliente_nome}} {{data_vencimento}} {{link_renovacao}}
  */
-export async function wppLembrete15min(
+export async function wppVencimentoVip3dias(
   phone: string,
+  clientName: string,
+  endDate: string,
+  linkRenovacao: string
+): Promise<void> {
+  await sendTemplate(phone, 'vencimento_plano_vip_3dias', [
+    clientName,
+    formatDate(endDate),
+    linkRenovacao,
+  ]);
+}
+
+/**
+ * vencimento_plano_vip_1dia
+ * Dispara: 1 dia antes do vencimento da assinatura (Cloud Function scheduled)
+ * Vars: {{cliente_nome}} {{data_vencimento}} {{link_renovacao}}
+ */
+export async function wppVencimentoVip1dia(
+  phone: string,
+  clientName: string,
+  endDate: string,
+  linkRenovacao: string
+): Promise<void> {
+  await sendTemplate(phone, 'vencimento_plano_vip_1dia', [
+    clientName,
+    formatDate(endDate),
+    linkRenovacao,
+  ]);
+}
+
+/**
+ * cliente_inativo
+ * Dispara: clientes sem visita há 30+ dias (Cloud Function — toda segunda)
+ * Vars: {{cliente_nome}} {{dias_ausente}} {{link_agendamento}}
+ */
+export async function wppClienteInativo(
+  phone: string,
+  clientName: string,
+  diasAusente: number,
+  linkAgendamento: string
+): Promise<void> {
+  await sendTemplate(phone, 'cliente_inativo', [
+    clientName,
+    String(diasAusente),
+    linkAgendamento,
+  ]);
+}
+
+/**
+ * novo_agendamento_barbeiro
+ * Dispara: quando barbeiro recebe novo agendamento
+ * Vars: {{barbeiro_nome}} {{cliente_nome}} {{servico}} {{horario}} {{data}}
+ */
+export async function wppNovoAgendamentoBarbeiro(
+  phone: string,
+  barbeiroNome: string,
   clientName: string,
   serviceName: string,
   time: string,
-  professionalName: string
+  date: string
 ): Promise<void> {
-  await sendTemplate(phone, 'lembrete_15min', [
+  await sendTemplate(phone, 'novo_agendamento_barbeiro', [
+    barbeiroNome,
     clientName,
     serviceName,
     time,
-    professionalName,
+    formatDate(date),
   ]);
 }
 
 /**
- * Template: assinatura_vencendo
- * Disparado quando: assinatura vence em 3 dias (cron no store)
- * Params: {{1}} Nome, {{2}} Plano, {{3}} Dias restantes, {{4}} Data de vencimento
+ * agenda_diaria_barbeiro
+ * Dispara: todo dia às 07:00 (Cloud Function scheduled)
+ * Vars: {{barbeiro_nome}} {{data}} {{agenda_resumo}} {{total_agendamentos}}
  */
-export async function wppAssinaturaVencendo(
+export async function wppAgendaDiariaBarbeiro(
   phone: string,
-  clientName: string,
-  planName: string,
-  daysLeft: number,
-  endDate: string
+  barbeiroNome: string,
+  data: string,
+  agendaResumo: string,
+  totalAgendamentos: number
 ): Promise<void> {
-  const [y, m, d] = endDate.split('-');
-  const formattedDate = `${d}/${m}/${y}`;
-
-  await sendTemplate(phone, 'assinatura_vencendo', [
-    clientName,
-    planName,
-    String(daysLeft),
-    formattedDate,
+  await sendTemplate(phone, 'agenda_diaria_barbeiro', [
+    barbeiroNome,
+    data,
+    agendaResumo,
+    String(totalAgendamentos),
   ]);
 }

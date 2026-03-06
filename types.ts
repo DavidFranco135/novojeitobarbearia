@@ -31,6 +31,7 @@ export interface Professional {
   isMaster?: boolean;
   masterSurcharge?: number;
   description?: string;
+  phone?: string;           // WhatsApp para agenda diária automática
   workingHours: {
     start: string;
     end: string;
