@@ -1,0 +1,355 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset e Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --primario-ouro: #C58A4A;
+  --fundo: #050505;
+  --texto: #f9fafb;
+  --texto-secundario: #9ca3af;
+  --cartao: rgba(18, 18, 18, 0.8);
+  --borda: rgba(255, 255, 255, 0.08);
+}
+
+.light-theme {
+  --fundo: #F3F4F6;
+  --texto: #000000;
+  --texto-secundario: #374151;
+  --cartao: #FFFFFF;
+  --borda: rgba(0, 0, 0, 0.15);
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background-color: var(--fundo);
+  color: var(--texto);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.font-display {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+.gradiente-ouro {
+  background: linear-gradient(135deg, #C58A4A 0%, #C58A4A 50%, #C58A4A 100%);
+}
+
+.gradiente-texto-ouro {
+  background: linear-gradient(135deg, #C58A4A 0%, #C58A4A 50%, #C58A4A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.cartao-vidro {
+  background: var(--cartao);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--borda);
+  color: var(--texto);
+}
+
+.text-color-main { 
+  color: var(--texto); 
+}
+
+.text-color-sec { 
+  color: var(--texto-secundario); 
+}
+
+/* Form Elements */
+input, select, textarea, button {
+  font-size: 16px !important;
+  color: var(--texto) !important;
+  font-family: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+}
+
+/* Scrollbar Customization */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Theme Transitions */
+.theme-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Image Container */
+.img-container {
+  aspect-ratio: 1/1;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background-color: #111;
+}
+
+.img-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.img-container:hover img {
+  transform: scale(1.05);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Recharts Fix */
+.recharts-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.recharts-surface {
+  overflow: visible;
+}
+
+/* Loading State */
+.loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Toast/Notification Styles */
+.notification-enter {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+}
+
+/* Prevent zoom on input focus (iOS) */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+
+/* ========================================
+   MODO CLARO — textos escuros em TODO o app
+   Aplicado via classe .light-theme no <html>
+   ======================================== */
+
+/* Todos os tons de cinza claro do Tailwind → cinza escuro legível */
+.light-theme .text-zinc-100,
+.light-theme .text-zinc-200,
+.light-theme .text-zinc-300,
+.light-theme .text-zinc-400,
+.light-theme .text-zinc-500,
+.light-theme .text-zinc-600 {
+  color: #3f3f46 !important; /* zinc-700 — legível em fundo claro */
+}
+
+/* text-white → quase preto */
+.light-theme .text-white {
+  color: #18181b !important; /* zinc-900 */
+}
+
+/* Textos específicos de formulários e inputs */
+.light-theme input,
+.light-theme select,
+.light-theme textarea {
+  color: #18181b !important;
+  background-color: #f9fafb !important;
+  border-color: #d1d5db !important;
+}
+
+.light-theme input::placeholder,
+.light-theme textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Botões com texto branco (não dourado) → texto escuro */
+.light-theme button {
+  color: inherit;
+}
+
+/* Bordas quase invisíveis → visíveis */
+.light-theme [class*="border-white"] {
+  border-color: #d4d4d8;
+}
+
+/* Fundos semi-transparentes escuros → tom claro */
+.light-theme [class*="bg-white/"],
+.light-theme [class*="bg-zinc-900"],
+.light-theme [class*="bg-\[#0"] {
+  /* Handled per-component */
+}
+
+/* Garantir que hover text-white não seja branco no claro */
+.light-theme .hover\:text-white:hover {
+  color: #18181b !important;
+}
+
+/* group-hover text-white */
+.light-theme .group:hover .group-hover\:text-white {
+  color: #18181b !important;
+}
+
+/* Textos de tracking/uppercase labels */
+.light-theme [class*="tracking-widest"],
+.light-theme [class*="uppercase"] {
+  /* herdam a cor do pai — não forçar aqui para não quebrar badges */
+}
+
+/* Placeholders do Tailwind */
+.light-theme .placeholder-zinc-600::placeholder,
+.light-theme .placeholder-zinc-700::placeholder {
+  color: #9ca3af !important;
+}
+
+/* ============ REGRA UNIVERSAL COMPLEMENTAR ============
+   Para qualquer elemento com texto muito claro no modo claro,
+   a regra abaixo serve de rede de segurança via variável CSS */
+.light-theme * {
+  --tw-text-opacity: 1;
+}
+
+/* Garantir que texto herdado do body seja escuro */
+.light-theme {
+  color: #18181b;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  :root {
+    --borda: rgba(255, 255, 255, 0.3);
+  }
+  
+  .light-theme {
+    --borda: rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   CORREÇÃO DO FLASH DE IMAGENS 
+   ======================================== */
+
+/* Placeholder suave para todas as imagens */
+img {
+  background: linear-gradient(90deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
+  background-size: 200% 100%;
+}
+
+/* Animação de carregamento (shimmer) */
+img:not([src]), img[src=""] {
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Fade-in suave quando a imagem carrega */
+img {
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+
+img[src]:not([src=""]) {
+  opacity: 1;
+}
+
+/* Garantir que o root tenha fundo desde o início */
+#root {
+  min-height: 100vh;
+  background: #050505;
+}
+
+/* ========================================
+   SELECT NATIVO — fundo escuro no modo dark
+   O browser renderiza select com fundo branco por padrão
+   ======================================== */
+select {
+  background-color: #1a1a1a;
+  color: #f4f4f5;
+}
+
+/* No modo claro, select com fundo claro limpo */
+.light-theme select {
+  background-color: #f9fafb !important;
+  color: #18181b !important;
+  border-color: #d1d5db !important;
+}
+
+/* Opções do select no modo escuro */
+select option {
+  background-color: #1a1a1a;
+  color: #f4f4f5;
+}
+
+.light-theme select option {
+  background-color: #ffffff !important;
+  color: #18181b !important;
+}
