@@ -30,6 +30,12 @@ const T = {
   clienteInativo:    "cliente_inativo",
   novoAgendBarbeiro: "novo_agendamento_barbeiro",
   agendaDiaria:      "agenda_diaria_barbeiro",
+  // ── Módulos de Automação ──────────────────────────────────
+  horarioVago:       "horario_vago",
+  promoDiaFraco:     "promocao_dia_fraco",
+  aniversario:       "aniversario_cliente",
+  manutencaoCorte:   "manutencao_corte",
+  cashbackRecebido:  "cashback_recebido",
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -258,7 +264,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
+  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -404,5 +410,165 @@ export const sendInactiveClients = onSchedule(
         { name: "link_agendamento", value: APP_URL },
       ]);
     }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 4 — Agendamento CANCELADO → notifica clientes
+// que costumam cortar naquele dia da semana (horário vago)
+// ─────────────────────────────────────────────────────────────
+export const onAppointmentCancelled = onDocumentUpdated(
+  "appointments/{id}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === "CANCELADO") return;
+    if (after.status  !== "CANCELADO") return;
+
+    const diaSemana = new Date(after.date).getDay();
+    const horario   = after.startTime;
+
+    // Busca todos os clientes que já agendaram naquele dia da semana
+    const apptSnap = await db
+      .collection("appointments")
+      .where("status", "==", "CONCLUIDO_PAGO")
+      .get();
+
+    const phonesSeen = new Set<string>();
+    const candidatos: { name: string; phone: string }[] = [];
+
+    for (const doc of apptSnap.docs) {
+      const a = doc.data();
+      if (!a.clientPhone || a.clientPhone === after.clientPhone) continue;
+      if (phonesSeen.has(a.clientPhone)) continue;
+      if (new Date(a.date).getDay() !== diaSemana) continue;
+      phonesSeen.add(a.clientPhone);
+      candidatos.push({ name: a.clientName || "Cliente", phone: a.clientPhone });
+    }
+
+    console.log(`📅 Horário vago ${horario} — ${candidatos.length} candidatos`);
+
+    for (const cli of candidatos.slice(0, 10)) { // máx 10 notificações por slot
+      await send(cli.phone, T.horarioVago, [
+        { name: "cliente_nome", value: cli.name  },
+        { name: "horario",      value: horario   },
+        { name: "data",         value: fmt(after.date) },
+        { name: "barbeiro",     value: after.professionalName || "Barbeiro" },
+        { name: "link",         value: APP_URL   },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 7 — Aniversariantes do dia (todo dia às 09:30)
+// ─────────────────────────────────────────────────────────────
+export const sendBirthdayMessages = onSchedule(
+  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const hoje = new Date();
+    const mmdd  = `${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+
+    const snap = await db.collection("clients").get();
+    let count = 0;
+
+    for (const doc of snap.docs) {
+      const cli = doc.data();
+      if (!cli.phone || !cli.birthday) continue;
+      const clientMmdd = String(cli.birthday).substring(5, 10); // MM-DD from YYYY-MM-DD
+      if (clientMmdd !== mmdd) continue;
+
+      await send(cli.phone, T.aniversario, [
+        { name: "cliente_nome", value: cli.name || "Cliente" },
+        { name: "desconto",     value: "10"                  },
+        { name: "link",         value: APP_URL               },
+      ]);
+      count++;
+    }
+
+    console.log(`🎉 Aniversariantes: ${count} mensagens enviadas`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 8 — Lembrete manutenção 15-20 dias (todo dia 10:30)
+// ─────────────────────────────────────────────────────────────
+export const sendMaintenanceReminders = onSchedule(
+  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const snap = await db.collection("clients").get();
+    let count = 0;
+
+    for (const doc of snap.docs) {
+      const cli = doc.data();
+      if (!cli.phone || !cli.lastVisit) continue;
+
+      const dias = Math.floor((Date.now() - new Date(cli.lastVisit).getTime()) / 86_400_000);
+      if (dias < 15 || dias > 22) continue; // janela de manutenção
+
+      // Evita reenvio: verifica flag wppManutencaoSent resetada a cada 30 dias
+      if (cli.wppManutencaoSent) {
+        const sentDate = new Date(cli.wppManutencaoSentAt || 0);
+        if ((Date.now() - sentDate.getTime()) < 30 * 86_400_000) continue;
+      }
+
+      await send(cli.phone, T.manutencaoCorte, [
+        { name: "cliente_nome", value: cli.name      || "Cliente" },
+        { name: "dias",         value: String(dias)               },
+        { name: "link",         value: APP_URL                    },
+      ]);
+
+      await doc.ref.update({
+        wppManutencaoSent:   true,
+        wppManutencaoSentAt: new Date().toISOString(),
+      });
+      count++;
+    }
+
+    console.log(`✂️ Manutenção: ${count} lembretes enviados`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 5 — Agendamento concluído → cashback automático
+// Envia mensagem de cashback após CONCLUIDO_PAGO
+// ─────────────────────────────────────────────────────────────
+export const onAppointmentCashback = onDocumentUpdated(
+  "appointments/{id}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === "CONCLUIDO_PAGO") return;
+    if (after.status  !== "CONCLUIDO_PAGO") return;
+    if (!after.clientPhone || !after.price || after.price <= 0) return;
+
+    // Busca configuração de cashback
+    const cfgDoc = await db.collection("config").doc("main").get();
+    const cfg    = cfgDoc.data();
+    const pct    = cfg?.cashbackPercent || 5;
+    const credito = Math.floor((after.price * pct) / 100);
+    if (credito <= 0) return;
+
+    // Atualiza cartela de fidelidade
+    const cardSnap = await db
+      .collection("loyaltyCards")
+      .where("clientId", "==", after.clientId)
+      .limit(1)
+      .get();
+
+    if (!cardSnap.empty) {
+      const card = cardSnap.docs[0];
+      await card.ref.update({ credits: (card.data().credits || 0) + credito });
+    }
+
+    // Envia mensagem de cashback
+    await send(after.clientPhone, T.cashbackRecebido, [
+      { name: "cliente_nome", value: after.clientName || "Cliente"          },
+      { name: "valor",        value: credito.toFixed(2)                     },
+      { name: "total_gasto",  value: after.price.toFixed(2)                 },
+      { name: "link",         value: APP_URL                                },
+    ]);
   }
 );
