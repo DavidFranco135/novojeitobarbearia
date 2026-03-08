@@ -31,7 +31,6 @@ export interface Professional {
   isMaster?: boolean;
   masterSurcharge?: number;
   description?: string;
-  phone?: string;           // WhatsApp para agenda diária automática
   workingHours: {
     start: string;
     end: string;
@@ -49,6 +48,10 @@ export interface Client {
   lastVisit?: string;
   createdAt: string;
   likedProfessionals?: string[];
+  birthday?: string;        // formato YYYY-MM-DD
+  referralCode?: string;    // código único de indicação
+  referredBy?: string;      // clientId de quem indicou
+  referralCredits?: number; // créditos de indicação acumulados
 }
 
 export interface Review {
