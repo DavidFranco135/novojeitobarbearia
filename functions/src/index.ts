@@ -1,6 +1,6 @@
 // ============================================================
 // functions/src/index.ts — Cloud Functions Firebase v2
-// Barbearia Novo Jeito — Automação WhatsApp Business APIi
+// Barbearia Novo Jeito — Automação WhatsApp Business API
 // ============================================================
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -26,6 +26,7 @@ const T = {
   posAtendimento:    "pos_atendimento",
   vip3dias:          "vencimento_plano_vip_3dias",
   vip1dia:           "vencimento_plano_vip_1dia",
+  vipAtivado:        "adesao_plano_vip",
   clienteInativo:    "cliente_inativo",
   novoAgendBarbeiro: "novo_agendamento_barbeiro",
   agendaDiaria:      "agenda_diaria_barbeiro",
@@ -46,14 +47,14 @@ function fmt(dateStr: string): string {
 async function send(
   toPhone: string,
   template: string,
-  params: string[]
-): Promise<void> {
+  params: { name: string; value: string }[]
+): Promise<boolean> {
   const phoneId = process.env.PHONE_NUMBER_ID || "";
   const token   = process.env.ACCESS_TOKEN    || "";
 
   if (!phoneId || !token) {
     console.warn("⚠️  PHONE_NUMBER_ID ou ACCESS_TOKEN não configurados no Cloud Run.");
-    return;
+    return false;
   }
 
   const cleaned = toPhone.replace(/\D/g, "");
@@ -77,7 +78,7 @@ async function send(
             language: { code: "pt_BR" },
             components: [{
               type: "body",
-              parameters: params.map((text) => ({ type: "text", text })),
+              parameters: params.map(({ name, value }) => ({ type: "text", parameter_name: name, text: value })),
             }],
           },
         }),
@@ -88,11 +89,14 @@ async function send(
 
     if (!res.ok) {
       console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result?.error || result));
+      return false;
     } else {
       console.log(`✅ Enviado [${template}] → ${number}`);
+      return true;
     }
   } catch (err) {
     console.error(`❌ Exceção [${template}] → ${number}:`, err);
+    return false;
   }
 }
 
@@ -110,11 +114,11 @@ export const onAppointmentCreated = onDocumentCreated(
     // 1. Confirmação para o cliente
     if (a.clientPhone) {
       await send(a.clientPhone, T.confirmacao, [
-        a.clientName       || "Cliente",
-        a.serviceName      || "Serviço",
-        a.professionalName || "Barbeiro",
-        fmt(a.date),
-        a.startTime        || "",
+        { name: "cliente_nome", value: a.clientName       || "Cliente"  },
+        { name: "servico",      value: a.serviceName      || "Serviço"  },
+        { name: "barbeiro",     value: a.professionalName || "Barbeiro" },
+        { name: "data",         value: fmt(a.date) },
+        { name: "horario",      value: a.startTime        || ""         },
       ]);
     }
 
@@ -124,11 +128,11 @@ export const onAppointmentCreated = onDocumentCreated(
       const prof    = profDoc.data();
       if (prof?.phone) {
         await send(prof.phone, T.novoAgendBarbeiro, [
-          prof.name          || "Barbeiro",
-          a.clientName       || "Cliente",
-          a.serviceName      || "Serviço",
-          a.startTime        || "",
-          fmt(a.date),
+          { name: "barbeiro_nome", value: prof.name          || "Barbeiro" },
+          { name: "cliente_nome",  value: a.clientName       || "Cliente"  },
+          { name: "servico",       value: a.serviceName      || "Serviço"  },
+          { name: "horario",       value: a.startTime        || ""         },
+          { name: "data",          value: fmt(a.date) },
         ]);
       }
     }
@@ -150,8 +154,30 @@ export const onAppointmentCompleted = onDocumentUpdated(
     if (!after.clientPhone) return;
 
     await send(after.clientPhone, T.posAtendimento, [
-      after.clientName || "Cliente",
-      APP_URL,
+      { name: "cliente_nome",   value: after.clientName || "Cliente" },
+      { name: "link_avaliacao", value: APP_URL },
+    ]);
+  }
+);
+
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 3 — Nova assinatura VIP ativada
+// ─────────────────────────────────────────────────────────────
+export const onSubscriptionCreated = onDocumentCreated(
+  "subscriptions/{id}",
+  async (event) => {
+    const sub = event.data?.data();
+    if (!sub || sub.status !== "ATIVA") return;
+
+    const cDoc = await db.collection("clients").doc(sub.clientId).get();
+    const cli  = cDoc.data();
+    if (!cli?.phone) return;
+
+    await send(cli.phone, T.vipAtivado, [
+      { name: "cliente_nome",    value: sub.clientName     || cli.name },
+      { name: "plano",           value: sub.planName       || "VIP"    },
+      { name: "data_vencimento", value: fmt(sub.endDate.split("T")[0]) },
     ]);
   }
 );
@@ -178,10 +204,10 @@ export const sendReminders24h = onSchedule(
       const a = doc.data();
       if (!a.clientPhone) continue;
       await send(a.clientPhone, T.lembrete24h, [
-        a.clientName       || "Cliente",
-        a.serviceName      || "Serviço",
-        a.professionalName || "Barbeiro",
-        a.startTime        || "",
+        { name: "cliente_nome", value: a.clientName       || "Cliente"  },
+        { name: "servico",      value: a.serviceName      || "Serviço"  },
+        { name: "barbeiro",     value: a.professionalName || "Barbeiro" },
+        { name: "horario",      value: a.startTime        || ""         },
       ]);
     }
   }
@@ -189,6 +215,7 @@ export const sendReminders24h = onSchedule(
 
 // ─────────────────────────────────────────────────────────────
 // SCHEDULED 2 — Lembrete 1h antes (toda hora em ponto)
+// Usa flag wppLembrete1hSent no agendamento para não repetir
 // ─────────────────────────────────────────────────────────────
 export const sendReminders1h = onSchedule(
   { schedule: "0 * * * *", timeZone: "America/Sao_Paulo" },
@@ -200,9 +227,10 @@ export const sendReminders1h = onSchedule(
 
     const snap = await db
       .collection("appointments")
-      .where("date",      "==", todayStr)
-      .where("startTime", "==", target)
-      .where("status",    "in", ["PENDENTE", "AGENDADO"])
+      .where("date",               "==", todayStr)
+      .where("startTime",          "==", target)
+      .where("status",             "in", ["PENDENTE", "AGENDADO"])
+      .where("wppLembrete1hSent",  "==", false)
       .get();
 
     console.log(`⏰ Lembretes 1h: ${snap.size} agendamentos para ${target}`);
@@ -210,12 +238,18 @@ export const sendReminders1h = onSchedule(
     for (const doc of snap.docs) {
       const a = doc.data();
       if (!a.clientPhone) continue;
-      await send(a.clientPhone, T.lembrete1h, [
-        a.clientName       || "Cliente",
-        a.serviceName      || "Serviço",
-        a.professionalName || "Barbeiro",
-        a.startTime        || "",
+
+      const ok = await send(a.clientPhone, T.lembrete1h, [
+        { name: "cliente_nome", value: a.clientName       || "Cliente"  },
+        { name: "servico",      value: a.serviceName      || "Serviço"  },
+        { name: "barbeiro",     value: a.professionalName || "Barbeiro" },
+        { name: "horario",      value: a.startTime        || ""         },
       ]);
+
+      // Marca como enviado para não repetir
+      if (ok !== false) {
+        await doc.ref.update({ wppLembrete1hSent: true });
+      }
     }
   }
 );
@@ -224,7 +258,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "35 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -263,10 +297,10 @@ export const sendDailyAgenda = onSchedule(
         .join("\n");
 
       await send(prof.phone, T.agendaDiaria, [
-        prof.name,
-        todayFormatted,
-        resumo,
-        String(meus.length),
+        { name: "barbeiro_nome",      value: prof.name },
+        { name: "data",               value: todayFormatted },
+        { name: "agenda_resumo",      value: resumo },
+        { name: "total_agendamentos", value: String(meus.length) },
       ]);
     }
   }
@@ -297,9 +331,9 @@ export const sendVipExpiry3days = onSchedule(
       if (!cli?.phone) continue;
 
       await send(cli.phone, T.vip3dias, [
-        sub.clientName || cli.name,
-        fmt(sub.endDate),
-        APP_URL,
+        { name: "cliente_nome",    value: sub.clientName || cli.name },
+        { name: "data_vencimento", value: fmt(sub.endDate) },
+        { name: "link_renovacao",  value: APP_URL },
       ]);
     }
   }
@@ -330,9 +364,9 @@ export const sendVipExpiry1day = onSchedule(
       if (!cli?.phone) continue;
 
       await send(cli.phone, T.vip1dia, [
-        sub.clientName || cli.name,
-        fmt(sub.endDate),
-        APP_URL,
+        { name: "cliente_nome",    value: sub.clientName || cli.name },
+        { name: "data_vencimento", value: fmt(sub.endDate) },
+        { name: "link_renovacao",  value: APP_URL },
       ]);
     }
   }
@@ -365,9 +399,9 @@ export const sendInactiveClients = onSchedule(
       if (dias < 30 || dias > 120) continue;
 
       await send(cli.phone, T.clienteInativo, [
-        cli.name    || "Cliente",
-        String(dias),
-        APP_URL,
+        { name: "cliente_nome",     value: cli.name    || "Cliente" },
+        { name: "dias_ausente",     value: String(dias) },
+        { name: "link_agendamento", value: APP_URL },
       ]);
     }
   }
