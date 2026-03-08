@@ -13,7 +13,7 @@ interface PublicBookingProps {
 }
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, loyaltyCards } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   
   const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
@@ -208,11 +208,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       setLookupPasswordError("Digite sua senha.");
       return;
     }
-    // Cliente sem senha — redireciona para definir senha no portal
-    if (!lookupClientFound.password || lookupClientFound.password.trim() === '') {
-      setLookupPasswordError("Você ainda não tem senha. Acesse 'Portal do Cliente' → 'Entrar' para definir sua senha primeiro.");
-      return;
-    }
     if (lookupClientFound.password !== lookupPassword) {
       setLookupPasswordError("Senha incorreta. Tente novamente.");
       return;
@@ -355,11 +350,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     }
 
     // 3º — Cliente existe mas não tem senha definida (cadastrado pelo admin sem senha)
-    if (!client.password || client.password.trim() === '') {
-      // Redireciona para a tela elegante de definir senha (já existente no portal)
-      setNoPasswordClient(client);
-      setLoginMode('setpassword');
-      setRegisterError(null);
+    if (!client.password) {
+      alert("Sua conta ainda não possui senha. Peça ao estabelecimento para definir uma ou crie uma nova conta no portal.");
       return;
     }
 
@@ -1128,6 +1120,67 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
 
               <div className="md:col-span-2 space-y-6">
+
+                 {/* ── CARTELA DE FIDELIDADE ── */}
+                 {(() => {
+                   const card = loyaltyCards?.find((lc: any) => lc.clientId === loggedClient.id);
+                   const totalSelos = (config as any).stampsForFreeCut || 10;
+                   const selosAtual = card?.stamps || 0;
+                   const cortesPendentes = card?.freeCutsPending || 0;
+                   const creditos = card?.credits || 0;
+                   return (
+                     <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
+                       <div className="flex items-center justify-between mb-6">
+                         <h3 className={`text-lg font-black font-display italic flex items-center gap-2 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                           <Star size={18} className="text-[#C58A4A]"/> Minha Fidelidade
+                         </h3>
+                         {cortesPendentes > 0 && (
+                           <span className="bg-emerald-500 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest animate-pulse">
+                             🎉 {cortesPendentes} corte{cortesPendentes > 1 ? 's' : ''} grátis disponível{cortesPendentes > 1 ? 'is' : ''}!
+                           </span>
+                         )}
+                       </div>
+
+                       {/* Grade de selos */}
+                       <div className="flex flex-wrap gap-2 mb-5">
+                         {Array.from({ length: totalSelos }).map((_, i) => (
+                           <div key={i} className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
+                             i < selosAtual
+                               ? 'bg-[#C58A4A] shadow-lg shadow-[#C58A4A]/30 scale-105'
+                               : theme === 'light' ? 'bg-zinc-100 border border-zinc-200' : 'bg-white/5 border border-white/10'
+                           }`}>
+                             {i < selosAtual ? '⭐' : <span className={`text-xs ${theme === 'light' ? 'text-zinc-300' : 'text-zinc-600'}`}>○</span>}
+                           </div>
+                         ))}
+                       </div>
+
+                       {/* Progresso */}
+                       <div className="mb-4">
+                         <div className={`h-2 rounded-full overflow-hidden ${theme === 'light' ? 'bg-zinc-100' : 'bg-white/10'}`}>
+                           <div
+                             className="h-full bg-gradient-to-r from-[#C58A4A] to-[#e6a85c] rounded-full transition-all duration-700"
+                             style={{ width: `${Math.min((selosAtual / totalSelos) * 100, 100)}%` }}
+                           />
+                         </div>
+                         <p className={`text-[10px] font-black mt-2 uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                           {selosAtual}/{totalSelos} selos · {totalSelos - selosAtual > 0 ? `Faltam ${totalSelos - selosAtual} para corte grátis` : '🎉 Você ganhou um corte grátis!'}
+                         </p>
+                       </div>
+
+                       {/* Créditos cashback */}
+                       {creditos > 0 && (
+                         <div className={`flex items-center gap-3 p-3 rounded-xl ${theme === 'light' ? 'bg-emerald-50 border border-emerald-200' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
+                           <span className="text-xl">💰</span>
+                           <div>
+                             <p className="text-emerald-500 font-black text-sm">R$ {creditos.toFixed(2)} em cashback</p>
+                             <p className={`text-[9px] uppercase tracking-widest font-black ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>disponível para usar</p>
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })()}
+
                  <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
                     <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Enviar Sugestão</h3>
                     <textarea rows={4} placeholder="Conte-nos suas ideias..." value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className={`w-full border p-4 rounded-xl outline-none text-sm ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}/>
