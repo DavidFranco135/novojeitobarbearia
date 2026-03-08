@@ -29,12 +29,12 @@ const T = {
   vipAtivado:        "ativacao_plano_vip2",
   clienteInativo:    "aviso_cliente_inativo",
   novoAgendBarbeiro: "novo_agendamento_barbeiro",
-  agendaDiaria:      "agenda_diaria_barbeiro",
+  agendaDiaria:      "agenda_diaria_barbeiro_v3",
   // ── Módulos de Automação ──────────────────────────────────
-  horarioVago:       "horario_vago",
-  promoDiaFraco:     "promocao_dia_fraco",
+  horarioVago:       "aviso_horario_vago",
+  promoDiaFraco:     "aviso_promocao",
   aniversario:       "aniversario_cliente",
-  manutencaoCorte:   "manutencao_corte",
+  manutencaoCorte:   "aviso_manutencao_corte",
 };
 
 // ─────────────────────────────────────────────────────────────
