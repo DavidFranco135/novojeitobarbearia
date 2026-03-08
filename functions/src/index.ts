@@ -26,7 +26,7 @@ const T = {
   posAtendimento:    "pos_atendimento",
   vip3dias:          "vencimento_plano_vip_3dias",
   vip1dia:           "vencimento_plano_vip_1dia",
-  vipAtivado:        "adesao_plano_vip",
+  vipAtivado:        "ativacao_plano_vip",
   clienteInativo:    "cliente_inativo",
   novoAgendBarbeiro: "novo_agendamento_barbeiro",
   agendaDiaria:      "agenda_diaria_barbeiro",
@@ -35,7 +35,7 @@ const T = {
   promoDiaFraco:     "promocao_dia_fraco",
   aniversario:       "aniversario_cliente",
   manutencaoCorte:   "manutencao_corte",
-  cashbackRecebido:  "cashback_recebido",
+  cashbackRecebido:  "cashback_cliente",
 };
 
 // ─────────────────────────────────────────────────────────────
