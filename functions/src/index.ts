@@ -258,7 +258,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "10 9 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
+  { schedule: "15 9 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -293,8 +293,8 @@ export const sendDailyAgenda = onSchedule(
       }
 
       const resumo = meus
-        .map((a) => `🕐 ${a.startTime}  ${a.clientName}  ${a.serviceName}`)
-        .join("\n");
+        .map((a) => `🕐 ${a.startTime} ${a.clientName} - ${a.serviceName}`)
+        .join("  |  ");
 
       await send(prof.phone, T.agendaDiaria, [
         { name: "barbeiro_nome",      value: prof.name },
