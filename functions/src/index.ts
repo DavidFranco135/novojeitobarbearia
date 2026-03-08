@@ -33,7 +33,7 @@ const T = {
   // ── Módulos de Automação ──────────────────────────────────
   horarioVago:       "aviso_horario_vago",
   promoDiaFraco:     "aviso_promocao",
-  aniversario:       "aniversario_cliente",
+  aniversario:       "aviso_aniversario",
   manutencaoCorte:   "aviso_manutencao_corte",
 };
 
