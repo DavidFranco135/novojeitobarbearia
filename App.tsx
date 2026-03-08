@@ -19,23 +19,32 @@ import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
 const App: React.FC = () => {
   const { user, config, theme, login, toggleTheme, addClient, clients, logout } = useBarberStore();
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isPublicView, setIsPublicView] = useState(true);
+  // ── Persistência de página via URL hash ──────────────────────
+  const getInitialTab = () => {
+    const hash = window.location.hash.replace('#', '');
+    const validTabs = ['dashboard','appointments','clients','professionals','services','financial','loyalty','subscriptions','partners','schedule','suggestions','settings'];
+    return validTabs.includes(hash) ? hash : 'dashboard';
+  };
+  const getInitialPublicView = () => {
+    const hash = window.location.hash.replace('#', '');
+    return hash !== 'admin';
+  };
+
+  const [activeTab, setActiveTabState] = useState(getInitialTab);
+  const [isPublicView, setIsPublicViewState] = useState(getInitialPublicView);
+
+  const setActiveTab = (tab: string) => {
+    window.location.hash = tab;
+    setActiveTabState(tab);
+  };
+  const setIsPublicView = (val: boolean) => {
+    if (!val) window.location.hash = 'admin';
+    setIsPublicViewState(val);
+  };
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerData, setRegisterData] = useState({ name: '', phone: '', email: '', password: '' });
-
-  // Aplica classe light-theme no <html> para que o CSS global funcione
-  React.useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('light-theme');
-      document.body.classList.add('light-theme');
-    } else {
-      document.documentElement.classList.remove('light-theme');
-      document.body.classList.remove('light-theme');
-    }
-  }, [theme]);
 
   // ── NOVO: Detecta se a URL contém ?validateBenefit=TOKEN ────
   const benefitToken = React.useMemo(() => {
