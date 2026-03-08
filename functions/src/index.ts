@@ -35,7 +35,6 @@ const T = {
   promoDiaFraco:     "promocao_dia_fraco",
   aniversario:       "aniversario_cliente",
   manutencaoCorte:   "manutencao_corte",
-  cashbackRecebido:  "cashback_cliente",
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -563,12 +562,6 @@ export const onAppointmentCashback = onDocumentUpdated(
       await card.ref.update({ credits: (card.data().credits || 0) + credito });
     }
 
-    // Envia mensagem de cashback
-    await send(after.clientPhone, T.cashbackRecebido, [
-      { name: "cliente_nome", value: after.clientName || "Cliente"          },
-      { name: "valor",        value: credito.toFixed(2)                     },
-      { name: "total_gasto",  value: after.price.toFixed(2)                 },
-      { name: "link",         value: APP_URL                                },
-    ]);
+    // Cashback creditado — mensagem já incluída no template pos_atendimento
   }
 );
