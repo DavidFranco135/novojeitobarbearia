@@ -13,7 +13,7 @@ interface PublicBookingProps {
 }
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, loyaltyCards } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   
   const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
@@ -40,7 +40,14 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [clientVerified, setClientVerified] = useState(false);
 
   // Estados para cadastro no Portal do Cliente
-  const [loginMode, setLoginMode] = useState<'login' | 'register' | 'setpassword'>('login');
+  const [loginMode, setLoginMode] = useState<'login' | 'register' | 'setpassword' | 'forgot'>('login');
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [forgotStep, setForgotStep] = useState<'phone' | 'reset'>('phone');
+  const [forgotClient, setForgotClient] = useState<any>(null);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
   const [registerData, setRegisterData] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '' });
   const [registerError, setRegisterError] = useState<string | null>(null);
   // Cliente pré-cadastrado pelo admin (sem senha) — precisa apenas definir senha
@@ -292,6 +299,28 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       setSuccess(true);
     } catch (err) { alert("Erro ao agendar."); }
     finally { setLoading(false); }
+  };
+
+
+  // ── ESQUECI SENHA — Portal do Cliente ──────────────────────
+  const handleForgotLookup = () => {
+    setForgotError(null);
+    const found = clients.find((cl: any) => cl.phone === forgotPhone.replace(/\D/g, '') || cl.phone === forgotPhone);
+    if (!found) { setForgotError('Número não encontrado. Verifique e tente novamente.'); return; }
+    setForgotClient(found);
+    setForgotStep('reset');
+  };
+  const handleForgotReset = async () => {
+    setForgotError(null);
+    if (!forgotNewPassword || forgotNewPassword.length < 4) { setForgotError('A senha deve ter pelo menos 4 caracteres.'); return; }
+    if (forgotNewPassword !== forgotConfirmPassword) { setForgotError('As senhas não conferem.'); return; }
+    await updateClient(forgotClient.id, { password: forgotNewPassword });
+    setForgotSuccess(true);
+    setTimeout(() => {
+      setForgotSuccess(false); setForgotStep('phone'); setForgotPhone('');
+      setForgotNewPassword(''); setForgotConfirmPassword(''); setForgotClient(null);
+      setLoginMode('login');
+    }, 2000);
   };
 
   // Definir senha para cliente pré-cadastrado pelo admin (sem senha)
@@ -1055,11 +1084,38 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     ← Voltar ao login
                   </button>
                 </div>
+              ) : loginMode === 'forgot' ? (
+                <div className="space-y-5">
+                  {forgotSuccess ? (
+                    <div className="p-5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-500 text-center font-black text-sm">✅ Senha alterada com sucesso!</div>
+                  ) : forgotStep === 'phone' ? (
+                    <>
+                      <p className={`text-[10px] font-black uppercase tracking-widest text-center ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Digite seu WhatsApp cadastrado</p>
+                      {forgotError && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black text-center">{forgotError}</div>}
+                      <input type="tel" placeholder="(21) 99999-9999" value={forgotPhone} onChange={e => setForgotPhone(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
+                      <button onClick={handleForgotLookup} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">CONTINUAR</button>
+                    </>
+                  ) : (
+                    <>
+                      <p className={`text-[10px] font-black uppercase tracking-widest text-center ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Olá, {forgotClient?.name}! Crie sua nova senha</p>
+                      {forgotError && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black text-center">{forgotError}</div>}
+                      <input type="password" placeholder="Nova senha (mín. 4 caracteres)" value={forgotNewPassword} onChange={e => setForgotNewPassword(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
+                      <input type="password" placeholder="Confirmar nova senha" value={forgotConfirmPassword} onChange={e => setForgotConfirmPassword(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
+                      <button onClick={handleForgotReset} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">SALVAR NOVA SENHA</button>
+                    </>
+                  )}
+                  <div className="text-center">
+                    <button onClick={() => { setLoginMode('login'); setForgotStep('phone'); setForgotError(null); }} className={`text-[9px] font-black uppercase tracking-widest hover:underline ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>← Voltar ao login</button>
+                  </div>
+                </div>
               ) : loginMode === 'login' ? (
                 <div className="space-y-6">
                    <input type="text" placeholder="E-mail ou WhatsApp" value={loginIdentifier} onChange={e => setLoginIdentifier(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
                    <input type="password" placeholder="Senha" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
                    <button onClick={handleLoginPortal} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">ACESSAR PORTAL</button>
+                   <div className="text-center pt-1">
+                     <button onClick={() => { setLoginMode('forgot'); setForgotStep('phone'); setForgotError(null); }} className={`text-[9px] font-black uppercase tracking-widest hover:underline ${theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300'}`}>🔑 Esqueci minha senha</button>
+                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1120,67 +1176,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
 
               <div className="md:col-span-2 space-y-6">
-
-                 {/* ── CARTELA DE FIDELIDADE ── */}
-                 {(() => {
-                   const card = loyaltyCards?.find((lc: any) => lc.clientId === loggedClient.id);
-                   const totalSelos = (config as any).stampsForFreeCut || 10;
-                   const selosAtual = card?.stamps || 0;
-                   const cortesPendentes = card?.freeCutsPending || 0;
-                   const creditos = card?.credits || 0;
-                   return (
-                     <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-                       <div className="flex items-center justify-between mb-6">
-                         <h3 className={`text-lg font-black font-display italic flex items-center gap-2 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                           <Star size={18} className="text-[#C58A4A]"/> Minha Fidelidade
-                         </h3>
-                         {cortesPendentes > 0 && (
-                           <span className="bg-emerald-500 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest animate-pulse">
-                             🎉 {cortesPendentes} corte{cortesPendentes > 1 ? 's' : ''} grátis disponível{cortesPendentes > 1 ? 'is' : ''}!
-                           </span>
-                         )}
-                       </div>
-
-                       {/* Grade de selos */}
-                       <div className="flex flex-wrap gap-2 mb-5">
-                         {Array.from({ length: totalSelos }).map((_, i) => (
-                           <div key={i} className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
-                             i < selosAtual
-                               ? 'bg-[#C58A4A] shadow-lg shadow-[#C58A4A]/30 scale-105'
-                               : theme === 'light' ? 'bg-zinc-100 border border-zinc-200' : 'bg-white/5 border border-white/10'
-                           }`}>
-                             {i < selosAtual ? '⭐' : <span className={`text-xs ${theme === 'light' ? 'text-zinc-300' : 'text-zinc-600'}`}>○</span>}
-                           </div>
-                         ))}
-                       </div>
-
-                       {/* Progresso */}
-                       <div className="mb-4">
-                         <div className={`h-2 rounded-full overflow-hidden ${theme === 'light' ? 'bg-zinc-100' : 'bg-white/10'}`}>
-                           <div
-                             className="h-full bg-gradient-to-r from-[#C58A4A] to-[#e6a85c] rounded-full transition-all duration-700"
-                             style={{ width: `${Math.min((selosAtual / totalSelos) * 100, 100)}%` }}
-                           />
-                         </div>
-                         <p className={`text-[10px] font-black mt-2 uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                           {selosAtual}/{totalSelos} selos · {totalSelos - selosAtual > 0 ? `Faltam ${totalSelos - selosAtual} para corte grátis` : '🎉 Você ganhou um corte grátis!'}
-                         </p>
-                       </div>
-
-                       {/* Créditos cashback */}
-                       {creditos > 0 && (
-                         <div className={`flex items-center gap-3 p-3 rounded-xl ${theme === 'light' ? 'bg-emerald-50 border border-emerald-200' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
-                           <span className="text-xl">💰</span>
-                           <div>
-                             <p className="text-emerald-500 font-black text-sm">R$ {creditos.toFixed(2)} em cashback</p>
-                             <p className={`text-[9px] uppercase tracking-widest font-black ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'}`}>disponível para usar</p>
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   );
-                 })()}
-
                  <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
                     <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Enviar Sugestão</h3>
                     <textarea rows={4} placeholder="Conte-nos suas ideias..." value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className={`w-full border p-4 rounded-xl outline-none text-sm ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}/>
