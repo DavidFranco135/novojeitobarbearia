@@ -450,7 +450,7 @@ const Subscriptions: React.FC = () => {
 
               {/* Limite de usos */}
               <div className="space-y-2">
-                <label className={lbl}>Limite de Usos (0 = ilimitado)</label>
+                <label className={lbl}>Limite de Usos (coloque a quantidade de usos)</label>
                 <input
                   type="number" min={0}
                   value={formData.usageLimit}
