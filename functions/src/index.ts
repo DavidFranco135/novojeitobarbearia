@@ -5,6 +5,7 @@
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 
@@ -24,18 +25,19 @@ const T = {
   lembrete24h:       "lembrete_24h",
   lembrete1h:        "lembrete_1h",
   posAtendimento:    "pos_atendimento_v2",
-  vip3dias:          "aviso_vencimento_3dias",
+  vip3dias:          "aviso_vencimento_3dia",
   vip1dia:           "aviso_vencimento_1dia",
-  vipAtivado:        "ativacao_plano_vip2",
+  vipAtivado:        "ativacao_plano_vip_3",
   clienteInativo:    "aviso_cliente_inativo",
   novoAgendBarbeiro: "novo_agendamento_barbeiro",
   agendaDiaria:      "agenda_diaria_barbeiro_v3",
   // ── Módulos de Automação ──────────────────────────────────
-  horarioVago:       "aviso_horario_vago",
+  horarioVago:       "aviso_horario_vago_2",
   promoDiaFraco:     "aviso_promocao",
-  aniversario:       "aviso_aniversario",
+  aniversario:       "aviso_aniversario_2",
   manutencaoCorte:   "aviso_manutencao_corte",
 };
+
 // ─────────────────────────────────────────────────────────────
 // HELPER — formata YYYY-MM-DD → DD/MM/YYYY
 // ─────────────────────────────────────────────────────────────
@@ -159,9 +161,9 @@ export const onAppointmentCompleted = onDocumentUpdated(
 
     await send(after.clientPhone, T.posAtendimento, [
       { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
+      { name: "link_avaliacao", value: APP_URL                              },
       { name: "servico",        value: after.serviceName      || "Serviço"  },
       { name: "barbeiro",       value: after.professionalName || "Barbeiro" },
-      { name: "link_avaliacao", value: APP_URL                              },
     ]);
   }
 );
@@ -455,7 +457,6 @@ export const onAppointmentCancelled = onDocumentUpdated(
         { name: "horario",      value: horario   },
         { name: "data",         value: fmt(after.date) },
         { name: "barbeiro",     value: after.professionalName || "Barbeiro" },
-        { name: "link",         value: APP_URL },
       ]);
     }
   }
@@ -480,8 +481,8 @@ export const sendBirthdayMessages = onSchedule(
       if (clientMmdd !== mmdd) continue;
 
       await send(cli.phone, T.aniversario, [
-        { name: "cliente_nome", value: cli.name || "Cliente" },
-        { name: "desconto",     value: "10"                  },
+        { name: "cliente_nome",  value: cli.name || "Cliente" },
+        { name: "link_ativacao", value: APP_URL               },
       ]);
       count++;
     }
@@ -563,5 +564,41 @@ export const onAppointmentCashback = onDocumentUpdated(
     }
 
     // Cashback creditado — mensagem já incluída no template pos_atendimento
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// HTTP PROXY — Asaas API (evita bloqueio CORS no browser)
+// ─────────────────────────────────────────────────────────────
+export const asaasProxy = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+
+    const { endpoint, method = "GET", body, key, env } = req.body;
+
+    if (!key) { res.status(400).json({ error: "Asaas key not configured" }); return; }
+
+    const base = env === "producao"
+      ? "https://api.asaas.com/v3"
+      : "https://sandbox.asaas.com/api/v3";
+
+    try {
+      const response = await fetch(`${base}${endpoint}`, {
+        method,
+        headers: {
+          "access_token": key,
+          "Content-Type": "application/json",
+          "User-Agent": "BarbeariaNj/1.0",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err: any) {
+      console.error("asaasProxy error:", err);
+      res.status(500).json({ error: err.message });
+    }
   }
 );
