@@ -163,6 +163,9 @@ export interface ShopConfig {
   masterBarberSurcharge?: number;
   // ── NOVO: Clube de Benefícios ──────────────────────────────
   benefitValidityDays?: number; // padrão: 7 dias
+  // ── Integração Asaas ──────────────────────────────────────
+  asaasKey?: string;
+  asaasEnv?: 'sandbox' | 'producao';
 }
 
 // ── FIDELIDADE ───────────────────────────────────────────────
