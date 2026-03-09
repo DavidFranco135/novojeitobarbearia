@@ -5,6 +5,7 @@
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 
@@ -265,7 +266,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
+  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -563,5 +564,41 @@ export const onAppointmentCashback = onDocumentUpdated(
     }
 
     // Cashback creditado — mensagem já incluída no template pos_atendimento
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// HTTP PROXY — Asaas API (evita bloqueio CORS no browser)
+// ─────────────────────────────────────────────────────────────
+export const asaasProxy = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+
+    const { endpoint, method = "GET", body, key, env } = req.body;
+
+    if (!key) { res.status(400).json({ error: "Asaas key not configured" }); return; }
+
+    const base = env === "producao"
+      ? "https://api.asaas.com/v3"
+      : "https://sandbox.asaas.com/api/v3";
+
+    try {
+      const response = await fetch(`${base}${endpoint}`, {
+        method,
+        headers: {
+          "access_token": key,
+          "Content-Type": "application/json",
+          "User-Agent": "BarbeariaNj/1.0",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err: any) {
+      console.error("asaasProxy error:", err);
+      res.status(500).json({ error: err.message });
+    }
   }
 );

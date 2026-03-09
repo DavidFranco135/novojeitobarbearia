@@ -395,14 +395,18 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
 
     // ── WhatsApp: confirmação de agendamento ──────────────────
-    await wppNovoAgendamento(
-      data.clientPhone,
-      data.clientName,
-      data.serviceName,
-      data.date,
-      data.startTime,
-      data.professionalName
-    );
+    try {
+      await wppNovoAgendamento(
+        data.clientPhone,
+        data.clientName,
+        data.serviceName,
+        data.date,
+        data.startTime,
+        data.professionalName
+      );
+    } catch (e) {
+      console.warn('WhatsApp confirmação falhou (não crítico):', e);
+    }
   };
 
   const updateAppointmentStatus = async (id: string, status: any) => {
@@ -519,14 +523,13 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const asaasRequest = async (endpoint: string, method = 'GET', body?: any) => {
     const key = (config as any).asaasKey || '';
     const env = (config as any).asaasEnv || 'sandbox';
-    const base = env === 'producao'
-      ? 'https://api.asaas.com/v3'
-      : 'https://sandbox.asaas.com/api/v3';
-    const res = await fetch(`${base}${endpoint}`, {
-      method,
-      headers: { 'access_token': key, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
+    // Usa Cloud Function como proxy para evitar bloqueio CORS do Asaas
+    const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, method, body, key, env }),
     });
+    if (!res.ok) throw new Error(`Asaas proxy error: ${res.status}`);
     return res.json();
   };
 
