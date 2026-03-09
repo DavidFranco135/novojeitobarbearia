@@ -698,8 +698,7 @@ const Appointments: React.FC = () => {
           </div>
         );
       })()}
-    </div>
-  
+
       {/* ══════════════════════════════════════════════════════
           MODAL DE FINALIZAÇÃO — Adicionais + Pagamento Asaas
       ══════════════════════════════════════════════════════ */}
@@ -837,5 +836,5 @@ const Appointments: React.FC = () => {
           </div>
         </div>
       )}
-
-    );
+    </div>
+  );
