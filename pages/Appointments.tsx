@@ -363,7 +363,7 @@ const Appointments: React.FC = () => {
                   <div className="flex items-center justify-center border-r border-white/5 bg-white/[0.01]"><span className={`font-black text-zinc-600 ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
                   {professionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
-                    // ── Abre modal de finalização ──────────────────────────────
+                    return (
                       <div 
                         key={prof.id} 
                         className={`border-r border-white/5 last:border-r-0 ${compactView ? 'p-1' : 'p-1.5'} ${!app ? 'cursor-pointer hover:bg-white/5 transition-all' : ''}`}
@@ -593,8 +593,7 @@ const Appointments: React.FC = () => {
           </div>
         );
       })()}
-    </div>
-  
+
       {/* ══════════════════════════════════════════════════════
           MODAL DE FINALIZAÇÃO — Adicionais + Pagamento Asaas
       ══════════════════════════════════════════════════════ */}
