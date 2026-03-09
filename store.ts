@@ -240,12 +240,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, '1');
 
-      await wppLembrete24h(
+      await wppLembreteAgendamento(
         a.clientPhone,
         a.clientName,
         a.serviceName,
-        a.professionalName,
-        a.startTime
+        a.startTime,
+        a.professionalName
       );
     });
 
@@ -264,11 +264,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       const phone = client?.phone || '';
       if (!phone) return;
 
-      await wppVencimentoVip3dias(
+      await wppAssinaturaVencendo(
         phone,
         s.clientName,
-        s.endDate.split('T')[0],
-        'https://novojeitobarbearia.pages.dev'
+        s.planName,
+        3,
+        s.endDate.split('T')[0]
       );
     });
 
@@ -309,12 +310,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         if (localStorage.getItem(key)) return; // já enviado
         localStorage.setItem(key, '1');
 
-        await wppLembrete1h(
+        await wppLembrete15min(
           a.clientPhone,
           a.clientName,
           a.serviceName,
-          a.professionalName,
-          a.startTime
+          a.startTime,
+          a.professionalName
         );
       });
     };
@@ -394,13 +395,13 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
 
     // ── WhatsApp: confirmação de agendamento ──────────────────
-    await wppConfirmacaoAgendamento(
+    await wppNovoAgendamento(
       data.clientPhone,
       data.clientName,
       data.serviceName,
-      data.professionalName,
       data.date,
-      data.startTime
+      data.startTime,
+      data.professionalName
     );
   };
 
@@ -513,17 +514,110 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
   };
 
+
+  // ── ASAAS: gera cobrança PIX ou link de pagamento ─────────
+  const asaasRequest = async (endpoint: string, method = 'GET', body?: any) => {
+    const key = (config as any).asaasKey || '';
+    const env = (config as any).asaasEnv || 'sandbox';
+    const base = env === 'producao'
+      ? 'https://api.asaas.com/v3'
+      : 'https://sandbox.asaas.com/api/v3';
+    const res = await fetch(`${base}${endpoint}`, {
+      method,
+      headers: { 'access_token': key, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.json();
+  };
+
+  const finalizeAppointment = async (id: string, additionals: any[], paymentMethod: string) => {
+    const appt = appointments.find(a => a.id === id);
+    if (!appt) return {};
+
+    const addTotal   = additionals.reduce((s: number, a: any) => s + a.price * a.qty, 0);
+    const totalPrice = appt.price + addTotal;
+
+    // Salva adicionais + totalPrice no Firestore
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+      additionals,
+      totalPrice,
+      paymentMethod,
+    });
+
+    let result: { pixCode?: string; pixQrCode?: string; paymentLink?: string } = {};
+    const asaasKey = (config as any).asaasKey || '';
+
+    if (asaasKey) {
+      try {
+        // Cria/busca cliente Asaas pelo telefone
+        const custSearch = await asaasRequest(`/customers?mobilePhone=${appt.clientPhone.replace(/\D/g,'')}`);
+        let customerId = custSearch?.data?.[0]?.id;
+
+        if (!customerId) {
+          const newCust = await asaasRequest('/customers', 'POST', {
+            name: appt.clientName,
+            mobilePhone: appt.clientPhone.replace(/\D/g,''),
+          });
+          customerId = newCust?.id;
+        }
+
+        if (customerId) {
+          if (paymentMethod === 'PIX') {
+            // Cria cobrança PIX
+            const charge = await asaasRequest('/payments', 'POST', {
+              customer: customerId,
+              billingType: 'PIX',
+              value: totalPrice,
+              dueDate: new Date().toISOString().split('T')[0],
+              description: `Barbearia Novo Jeito — ${appt.serviceName}`,
+            });
+            if (charge?.id) {
+              const pix = await asaasRequest(`/payments/${charge.id}/pixQrCode`);
+              result = { pixCode: pix?.payload, pixQrCode: pix?.encodedImage };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId: charge.id,
+                asaasPixCode:   pix?.payload    || '',
+                asaasPixQrCode: pix?.encodedImage || '',
+              });
+            }
+          } else if (paymentMethod === 'LINK') {
+            // Cria cobrança com link
+            const charge = await asaasRequest('/payments', 'POST', {
+              customer: customerId,
+              billingType: 'UNDEFINED',
+              value: totalPrice,
+              dueDate: new Date().toISOString().split('T')[0],
+              description: `Barbearia Novo Jeito — ${appt.serviceName}`,
+            });
+            if (charge?.id) {
+              result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '' };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId:   charge.id,
+                asaasPaymentLink: result.paymentLink,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Asaas error:', err);
+      }
+    }
+
+    // Finaliza o status normalmente (reutiliza lógica existente)
+    await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
+    return result;
+  };
+
   const rescheduleAppointment = async (id: string, date: string, startTime: string, endTime: string) => {
     await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { date, startTime, endTime });
 
     // ── WhatsApp: avisa sobre o reagendamento ─────────────────
     const appointment = appointments.find(a => a.id === id);
     if (appointment) {
-      await wppConfirmacaoAgendamento(
+      await wppReagendamento(
         appointment.clientPhone,
         appointment.clientName,
         appointment.serviceName,
-        appointment.professionalName,
         date,
         startTime
       );
@@ -591,10 +685,11 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     const client = clients.find(c => c.id === data.clientId);
     const phone = client?.phone || '';
     if (phone) {
-      await wppPosAtendimento(
+      await wppAssinaturaAtivada(
         phone,
         data.clientName,
-        'https://novojeitobarbearia.pages.dev'
+        data.planName,
+        data.endDate.split('T')[0]
       );
     }
   };
@@ -727,7 +822,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
-      addAppointment, updateAppointmentStatus, rescheduleAppointment, deleteAppointment,
+      addAppointment, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
       addFinancialEntry, deleteFinancialEntry,
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,
@@ -749,104 +844,3 @@ export const useBarberStore = () => {
   if (!context) throw new Error('useBarberStore must be used within BarberProvider');
   return context;
 };
-import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import {
-  Client, Professional, Service, Appointment, ShopConfig, User,
-  FinancialEntry, Notification, Review, Suggestion,
-  LoyaltyCard, Subscription, Partner, BlockedSlot, InactivityCampaign,
-  ClientBenefit  // ── NOVO ──
-} from './types';
-import { db } from './firebase';
-import {
-  collection,
-  doc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  setDoc,
-  query,
-  orderBy,
-  serverTimestamp,
-  Timestamp
-} from 'firebase/firestore';
-
-// ── WhatsApp Cloud API ────────────────────────────────────────
-import {
-  wppNovoAgendamento,
-  wppLembreteAgendamento,
-  wppLembrete15min,
-  wppReagendamento,
-  wppAssinaturaAtivada,
-  wppAssinaturaVencendo,
-} from './services/whatsapp';
-
-interface BarberContextType {
-  user: User | null;
-  clients: Client[];
-  professionals: Professional[];
-  services: Service[];
-  appointments: Appointment[];
-  financialEntries: FinancialEntry[];
-  notifications: Notification[];
-  suggestions: Suggestion[];
-  config: ShopConfig;
-  loading: boolean;
-  theme: 'dark' | 'light';
-  loyaltyCards: LoyaltyCard[];
-  subscriptions: Subscription[];
-  partners: Partner[];
-  blockedSlots: BlockedSlot[];
-  inactivityCampaigns: InactivityCampaign[];
-  clientBenefits: ClientBenefit[];  // ── NOVO ──
-  toggleTheme: () => void;
-  login: (emailOrPhone: string, pass: string) => Promise<void>;
-  logout: () => void;
-  updateUser: (data: Partial<User>) => void;
-  addClient: (data: Omit<Client, 'id' | 'totalSpent' | 'createdAt'>) => Promise<Client>;
-  updateClient: (id: string, data: Partial<Client>) => Promise<void>;
-  deleteClient: (id: string) => Promise<void>;
-  addService: (data: Omit<Service, 'id'>) => Promise<void>;
-  updateService: (id: string, data: Partial<Service>) => Promise<void>;
-  deleteService: (id: string) => Promise<void>;
-  addProfessional: (data: Omit<Professional, 'id' | 'likes'>) => Promise<void>;
-  updateProfessional: (id: string, data: Partial<Professional>) => Promise<void>;
-  deleteProfessional: (id: string) => Promise<void>;
-  likeProfessional: (id: string) => void;
-  resetAllLikes: () => Promise<void>;
-  addAppointment: (data: Omit<Appointment, 'id' | 'status'>, isPublic?: boolean) => Promise<void>;
-  updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<void>;
-  finalizeAppointment: (id: string, additionals: any[], paymentMethod: string) => Promise<{ pixCode?: string; pixQrCode?: string; paymentLink?: string }>;
-  rescheduleAppointment: (id: string, date: string, startTime: string, endTime: string) => Promise<void>;
-  deleteAppointment: (id: string) => Promise<void>;
-  addFinancialEntry: (data: Omit<FinancialEntry, 'id'>) => Promise<void>;
-  deleteFinancialEntry: (id: string) => Promise<void>;
-  addSuggestion: (data: Omit<Suggestion, 'id' | 'date'>) => Promise<void>;
-  updateSuggestion: (id: string, data: Partial<Suggestion>) => Promise<void>;
-  deleteSuggestion: (id: string) => Promise<void>;
-  markNotificationAsRead: (id: string) => void;
-  clearNotifications: () => void;
-  updateConfig: (data: Partial<ShopConfig>) => Promise<void>;
-  addShopReview: (review: Omit<Review, 'id' | 'date'>) => void;
-  addLoyaltyCard: (data: Omit<LoyaltyCard, 'id'>) => Promise<void>;
-  updateLoyaltyCard: (clientId: string, data: Partial<LoyaltyCard>) => Promise<void>;
-  addSubscription: (data: Omit<Subscription, 'id'>) => Promise<void>;
-  updateSubscription: (id: string, data: Partial<Subscription>) => Promise<void>;
-  deleteSubscription: (id: string) => Promise<void>;
-  addPartner: (data: Omit<Partner, 'id'>) => Promise<void>;
-  updatePartner: (id: string, data: Partial<Partner>) => Promise<void>;
-  deletePartner: (id: string) => Promise<void>;
-  addBlockedSlot: (data: Omit<BlockedSlot, 'id'>) => Promise<void>;
-  deleteBlockedSlot: (id: string) => Promise<void>;
-  addCampaign: (data: Omit<InactivityCampaign, 'id'>) => Promise<void>;
-  updateCampaign: (id: string, data: Partial<InactivityCampaign>) => Promise<void>;
-  deleteCampaign: (id: string) => Promise<void>;
-  isSlotBlocked: (professionalId: string, date: string, time: string) => boolean;
-  // ── NOVO: Clube de Benefícios ──────────────────────────────
-  addClientBenefit: (data: Omit<ClientBenefit, 'id'>) => Promise<void>;
-  updateClientBenefit: (id: string, data: Partial<ClientBenefit>) => Promise<void>;
-  deleteClientBenefit: (id: string) => Promise<void>;
-  generateBenefitQR: (benefitId: string, partnerId: string, partnerName: string) => Promise<string>;
-  validateAndUseBenefit: (qrToken: string) => Promise<ClientBenefit | null>;
-}

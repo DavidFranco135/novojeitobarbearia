@@ -838,3 +838,6 @@ const Appointments: React.FC = () => {
       )}
     </div>
   );
+};
+
+export default Appointments;
