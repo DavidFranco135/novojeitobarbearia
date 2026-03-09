@@ -508,7 +508,7 @@ const Appointments: React.FC = () => {
         const professional = professionals.find(p => p.id === app.professionalId);
         const statusLabel = app.status === 'CONCLUIDO_PAGO' ? 'Concluído e Pago' : app.status === 'CANCELADO' ? 'Cancelado' : 'Pendente';
         const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
-        // ── Abre modal de finalização ──────────────────────────────
+        return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
             <div className={`w-full max-w-md rounded-[2.5rem] p-8 space-y-6 shadow-2xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
               {/* Header */}
@@ -731,8 +731,8 @@ const Appointments: React.FC = () => {
           </div>
         </div>
       )}
-
-    );
+    </div>
+  );
 };
 
 export default Appointments;
