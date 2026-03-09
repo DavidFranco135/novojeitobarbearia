@@ -93,7 +93,7 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, theme
+    addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, theme
   } = useBarberStore();
 
   // ── Referência ao momento em que o componente montou.
@@ -109,42 +109,7 @@ const Appointments: React.FC = () => {
     const tick = () => setCurrentDate(getTodayString());
     tick();
     const interval = setInterval(tick, 60_000);
-    // ── Abre modal de finalização ──────────────────────────────
-  const openFinModal = (app: any) => {
-    setFinModal(app);
-    setFinAdditionals([]);
-    setFinPayMethod('PIX');
-    setFinNewItem({ name: '', price: '' });
-    setFinResult(null);
-  };
-
-  const handleFinalize = async () => {
-    if (!finModal) return;
-    setFinLoading(true);
-    try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
-      setFinResult(result || {});
-      if (!result?.pixCode && !result?.paymentLink) {
-        // No Asaas configured — just close
-        setFinModal(null);
-      }
-    } catch(e) { console.error(e); }
-    finally { setFinLoading(false); }
-  };
-
-  const addFinItem = () => {
-    if (!finNewItem.name || !finNewItem.price) return;
-    setFinAdditionals(prev => [...prev, {
-      id: Date.now().toString(),
-      name: finNewItem.name,
-      price: parseFloat(finNewItem.price) || 0,
-      qty: 1,
-    }]);
-    setFinNewItem({ name: '', price: '' });
-  };
-
-  const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
-
+    return () => clearInterval(interval);
   }, []);
 
   // ── Som: apenas para ADMIN, apenas para agendamentos públicos (do cliente).
@@ -198,6 +163,41 @@ const Appointments: React.FC = () => {
   const [finNewItem, setFinNewItem] = useState({ name: '', price: '' });
   const [finLoading, setFinLoading] = useState(false);
   const [finResult, setFinResult] = useState<{pixCode?:string;pixQrCode?:string;paymentLink?:string}|null>(null);
+
+  // ── Handlers do modal de finalização ──────────────────────
+  const openFinModal = (app: any) => {
+    setFinModal(app);
+    setFinAdditionals([]);
+    setFinPayMethod('PIX');
+    setFinNewItem({ name: '', price: '' });
+    setFinResult(null);
+  };
+
+  const handleFinalize = async () => {
+    if (!finModal) return;
+    setFinLoading(true);
+    try {
+      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
+      setFinResult(result || {});
+      if (!result?.pixCode && !result?.paymentLink) {
+        setFinModal(null);
+      }
+    } catch(e) { console.error(e); }
+    finally { setFinLoading(false); }
+  };
+
+  const addFinItem = () => {
+    if (!finNewItem.name || !finNewItem.price) return;
+    setFinAdditionals(prev => [...prev, {
+      id: Date.now().toString(),
+      name: finNewItem.name,
+      price: parseFloat(finNewItem.price) || 0,
+      qty: 1,
+    }]);
+    setFinNewItem({ name: '', price: '' });
+  };
+
+  const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
   const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all'>('day');
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
@@ -346,9 +346,9 @@ const Appointments: React.FC = () => {
       <div className="flex-1 cartao-vidro rounded-[2rem] border-white/5 shadow-2xl overflow-hidden flex flex-col">
         {viewMode === 'grid' ? (
           <div className={`overflow-auto h-full scrollbar-hide ${compactView ? '' : ''}`}>
-            <div className={compactView ? 'min-w-[360px]' : 'min-w-[600px]'}>
+            <div className={compactView ? 'min-w-[320px]' : 'min-w-[500px]'} style={{minWidth: compactView ? `${60 + professionals.length * 100}px` : `${80 + professionals.length * 160}px`}}>
               {/* CABEÇALHO: Reduzido padding vertical */}
-              <div className={`border-b border-white/5 bg-white/[0.02] sticky top-0 z-10 ${compactView ? 'grid grid-cols-[60px_repeat(auto-fit,minmax(120px,1fr))]' : 'grid grid-cols-[80px_repeat(auto-fit,minmax(200px,1fr))]'}`}>
+              <div className={`border-b border-white/5 bg-white/[0.02] sticky top-0 z-10`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
                 <div className={`flex items-center justify-center text-zinc-500 ${compactView ? 'p-2' : 'p-3'}`}><Clock size={compactView ? 14 : 18} /></div>
                 {professionals.map(prof => (
                   <div key={prof.id} className={`flex items-center justify-center gap-3 border-r border-white/5 ${compactView ? 'p-2 flex-col' : 'p-3'}`}>
@@ -359,7 +359,7 @@ const Appointments: React.FC = () => {
               </div>
               {/* LINHAS DE HORÁRIO: Altura reduzida de 100px/50px para 60px/35px */}
               {hours.map(hour => (
-                <div key={hour} className={`border-b border-white/[0.03] ${compactView ? 'grid grid-cols-[60px_repeat(auto-fit,minmax(120px,1fr))] min-h-[35px]' : 'grid grid-cols-[80px_repeat(auto-fit,minmax(200px,1fr))] min-h-[60px]'}`}>
+                <div key={hour} className={`border-b border-white/[0.03] ${compactView ? 'min-h-[40px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
                   <div className="flex items-center justify-center border-r border-white/5 bg-white/[0.01]"><span className={`font-black text-zinc-600 ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
                   {professionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
