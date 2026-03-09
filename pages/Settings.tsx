@@ -320,10 +320,56 @@ const Settings: React.FC = () => {
                 <input type="number" min={0} max={20} step={0.5}
                   value={(formData as any).cashbackPercent ?? 5}
                   onChange={e => setFormData({ ...formData, cashbackPercent: parseFloat(e.target.value) || 0 } as any)}
-                  className={inp} />
-                <p className={`text-[10px] font-bold ml-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>% do valor do serviço retorna como crédito</p>
+                  className={inp}
+                />
               </div>
             </div>
+
+            {/* ── Integração Asaas ────────────────────────────────── */}
+            <div className={`rounded-[2rem] border p-8 space-y-6 ${isDark ? 'border-white/5 bg-white/2' : 'border-zinc-200 bg-white'}`}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-2xl bg-[#00a650] flex items-center justify-center">
+                  <span className="text-white font-black text-sm">A$</span>
+                </div>
+                <div>
+                  <h3 className={`text-lg font-black font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>Integração Asaas</h3>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Pagamentos PIX · Cartão · Link de cobrança</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Chave de API</label>
+                  <input
+                    type="password"
+                    placeholder="$aas_... (cole sua chave de API)"
+                    value={(formData as any).asaasKey || ''}
+                    onChange={e => setFormData({ ...formData, asaasKey: e.target.value } as any)}
+                    className={`w-full border p-4 rounded-2xl outline-none font-mono text-sm transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-[#00a650]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#00a650]'}`}
+                  />
+                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Encontre em: Asaas → Minha Conta → Integrações → Chave de API</p>
+                </div>
+                <div className="space-y-2">
+                  <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Ambiente</label>
+                  <select
+                    value={(formData as any).asaasEnv || 'sandbox'}
+                    onChange={e => setFormData({ ...formData, asaasEnv: e.target.value } as any)}
+                    className={`w-full border p-4 rounded-2xl outline-none font-bold transition-all ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
+                    style={{ colorScheme: isDark ? 'dark' : 'light' }}
+                  >
+                    <option value="sandbox">Sandbox (testes)</option>
+                    <option value="producao">Produção (dinheiro real)</option>
+                  </select>
+                </div>
+                <div className={`flex items-center gap-3 p-4 rounded-2xl ${isDark ? 'bg-[#00a650]/10 border border-[#00a650]/20' : 'bg-green-50 border border-green-200'}`}>
+                  <span className="text-green-500 text-xl">💳</span>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-green-400' : 'text-green-600'}`}>Com Asaas configurado você pode:</p>
+                    <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Gerar PIX na hora · Enviar link por WhatsApp · Controle de pagamentos</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           {/* 7. Planos VIP */}

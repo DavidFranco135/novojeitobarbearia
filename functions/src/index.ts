@@ -36,7 +36,6 @@ const T = {
   aniversario:       "aviso_aniversario",
   manutencaoCorte:   "aviso_manutencao_corte",
 };
-
 // ─────────────────────────────────────────────────────────────
 // HELPER — formata YYYY-MM-DD → DD/MM/YYYY
 // ─────────────────────────────────────────────────────────────
@@ -159,8 +158,10 @@ export const onAppointmentCompleted = onDocumentUpdated(
     if (!after.clientPhone) return;
 
     await send(after.clientPhone, T.posAtendimento, [
-      { name: "cliente_nome",   value: after.clientName || "Cliente" },
-      { name: "link_avaliacao", value: APP_URL },
+      { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
+      { name: "servico",        value: after.serviceName      || "Serviço"  },
+      { name: "barbeiro",       value: after.professionalName || "Barbeiro" },
+      { name: "link_avaliacao", value: APP_URL                              },
     ]);
   }
 );
@@ -405,8 +406,8 @@ export const sendInactiveClients = onSchedule(
 
       await send(cli.phone, T.clienteInativo, [
         { name: "cliente_nome",     value: cli.name    || "Cliente" },
-        { name: "dias_ausente",     value: String(dias) },
-        { name: "link_agendamento", value: APP_URL },
+        { name: "dias_ausente",     value: String(dias)             },
+        { name: "link_agendamento", value: APP_URL                  },
       ]);
     }
   }
@@ -454,7 +455,7 @@ export const onAppointmentCancelled = onDocumentUpdated(
         { name: "horario",      value: horario   },
         { name: "data",         value: fmt(after.date) },
         { name: "barbeiro",     value: after.professionalName || "Barbeiro" },
-        { name: "link",         value: APP_URL   },
+        { name: "link",         value: APP_URL },
       ]);
     }
   }
@@ -481,7 +482,6 @@ export const sendBirthdayMessages = onSchedule(
       await send(cli.phone, T.aniversario, [
         { name: "cliente_nome", value: cli.name || "Cliente" },
         { name: "desconto",     value: "10"                  },
-        { name: "link",         value: APP_URL               },
       ]);
       count++;
     }
@@ -513,9 +513,9 @@ export const sendMaintenanceReminders = onSchedule(
       }
 
       await send(cli.phone, T.manutencaoCorte, [
-        { name: "cliente_nome", value: cli.name      || "Cliente" },
-        { name: "dias",         value: String(dias)               },
-        { name: "link",         value: APP_URL                    },
+        { name: "cliente_nome", value: cli.name  || "Cliente" },
+        { name: "dias",         value: String(dias)           },
+        { name: "link",         value: APP_URL                },
       ]);
 
       await doc.ref.update({
