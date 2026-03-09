@@ -26,7 +26,7 @@ const T = {
   posAtendimento:    "pos_atendimento_v2",
   vip3dias:          "aviso_vencimento_3dias",
   vip1dia:           "aviso_vencimento_1dia",
-  vipAtivado:        "ativacao_plano_vip2",
+  vipAtivado:        "ativacao_plano_vip3",
   clienteInativo:    "aviso_cliente_inativo",
   novoAgendBarbeiro: "novo_agendamento_barbeiro",
   agendaDiaria:      "agenda_diaria_barbeiro_v3",
