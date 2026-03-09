@@ -1,0 +1,751 @@
+import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import {
+  Client, Professional, Service, Appointment, ShopConfig, User,
+  FinancialEntry, Notification, Review, Suggestion,
+  LoyaltyCard, Subscription, Partner, BlockedSlot, InactivityCampaign,
+  ClientBenefit  // ── NOVO ──
+} from './types';
+import { db } from './firebase';
+import {
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  setDoc,
+  query,
+  orderBy,
+  serverTimestamp,
+  Timestamp
+} from 'firebase/firestore';
+
+// ── WhatsApp Cloud API ────────────────────────────────────────
+import {
+  wppConfirmacaoAgendamento,
+  wppLembrete24h,
+  wppLembrete1h,
+  wppPosAtendimento,
+  wppVencimentoVip3dias,
+} from './services/whatsapp';
+
+interface BarberContextType {
+  user: User | null;
+  clients: Client[];
+  professionals: Professional[];
+  services: Service[];
+  appointments: Appointment[];
+  financialEntries: FinancialEntry[];
+  notifications: Notification[];
+  suggestions: Suggestion[];
+  config: ShopConfig;
+  loading: boolean;
+  theme: 'dark' | 'light';
+  loyaltyCards: LoyaltyCard[];
+  subscriptions: Subscription[];
+  partners: Partner[];
+  blockedSlots: BlockedSlot[];
+  inactivityCampaigns: InactivityCampaign[];
+  clientBenefits: ClientBenefit[];  // ── NOVO ──
+  toggleTheme: () => void;
+  login: (emailOrPhone: string, pass: string) => Promise<void>;
+  logout: () => void;
+  updateUser: (data: Partial<User>) => void;
+  addClient: (data: Omit<Client, 'id' | 'totalSpent' | 'createdAt'>) => Promise<Client>;
+  updateClient: (id: string, data: Partial<Client>) => Promise<void>;
+  deleteClient: (id: string) => Promise<void>;
+  addService: (data: Omit<Service, 'id'>) => Promise<void>;
+  updateService: (id: string, data: Partial<Service>) => Promise<void>;
+  deleteService: (id: string) => Promise<void>;
+  addProfessional: (data: Omit<Professional, 'id' | 'likes'>) => Promise<void>;
+  updateProfessional: (id: string, data: Partial<Professional>) => Promise<void>;
+  deleteProfessional: (id: string) => Promise<void>;
+  likeProfessional: (id: string) => void;
+  resetAllLikes: () => Promise<void>;
+  addAppointment: (data: Omit<Appointment, 'id' | 'status'>, isPublic?: boolean) => Promise<void>;
+  updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<void>;
+  rescheduleAppointment: (id: string, date: string, startTime: string, endTime: string) => Promise<void>;
+  deleteAppointment: (id: string) => Promise<void>;
+  addFinancialEntry: (data: Omit<FinancialEntry, 'id'>) => Promise<void>;
+  deleteFinancialEntry: (id: string) => Promise<void>;
+  addSuggestion: (data: Omit<Suggestion, 'id' | 'date'>) => Promise<void>;
+  updateSuggestion: (id: string, data: Partial<Suggestion>) => Promise<void>;
+  deleteSuggestion: (id: string) => Promise<void>;
+  markNotificationAsRead: (id: string) => void;
+  clearNotifications: () => void;
+  updateConfig: (data: Partial<ShopConfig>) => Promise<void>;
+  addShopReview: (review: Omit<Review, 'id' | 'date'>) => void;
+  addLoyaltyCard: (data: Omit<LoyaltyCard, 'id'>) => Promise<void>;
+  updateLoyaltyCard: (clientId: string, data: Partial<LoyaltyCard>) => Promise<void>;
+  addSubscription: (data: Omit<Subscription, 'id'>) => Promise<void>;
+  updateSubscription: (id: string, data: Partial<Subscription>) => Promise<void>;
+  deleteSubscription: (id: string) => Promise<void>;
+  addPartner: (data: Omit<Partner, 'id'>) => Promise<void>;
+  updatePartner: (id: string, data: Partial<Partner>) => Promise<void>;
+  deletePartner: (id: string) => Promise<void>;
+  addBlockedSlot: (data: Omit<BlockedSlot, 'id'>) => Promise<void>;
+  deleteBlockedSlot: (id: string) => Promise<void>;
+  addCampaign: (data: Omit<InactivityCampaign, 'id'>) => Promise<void>;
+  updateCampaign: (id: string, data: Partial<InactivityCampaign>) => Promise<void>;
+  deleteCampaign: (id: string) => Promise<void>;
+  isSlotBlocked: (professionalId: string, date: string, time: string) => boolean;
+  // ── NOVO: Clube de Benefícios ──────────────────────────────
+  addClientBenefit: (data: Omit<ClientBenefit, 'id'>) => Promise<void>;
+  updateClientBenefit: (id: string, data: Partial<ClientBenefit>) => Promise<void>;
+  deleteClientBenefit: (id: string) => Promise<void>;
+  generateBenefitQR: (benefitId: string, partnerId: string, partnerName: string) => Promise<string>;
+  validateAndUseBenefit: (qrToken: string) => Promise<ClientBenefit | null>;
+}
+
+const BarberContext = createContext<BarberContextType | undefined>(undefined);
+
+const COLLECTIONS = {
+  CLIENTS: 'clients',
+  PROFESSIONALS: 'professionals',
+  SERVICES: 'services',
+  APPOINTMENTS: 'appointments',
+  FINANCIAL: 'financialEntries',
+  CONFIG: 'config',
+  NOTIFICATIONS: 'notifications',
+  SUGGESTIONS: 'suggestions',
+  LOYALTY_CARDS: 'loyaltyCards',
+  SUBSCRIPTIONS: 'subscriptions',
+  PARTNERS: 'partners',
+  BLOCKED_SLOTS: 'blockedSlots',
+  INACTIVITY_CAMPAIGNS: 'inactivityCampaigns',
+  CLIENT_BENEFITS: 'clientBenefits',  // ── NOVO ──
+};
+
+// ── Gerador de token único para QR Code de benefício ─────────
+const generateBenefitToken = (): string => {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `BNF-${timestamp}-${random}`;
+};
+
+// ── Helpers de data ───────────────────────────────────────────
+/** Retorna data no formato YYYY-MM-DD para N dias à frente */
+function datePlusDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+/** Chave usada no localStorage para controlar lembretes já enviados */
+function reminderKey(type: string, id: string, date: string): string {
+  return `wpp_reminder_${type}_${id}_${date}`;
+}
+
+export function BarberProvider({ children }: { children?: ReactNode }) {
+  const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('brb_theme');
+    return (saved as 'dark' | 'light') || 'dark';
+  });
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('brb_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [clients, setClients] = useState<Client[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [config, setConfig] = useState<ShopConfig>({
+    name: "", description: "", aboutTitle: "", aboutText: "", address: "",
+    city: "", state: "", whatsapp: "", instagram: "", logo: "", coverImage: "",
+    loginBackground: "", locationUrl: "", openingTime: "08:00", closingTime: "20:00",
+    email: "", cnpj: "", gallery: [], reviews: []
+  });
+  const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCard[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
+  const [inactivityCampaigns, setInactivityCampaigns] = useState<InactivityCampaign[]>([]);
+  const [clientBenefits, setClientBenefits] = useState<ClientBenefit[]>([]);  // ── NOVO ──
+
+  useEffect(() => { localStorage.setItem('brb_theme', theme); }, [theme]);
+  useEffect(() => {
+    if (user) localStorage.setItem('brb_user', JSON.stringify(user));
+    else localStorage.removeItem('brb_user');
+  }, [user]);
+
+  useEffect(() => {
+    const unsubscribers = [
+      onSnapshot(collection(db, COLLECTIONS.CLIENTS), snap => setClients(snap.docs.map(d => ({ id: d.id, ...d.data() } as Client)))),
+      onSnapshot(collection(db, COLLECTIONS.PROFESSIONALS), snap => setProfessionals(snap.docs.map(d => ({ id: d.id, ...d.data() } as Professional)))),
+      onSnapshot(collection(db, COLLECTIONS.SERVICES), snap => setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Service)))),
+      onSnapshot(collection(db, COLLECTIONS.APPOINTMENTS), snap => setAppointments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Appointment)))),
+      onSnapshot(collection(db, COLLECTIONS.FINANCIAL), snap => setFinancialEntries(snap.docs.map(d => ({ id: d.id, ...d.data() } as FinancialEntry)))),
+      onSnapshot(collection(db, COLLECTIONS.NOTIFICATIONS), snap => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)))),
+      onSnapshot(collection(db, COLLECTIONS.SUGGESTIONS), snap => setSuggestions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Suggestion)))),
+      onSnapshot(collection(db, COLLECTIONS.LOYALTY_CARDS), snap => setLoyaltyCards(snap.docs.map(d => ({ id: d.id, ...d.data() } as LoyaltyCard)))),
+      onSnapshot(collection(db, COLLECTIONS.SUBSCRIPTIONS), snap => setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Subscription)))),
+      onSnapshot(collection(db, COLLECTIONS.PARTNERS), snap => setPartners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Partner)))),
+      onSnapshot(collection(db, COLLECTIONS.BLOCKED_SLOTS), snap => setBlockedSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlockedSlot)))),
+      onSnapshot(collection(db, COLLECTIONS.INACTIVITY_CAMPAIGNS), snap => setInactivityCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as InactivityCampaign)))),
+      // ── NOVO: Escuta em tempo real para benefícios ──
+      onSnapshot(collection(db, COLLECTIONS.CLIENT_BENEFITS), snap => setClientBenefits(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientBenefit)))),
+      onSnapshot(doc(db, COLLECTIONS.CONFIG, 'main'), docSnap => {
+        if (docSnap.exists()) {
+          const configData = docSnap.data() as ShopConfig;
+          setConfig(configData);
+          const savedUser = localStorage.getItem('brb_user');
+          if (savedUser) {
+            const parsedUser = JSON.parse(savedUser);
+            if (parsedUser.role === 'ADMIN' && configData.adminName) {
+              const updatedUser = { ...parsedUser, name: configData.adminName, avatar: configData.logo };
+              setUser(updatedUser);
+              localStorage.setItem('brb_user', JSON.stringify(updatedUser));
+            }
+          }
+        }
+      })
+    ];
+    setLoading(false);
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, []);
+
+  // ── ─────────────────────────────────────────────────────────
+  // CRON SIMULADO: roda uma vez por sessão quando os dados
+  // já estiverem carregados (appointments e subscriptions prontos).
+  // Envia lembretes de agendamento (amanhã) e assinaturas (3 dias).
+  // Usa localStorage para não repetir o envio no mesmo dia.
+  // ── ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (loading) return;
+    if (appointments.length === 0 && subscriptions.length === 0) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const cronKey = `wpp_cron_${today}`;
+
+    // Só roda uma vez por dia
+    if (localStorage.getItem(cronKey)) return;
+    localStorage.setItem(cronKey, '1');
+
+    const tomorrow    = datePlusDays(1);
+    const in3Days     = datePlusDays(3);
+
+    // ── Lembretes de agendamento (amanhã) ──────────────────────
+    const appointmentsTomorrow = appointments.filter(
+      a => a.date === tomorrow && a.status === 'AGENDADO'
+    );
+
+    appointmentsTomorrow.forEach(async (a) => {
+      const key = reminderKey('agendamento', a.id, tomorrow);
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+
+      await wppLembrete24h(
+        a.clientPhone,
+        a.clientName,
+        a.serviceName,
+        a.professionalName,
+        a.startTime
+      );
+    });
+
+    // ── Lembretes de assinatura vencendo em 3 dias ─────────────
+    const subsExpiring = subscriptions.filter(
+      s => s.endDate?.split('T')[0] === in3Days && s.status === 'ATIVA'
+    );
+
+    subsExpiring.forEach(async (s) => {
+      const key = reminderKey('assinatura', s.id, in3Days);
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+
+      // Busca o telefone do cliente
+      const client = clients.find(c => c.id === s.clientId);
+      const phone = client?.phone || '';
+      if (!phone) return;
+
+      await wppVencimentoVip3dias(
+        phone,
+        s.clientName,
+        s.endDate.split('T')[0],
+        'https://novojeitobarbearia.pages.dev'
+      );
+    });
+
+  }, [loading, appointments, subscriptions, clients]);
+
+  // ── ─────────────────────────────────────────────────────────
+  // LEMBRETE 15 MIN: roda a cada 60 segundos e verifica se
+  // algum agendamento de HOJE começa em ~15 minutos.
+  // Usa localStorage para garantir envio único por agendamento.
+  // ── ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (loading || appointments.length === 0) return;
+
+    const check = () => {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+
+      // Formata hora atual como "HH:MM"
+      const nowHH = String(now.getHours()).padStart(2, '0');
+      const nowMM = String(now.getMinutes()).padStart(2, '0');
+      const nowTime = `${nowHH}:${nowMM}`;
+
+      // Calcula o horário que será daqui a 15 minutos
+      const in15 = new Date(now.getTime() + 15 * 60 * 1000);
+      const in15HH = String(in15.getHours()).padStart(2, '0');
+      const in15MM = String(in15.getMinutes()).padStart(2, '0');
+      const targetTime = `${in15HH}:${in15MM}`;
+
+      const candidates = appointments.filter(
+        a =>
+          a.date === todayStr &&
+          a.startTime === targetTime &&
+          (a.status === 'AGENDADO' || a.status === 'PENDENTE')
+      );
+
+      candidates.forEach(async (a) => {
+        const key = `wpp_15min_${a.id}`;
+        if (localStorage.getItem(key)) return; // já enviado
+        localStorage.setItem(key, '1');
+
+        await wppLembrete1h(
+          a.clientPhone,
+          a.clientName,
+          a.serviceName,
+          a.professionalName,
+          a.startTime
+        );
+      });
+    };
+
+    // Roda imediatamente e depois a cada 60 segundos
+    check();
+    const interval = setInterval(check, 60 * 1000);
+    return () => clearInterval(interval);
+
+  }, [loading, appointments]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+
+  const login = async (id: string, pass: string) => {
+    if (id === 'novojeitoadm@gmail.com' && pass === '654326') {
+      const adminName = config.adminName || 'Novo Jeito';
+      const adminAvatar = config.logo || 'https://i.pravatar.cc/150';
+      setUser({ id: 'admin', name: adminName, email: id, role: 'ADMIN', avatar: adminAvatar });
+      return;
+    }
+    const client = clients.find(c => (c.phone === id || c.email === id) && c.password === pass);
+    if (client) {
+      setUser({ id: client.id, name: client.name, email: client.email, role: 'CLIENTE', phone: client.phone });
+    } else {
+      throw new Error('Credenciais inválidas');
+    }
+  };
+
+  const logout = () => setUser(null);
+
+  const updateUser = (data: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...data };
+      localStorage.setItem('brb_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // ── CLIENTS ──────────────────────────────────────────────────
+  const addClient = async (data: any) => {
+    const docRef = await addDoc(collection(db, COLLECTIONS.CLIENTS), { ...data, totalSpent: 0, createdAt: new Date().toISOString() });
+    return { id: docRef.id, ...data } as Client;
+  };
+  const updateClient = async (id: string, data: any) => { await updateDoc(doc(db, COLLECTIONS.CLIENTS, id), data); };
+  const deleteClient = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.CLIENTS, id)); };
+
+  // ── SERVICES ─────────────────────────────────────────────────
+  const addService = async (data: any) => { await addDoc(collection(db, COLLECTIONS.SERVICES), data); };
+  const updateService = async (id: string, data: any) => { await updateDoc(doc(db, COLLECTIONS.SERVICES, id), data); };
+  const deleteService = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.SERVICES, id)); };
+
+  // ── PROFESSIONALS ─────────────────────────────────────────────
+  const addProfessional = async (data: any) => { await addDoc(collection(db, COLLECTIONS.PROFESSIONALS), { ...data, likes: 0 }); };
+  const updateProfessional = async (id: string, data: any) => { await updateDoc(doc(db, COLLECTIONS.PROFESSIONALS, id), data); };
+  const deleteProfessional = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PROFESSIONALS, id)); };
+  const likeProfessional = async (id: string) => {
+    const p = professionals.find(p => p.id === id);
+    if (p) await updateDoc(doc(db, COLLECTIONS.PROFESSIONALS, id), { likes: (p.likes || 0) + 1 });
+  };
+  const resetAllLikes = async () => {
+    await Promise.all(professionals.map(p => updateDoc(doc(db, COLLECTIONS.PROFESSIONALS, p.id), { likes: 0 })));
+  };
+
+  // ── APPOINTMENTS ─────────────────────────────────────────────
+  const addAppointment = async (data: any, isPublic = false) => {
+    await addDoc(collection(db, COLLECTIONS.APPOINTMENTS), { ...data, status: 'PENDENTE' });
+
+    if (isPublic) {
+      await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), {
+        title: 'Novo Agendamento',
+        message: `${data.clientName} agendou ${data.serviceName}`,
+        time: new Date().toISOString(),
+        read: false,
+        type: 'appointment'
+      });
+    }
+
+    // ── WhatsApp: confirmação de agendamento ──────────────────
+    await wppConfirmacaoAgendamento(
+      data.clientPhone,
+      data.clientName,
+      data.serviceName,
+      data.professionalName,
+      data.date,
+      data.startTime
+    );
+  };
+
+  const updateAppointmentStatus = async (id: string, status: any) => {
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { status });
+
+    const appointment = appointments.find(a => a.id === id);
+
+    // ── Voltar para PENDENTE: remove receita + estorna fidelidade ──
+    if (status === 'PENDENTE') {
+      // Remove entrada financeira vinculada
+      const linkedEntry = financialEntries.find(e => e.appointmentId === id);
+      if (linkedEntry) await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, linkedEntry.id));
+
+      // Estorna selos e cashback de fidelidade
+      if (appointment) {
+        const cashbackPct = (config as any).cashbackPercent ?? 5;
+        const stampsLimit = (config as any).stampsForFreeCut ?? 10;
+        const cashbackValue = parseFloat(((appointment.price * cashbackPct) / 100).toFixed(2));
+
+        const loyaltySnapshot = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+        const cardDoc = loyaltySnapshot.docs.find(d => d.data().clientId === appointment.clientId);
+
+        if (cardDoc) {
+          const card = cardDoc.data();
+          const prevTotal = (card.totalStamps || 0) - 1;
+          const gaveFreeCut = prevTotal > 0 && prevTotal % stampsLimit === 0;
+
+          await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
+            stamps: Math.max(0, (card.stamps || 0) - 1),
+            totalStamps: Math.max(0, (card.totalStamps || 0) - 1),
+            credits: Math.max(0, parseFloat(((card.credits || 0) - cashbackValue).toFixed(2))),
+            freeCutsPending: gaveFreeCut ? Math.max(0, (card.freeCutsPending || 0) - 1) : (card.freeCutsPending || 0),
+            freeCutsEarned: gaveFreeCut ? Math.max(0, (card.freeCutsEarned || 0) - 1) : (card.freeCutsEarned || 0),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      // ── NOVO: Estorna benefício gerado (se não foi usado) ──
+      if (appointment) {
+        const benefitsSnap = await getDocs(collection(db, COLLECTIONS.CLIENT_BENEFITS));
+        const benefitDoc = benefitsSnap.docs.find(d =>
+          d.data().appointmentId === id &&
+          (d.data().status === 'DISPONIVEL' || d.data().status === 'QR_GERADO')
+        );
+        if (benefitDoc) {
+          await deleteDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, benefitDoc.id));
+        }
+      }
+    }
+
+    // ── Marcar como CONCLUIDO_PAGO: cria receita + aplica fidelidade + gera benefício ──
+    if (status === 'CONCLUIDO_PAGO' && appointment) {
+      const entryDescription = `Agendamento #${id.substring(0, 8)} - ${appointment.serviceName}`;
+      const existingEntry = financialEntries.find(e => e.description === entryDescription);
+
+      if (!existingEntry) {
+        await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+          description: entryDescription,
+          amount: appointment.price,
+          type: 'RECEITA',
+          category: 'Serviços',
+          date: new Date().toISOString().split('T')[0],
+          appointmentId: id
+        });
+      }
+
+      // Cashback + Selos
+      const cashbackPct = (config as any).cashbackPercent ?? 5;
+      const stampsLimit = (config as any).stampsForFreeCut ?? 10;
+      const cashbackValue = parseFloat(((appointment.price * cashbackPct) / 100).toFixed(2));
+
+      const loyaltySnapshot = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+      const cardDoc = loyaltySnapshot.docs.find(d => d.data().clientId === appointment.clientId);
+
+      if (cardDoc) {
+        const card = cardDoc.data();
+        const newStamps = (card.stamps || 0) + 1;
+        const cycled = newStamps >= stampsLimit;
+        await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
+          stamps: cycled ? newStamps - stampsLimit : newStamps,
+          totalStamps: (card.totalStamps || 0) + 1,
+          credits: parseFloat(((card.credits || 0) + cashbackValue).toFixed(2)),
+          freeCutsPending: cycled ? (card.freeCutsPending || 0) + 1 : (card.freeCutsPending || 0),
+          freeCutsEarned: cycled ? (card.freeCutsEarned || 0) + 1 : (card.freeCutsEarned || 0),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      // ── NOVO: Gera 1 benefício parceiro para o cliente ──────
+      const benefitsSnap = await getDocs(collection(db, COLLECTIONS.CLIENT_BENEFITS));
+      const existingBenefit = benefitsSnap.docs.find(d => d.data().appointmentId === id);
+
+      if (!existingBenefit) {
+        const validityDays = (config as any).benefitValidityDays ?? 7;
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + validityDays);
+
+        await addDoc(collection(db, COLLECTIONS.CLIENT_BENEFITS), {
+          clientId: appointment.clientId,
+          clientName: appointment.clientName,
+          clientPhone: appointment.clientPhone,
+          appointmentId: id,
+          status: 'DISPONIVEL',
+          expiryDate: expiryDate.toISOString(),
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+  };
+
+  const rescheduleAppointment = async (id: string, date: string, startTime: string, endTime: string) => {
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { date, startTime, endTime });
+
+    // ── WhatsApp: avisa sobre o reagendamento ─────────────────
+    const appointment = appointments.find(a => a.id === id);
+    if (appointment) {
+      await wppConfirmacaoAgendamento(
+        appointment.clientPhone,
+        appointment.clientName,
+        appointment.serviceName,
+        appointment.professionalName,
+        date,
+        startTime
+      );
+    }
+  };
+
+  const deleteAppointment = async (id: string) => {
+    const linkedEntry = financialEntries.find(e => e.appointmentId === id);
+    if (linkedEntry) await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, linkedEntry.id));
+    await deleteDoc(doc(db, COLLECTIONS.APPOINTMENTS, id));
+  };
+
+  // ── FINANCIAL ─────────────────────────────────────────────────
+  const addFinancialEntry = async (data: any) => { await addDoc(collection(db, COLLECTIONS.FINANCIAL), data); };
+  const deleteFinancialEntry = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, id)); };
+
+  // ── SUGGESTIONS ───────────────────────────────────────────────
+  const addSuggestion = async (data: any) => {
+    await addDoc(collection(db, COLLECTIONS.SUGGESTIONS), { ...data, date: new Date().toLocaleDateString('pt-BR') });
+    await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), {
+      title: 'Nova Sugestão',
+      message: `${data.clientName} enviou uma sugestão`,
+      time: new Date().toISOString(),
+      read: false,
+      type: 'suggestion',
+      clientPhone: data.clientPhone
+    });
+  };
+  const updateSuggestion = async (id: string, data: any) => { await updateDoc(doc(db, COLLECTIONS.SUGGESTIONS, id), data); };
+  const deleteSuggestion = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.SUGGESTIONS, id)); };
+
+  // ── NOTIFICATIONS ─────────────────────────────────────────────
+  const markNotificationAsRead = async (id: string) => { await updateDoc(doc(db, COLLECTIONS.NOTIFICATIONS, id), { read: true }); };
+  const clearNotifications = async () => {
+    const snapshot = await getDocs(collection(db, COLLECTIONS.NOTIFICATIONS));
+    snapshot.docs.forEach(async d => await deleteDoc(doc(db, COLLECTIONS.NOTIFICATIONS, d.id)));
+  };
+
+  // ── CONFIG ────────────────────────────────────────────────────
+  const updateConfig = async (data: Partial<ShopConfig>) => {
+    const sanitize = (obj: any): any => JSON.parse(JSON.stringify(obj));
+    const merged = sanitize({ ...config, ...data });
+    await setDoc(doc(db, COLLECTIONS.CONFIG, 'main'), merged, { merge: true });
+  };
+  const addShopReview = async (review: Omit<Review, 'id' | 'date'>) => {
+    const newReview: Review = { ...review, id: `rev_${Date.now()}`, date: new Date().toLocaleDateString('pt-BR') };
+    await updateConfig({ reviews: [newReview, ...(config.reviews || [])] });
+  };
+
+  // ── LOYALTY CARDS ─────────────────────────────────────────────
+  const addLoyaltyCard = async (data: Omit<LoyaltyCard, 'id'>) => {
+    await addDoc(collection(db, COLLECTIONS.LOYALTY_CARDS), data);
+  };
+  const updateLoyaltyCard = async (clientId: string, data: Partial<LoyaltyCard>) => {
+    const snapshot = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+    const cardDoc = snapshot.docs.find(d => d.data().clientId === clientId);
+    if (cardDoc) await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), data);
+  };
+
+  // ── SUBSCRIPTIONS ─────────────────────────────────────────────
+  const addSubscription = async (data: Omit<Subscription, 'id'>) => {
+    await addDoc(collection(db, COLLECTIONS.SUBSCRIPTIONS), data);
+
+    // ── WhatsApp: boas-vindas ao novo assinante ───────────────
+    const client = clients.find(c => c.id === data.clientId);
+    const phone = client?.phone || '';
+    if (phone) {
+      await wppPosAtendimento(
+        phone,
+        data.clientName,
+        'https://novojeitobarbearia.pages.dev'
+      );
+    }
+  };
+  const updateSubscription = async (id: string, data: Partial<Subscription>) => { await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id), data); };
+  const deleteSubscription = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id)); };
+
+  // ── PARTNERS ──────────────────────────────────────────────────
+  const addPartner = async (data: Omit<Partner, 'id'>) => { await addDoc(collection(db, COLLECTIONS.PARTNERS), data); };
+  const updatePartner = async (id: string, data: Partial<Partner>) => { await updateDoc(doc(db, COLLECTIONS.PARTNERS, id), data); };
+  const deletePartner = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.PARTNERS, id)); };
+
+  // ── BLOCKED SLOTS ─────────────────────────────────────────────
+  const addBlockedSlot = async (data: Omit<BlockedSlot, 'id'>) => { await addDoc(collection(db, COLLECTIONS.BLOCKED_SLOTS), data); };
+  const deleteBlockedSlot = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.BLOCKED_SLOTS, id)); };
+  const isSlotBlocked = (professionalId: string, date: string, time: string): boolean => {
+    const dayOfWeek = new Date(date + 'T12:00:00').getDay();
+    return blockedSlots.some(slot => {
+      if (slot.professionalId !== professionalId) return false;
+      const timeInRange = time >= slot.startTime && time < slot.endTime;
+      if (!timeInRange) return false;
+      if (slot.recurring) return slot.recurringDays?.includes(dayOfWeek) ?? false;
+      return slot.date === date;
+    });
+  };
+
+  // ── INACTIVITY CAMPAIGNS ──────────────────────────────────────
+  const addCampaign = async (data: Omit<InactivityCampaign, 'id'>) => { await addDoc(collection(db, COLLECTIONS.INACTIVITY_CAMPAIGNS), data); };
+  const updateCampaign = async (id: string, data: Partial<InactivityCampaign>) => { await updateDoc(doc(db, COLLECTIONS.INACTIVITY_CAMPAIGNS, id), data); };
+  const deleteCampaign = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.INACTIVITY_CAMPAIGNS, id)); };
+
+  // ── CLUBE DE BENEFÍCIOS ───────────────────────────────────────
+  const addClientBenefit = async (data: Omit<ClientBenefit, 'id'>) => {
+    await addDoc(collection(db, COLLECTIONS.CLIENT_BENEFITS), data);
+  };
+
+  const updateClientBenefit = async (id: string, data: Partial<ClientBenefit>) => {
+    await updateDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, id), data);
+  };
+
+  const deleteClientBenefit = async (id: string) => {
+    await deleteDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, id));
+  };
+
+  /**
+   * Gera um QR Code único para o cliente usar no parceiro escolhido.
+   * Atualiza o benefício com: qrToken, partnerId, partnerName, status=QR_GERADO, qrExpiryDate.
+   * Retorna o token gerado.
+   */
+  const generateBenefitQR = async (benefitId: string, partnerId: string, partnerName: string): Promise<string> => {
+    const token = generateBenefitToken();
+    const qrExpiry = new Date();
+    qrExpiry.setHours(qrExpiry.getHours() + 24); // QR válido por 24h após geração
+
+    await updateDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, benefitId), {
+      qrToken: token,
+      partnerId,
+      partnerName,
+      status: 'QR_GERADO',
+      qrExpiryDate: qrExpiry.toISOString(),
+    });
+
+    return token;
+  };
+
+  /**
+   * Valida e consome um QR Code de benefício.
+   * Verifica: existência, status, validade do QR, validade do benefício.
+   * Se válido, marca como USADO e retorna o benefício.
+   * Se inválido, retorna null.
+   */
+  const validateAndUseBenefit = async (qrToken: string): Promise<ClientBenefit | null> => {
+    const snap = await getDocs(collection(db, COLLECTIONS.CLIENT_BENEFITS));
+    const benefitDoc = snap.docs.find(d => d.data().qrToken === qrToken);
+
+    if (!benefitDoc) return null;
+
+    const benefit = { id: benefitDoc.id, ...benefitDoc.data() } as ClientBenefit;
+    const now = new Date();
+
+    // Verifica se já foi usado
+    if (benefit.status === 'USADO') return null;
+
+    // Verifica se o benefício principal expirou
+    if (new Date(benefit.expiryDate) < now) {
+      await updateDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, benefitDoc.id), { status: 'EXPIRADO' });
+      return null;
+    }
+
+    // Verifica se o QR Code expirou
+    if (benefit.qrExpiryDate && new Date(benefit.qrExpiryDate) < now) {
+      // QR expirou mas benefício ainda válido — volta para DISPONIVEL
+      await updateDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, benefitDoc.id), {
+        status: 'DISPONIVEL',
+        qrToken: undefined,
+        partnerId: undefined,
+        partnerName: undefined,
+        qrExpiryDate: undefined,
+      });
+      return null;
+    }
+
+    // ✅ Tudo válido: marca como usado e incrementa contador do parceiro
+    await updateDoc(doc(db, COLLECTIONS.CLIENT_BENEFITS, benefitDoc.id), {
+      status: 'USADO',
+      usedAt: new Date().toISOString(),
+      usedByPartnerName: benefit.partnerName,
+    });
+
+    // Incrementa usedBenefitsCount no parceiro
+    if (benefit.partnerId) {
+      const partnerDoc = partners.find(p => p.id === benefit.partnerId);
+      if (partnerDoc) {
+        await updateDoc(doc(db, COLLECTIONS.PARTNERS, benefit.partnerId), {
+          usedBenefitsCount: ((partnerDoc as any).usedBenefitsCount || 0) + 1,
+          totalReferrals: (partnerDoc.totalReferrals || 0) + 1,
+        });
+      }
+    }
+
+    return { ...benefit, status: 'USADO', usedAt: new Date().toISOString() };
+  };
+
+  return React.createElement(BarberContext.Provider, {
+    value: {
+      user, clients, professionals, services, appointments, financialEntries,
+      notifications, suggestions, config, loading, theme,
+      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns,
+      clientBenefits,  // ── NOVO ──
+      toggleTheme, login, logout, updateUser,
+      addClient, updateClient, deleteClient,
+      addService, updateService, deleteService,
+      addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
+      addAppointment, updateAppointmentStatus, rescheduleAppointment, deleteAppointment,
+      addFinancialEntry, deleteFinancialEntry,
+      addSuggestion, updateSuggestion, deleteSuggestion,
+      markNotificationAsRead, clearNotifications,
+      updateConfig, addShopReview,
+      addLoyaltyCard, updateLoyaltyCard,
+      addSubscription, updateSubscription, deleteSubscription,
+      addPartner, updatePartner, deletePartner,
+      addBlockedSlot, deleteBlockedSlot, isSlotBlocked,
+      addCampaign, updateCampaign, deleteCampaign,
+      // ── NOVO ──
+      addClientBenefit, updateClientBenefit, deleteClientBenefit,
+      generateBenefitQR, validateAndUseBenefit,
+    }
+  }, children);
+}
+
+export const useBarberStore = () => {
+  const context = useContext(BarberContext);
+  if (!context) throw new Error('useBarberStore must be used within BarberProvider');
+  return context;
+};
