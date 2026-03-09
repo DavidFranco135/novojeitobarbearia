@@ -145,8 +145,6 @@ const Appointments: React.FC = () => {
 
   const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
 
-  return (
-) => clearInterval(interval);
   }, []);
 
   // ── Som: apenas para ADMIN, apenas para agendamentos públicos (do cliente).
@@ -193,6 +191,13 @@ const Appointments: React.FC = () => {
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
   const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '' });
+  // ── Modal Finalização ──────────────────────────────────────
+  const [finModal, setFinModal] = useState<any>(null);
+  const [finAdditionals, setFinAdditionals] = useState<{id:string;name:string;price:number;qty:number}[]>([]);
+  const [finPayMethod, setFinPayMethod] = useState<'PIX'|'LINK'|'DINHEIRO'|'CARTAO'>('PIX');
+  const [finNewItem, setFinNewItem] = useState({ name: '', price: '' });
+  const [finLoading, setFinLoading] = useState(false);
+  const [finResult, setFinResult] = useState<{pixCode?:string;pixQrCode?:string;paymentLink?:string}|null>(null);
   const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all'>('day');
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
@@ -249,42 +254,6 @@ const Appointments: React.FC = () => {
       setShowRescheduleModal(null);
     }
   };
-
-  // ── Abre modal de finalização ──────────────────────────────
-  const openFinModal = (app: any) => {
-    setFinModal(app);
-    setFinAdditionals([]);
-    setFinPayMethod('PIX');
-    setFinNewItem({ name: '', price: '' });
-    setFinResult(null);
-  };
-
-  const handleFinalize = async () => {
-    if (!finModal) return;
-    setFinLoading(true);
-    try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
-      setFinResult(result || {});
-      if (!result?.pixCode && !result?.paymentLink) {
-        // No Asaas configured — just close
-        setFinModal(null);
-      }
-    } catch(e) { console.error(e); }
-    finally { setFinLoading(false); }
-  };
-
-  const addFinItem = () => {
-    if (!finNewItem.name || !finNewItem.price) return;
-    setFinAdditionals(prev => [...prev, {
-      id: Date.now().toString(),
-      name: finNewItem.name,
-      price: parseFloat(finNewItem.price) || 0,
-      qty: 1,
-    }]);
-    setFinNewItem({ name: '', price: '' });
-  };
-
-  const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
 
   return (
 
@@ -377,7 +346,7 @@ const Appointments: React.FC = () => {
       <div className="flex-1 cartao-vidro rounded-[2rem] border-white/5 shadow-2xl overflow-hidden flex flex-col">
         {viewMode === 'grid' ? (
           <div className={`overflow-auto h-full scrollbar-hide ${compactView ? '' : ''}`}>
-            <div className={compactView ? 'w-full' : 'min-w-[900px]'}>
+            <div className={compactView ? 'min-w-[360px]' : 'min-w-[600px]'}>
               {/* CABEÇALHO: Reduzido padding vertical */}
               <div className={`border-b border-white/5 bg-white/[0.02] sticky top-0 z-10 ${compactView ? 'grid grid-cols-[60px_repeat(auto-fit,minmax(120px,1fr))]' : 'grid grid-cols-[80px_repeat(auto-fit,minmax(200px,1fr))]'}`}>
                 <div className={`flex items-center justify-center text-zinc-500 ${compactView ? 'p-2' : 'p-3'}`}><Clock size={compactView ? 14 : 18} /></div>
@@ -395,43 +364,6 @@ const Appointments: React.FC = () => {
                   {professionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
                     // ── Abre modal de finalização ──────────────────────────────
-  const openFinModal = (app: any) => {
-    setFinModal(app);
-    setFinAdditionals([]);
-    setFinPayMethod('PIX');
-    setFinNewItem({ name: '', price: '' });
-    setFinResult(null);
-  };
-
-  const handleFinalize = async () => {
-    if (!finModal) return;
-    setFinLoading(true);
-    try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
-      setFinResult(result || {});
-      if (!result?.pixCode && !result?.paymentLink) {
-        // No Asaas configured — just close
-        setFinModal(null);
-      }
-    } catch(e) { console.error(e); }
-    finally { setFinLoading(false); }
-  };
-
-  const addFinItem = () => {
-    if (!finNewItem.name || !finNewItem.price) return;
-    setFinAdditionals(prev => [...prev, {
-      id: Date.now().toString(),
-      name: finNewItem.name,
-      price: parseFloat(finNewItem.price) || 0,
-      qty: 1,
-    }]);
-    setFinNewItem({ name: '', price: '' });
-  };
-
-  const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
-
-  return (
-
                       <div 
                         key={prof.id} 
                         className={`border-r border-white/5 last:border-r-0 ${compactView ? 'p-1' : 'p-1.5'} ${!app ? 'cursor-pointer hover:bg-white/5 transition-all' : ''}`}
@@ -577,43 +509,6 @@ const Appointments: React.FC = () => {
         const statusLabel = app.status === 'CONCLUIDO_PAGO' ? 'Concluído e Pago' : app.status === 'CANCELADO' ? 'Cancelado' : 'Pendente';
         const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
         // ── Abre modal de finalização ──────────────────────────────
-  const openFinModal = (app: any) => {
-    setFinModal(app);
-    setFinAdditionals([]);
-    setFinPayMethod('PIX');
-    setFinNewItem({ name: '', price: '' });
-    setFinResult(null);
-  };
-
-  const handleFinalize = async () => {
-    if (!finModal) return;
-    setFinLoading(true);
-    try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
-      setFinResult(result || {});
-      if (!result?.pixCode && !result?.paymentLink) {
-        // No Asaas configured — just close
-        setFinModal(null);
-      }
-    } catch(e) { console.error(e); }
-    finally { setFinLoading(false); }
-  };
-
-  const addFinItem = () => {
-    if (!finNewItem.name || !finNewItem.price) return;
-    setFinAdditionals(prev => [...prev, {
-      id: Date.now().toString(),
-      name: finNewItem.name,
-      price: parseFloat(finNewItem.price) || 0,
-      qty: 1,
-    }]);
-    setFinNewItem({ name: '', price: '' });
-  };
-
-  const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
-
-  return (
-
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
             <div className={`w-full max-w-md rounded-[2.5rem] p-8 space-y-6 shadow-2xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
               {/* Header */}
@@ -698,7 +593,8 @@ const Appointments: React.FC = () => {
           </div>
         );
       })()}
-
+    </div>
+  
       {/* ══════════════════════════════════════════════════════
           MODAL DE FINALIZAÇÃO — Adicionais + Pagamento Asaas
       ══════════════════════════════════════════════════════ */}
@@ -836,8 +732,8 @@ const Appointments: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
-  );
+
+    );
 };
 
 export default Appointments;
