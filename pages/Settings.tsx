@@ -370,12 +370,6 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className={`rounded-[2rem] border p-8 space-y-6 ${isDark ? 'border-white/5 bg-white/2' : 'border-zinc-200 bg-white'}`}>
-              <h3 className={`text-lg font-black font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>_PLACEHOLDER_
-                  className={inp} />
-                <p className={`text-[10px] font-bold ml-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>% do valor do serviço retorna como crédito</p>
-              </div>
-            </div>
           </div>
 
           {/* 7. Planos VIP */}
