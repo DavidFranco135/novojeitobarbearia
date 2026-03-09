@@ -95,6 +95,7 @@ const Appointments: React.FC = () => {
     appointments, professionals, services, clients, user, notifications,
     addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, theme
   } = useBarberStore();
+  const isDark = theme !== 'light';
 
   // ── Referência ao momento em que o componente montou.
   // Só notificações com timestamp POSTERIOR ao mount são consideradas "novas".
@@ -201,7 +202,9 @@ const Appointments: React.FC = () => {
   const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all'>('day');
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
-  const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`), []);
+  const hoursNormal = useMemo(() => Array.from({ length: 14 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`), []);
+  const hoursCompact = useMemo(() => Array.from({ length: 15 }, (_, i) => `${(i + 7).toString().padStart(2, '0')}:00`), []);
+  const hours = compactView ? hoursCompact : hoursNormal;
   const appointmentsToday = useMemo(() => appointments.filter(a => a.date === currentDate), [appointments, currentDate]);
   
   const appointmentsFiltered = useMemo(() => {
@@ -359,7 +362,7 @@ const Appointments: React.FC = () => {
               </div>
               {/* LINHAS DE HORÁRIO: Altura reduzida de 100px/50px para 60px/35px */}
               {hours.map(hour => (
-                <div key={hour} className={`border-b border-white/[0.03] ${compactView ? 'min-h-[40px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
+                <div key={hour} className={`border-b border-white/[0.03] ${compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
                   <div className="flex items-center justify-center border-r border-white/5 bg-white/[0.01]"><span className={`font-black text-zinc-600 ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
                   {professionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
@@ -372,13 +375,17 @@ const Appointments: React.FC = () => {
                       >
                         {app ? (
                           <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
-                            <div className="truncate">
-                              <h4 
-                                onClick={(e) => { e.stopPropagation(); setShowDetailModal(app); }}
-                                className={`font-black uppercase truncate cursor-pointer hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
-                                title="Ver detalhes do agendamento"
+                            <div className="truncate" onClick={(e) => { e.stopPropagation(); setShowDetailModal(app); }} style={{cursor:'pointer'}}>
+                              <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
+                                title="Ver detalhes"
                               >{app.clientName}</h4>
-                              {!compactView && <p className="text-[8px] font-black opacity-50 uppercase mt-1 truncate">{app.serviceName}</p>}
+                              {!compactView && (
+                                <>
+                                  <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName}</p>
+                                  <p className="text-[7px] text-zinc-500 font-bold mt-0.5">{app.startTime}{app.endTime ? ` – ${app.endTime}` : ''}</p>
+                                </>
+                              )}
+                              {compactView && <p className="text-[7px] text-[#C58A4A]/70 truncate">{app.serviceName}</p>}
                             </div>
                             <div className={`flex items-center justify-end gap-1 ${compactView ? 'mt-0.5' : 'mt-1'}`}>
                                <button 
