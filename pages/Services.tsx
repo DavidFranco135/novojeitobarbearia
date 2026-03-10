@@ -27,11 +27,23 @@ const Services: React.FC = () => {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setFormData({ ...formData, image: reader.result as string });
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    // Comprime a imagem antes de salvar (resolve travamento no Safari iOS com fotos de iPhone)
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 600;
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.width  * ratio;
+      canvas.height = img.height * ratio;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL('image/jpeg', 0.75);
+      URL.revokeObjectURL(url);
+      // Usa prev => para não capturar formData stale (bug clássico iOS Safari)
+      setFormData(prev => ({ ...prev, image: compressed }));
+    };
+    img.src = url;
   };
 
   const filteredServices = useMemo(() => {
@@ -150,7 +162,7 @@ const Services: React.FC = () => {
             </div>
             {/* botão fixo fora do scroll — nunca bloqueado pelo Safari */}
             <div className="px-10 py-6 flex-shrink-0">
-              <button type="button" onClick={handleSave} style={{ cursor: 'pointer', WebkitTapHighlightColor: 'rgba(0,0,0,0)', touchAction: 'manipulation' }} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
+              <button type="button" onClick={handleSave} onTouchEnd={e => { e.preventDefault(); handleSave(); }} style={{ cursor: 'pointer', WebkitTapHighlightColor: 'rgba(0,0,0,0)', touchAction: 'manipulation' }} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
             </div>
           </div>
         </div>

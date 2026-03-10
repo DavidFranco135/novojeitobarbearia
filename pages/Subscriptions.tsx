@@ -10,9 +10,10 @@ import { Subscription } from '../types';
 const Subscriptions: React.FC = () => {
   const store = useBarberStore() as any;
   const { clients, config, theme } = store;
-  const { subscriptions, addSubscription, updateSubscription } = store;
+  const { subscriptions, addSubscription, updateSubscription, deleteSubscription } = store;
 
   const [showModal, setShowModal]         = useState(false);
+  const [editingSub, setEditingSub]       = useState<any>(null);
   const [filterStatus, setFilterStatus]   = useState<'TODAS' | 'ATIVA' | 'A_VENCER' | 'VENCIDA' | 'CANCELADA'>('TODAS');
   const [selectedIds, setSelectedIds]     = useState<string[]>([]);   // multi-select para lembrete
   const [formData, setFormData]           = useState({
@@ -101,6 +102,17 @@ const Subscriptions: React.FC = () => {
     const startDate = new Date();
     const endDate   = calcEndDate(plan);
 
+    if (editingSub) {
+      await updateSubscription((editingSub as any).id, {
+        clientId: (formData as any).clientId,
+        planId: (formData as any).planId,
+        startDate: (formData as any).startDate,
+        endDate: (formData as any).endDate,
+        price: Number((formData as any).price),
+        status: (formData as any).status,
+      });
+      setEditingSub(null);
+    } else {
     await addSubscription({
       clientId:    formData.clientId,
       clientName:  client.name,
@@ -121,7 +133,8 @@ const Subscriptions: React.FC = () => {
       }],
       createdAt: new Date().toISOString(),
     });
-    setShowModal(false);
+    }
+    setShowModal(false); setEditingSub(null);
     setFormData({ clientId: '', planId: '', usageLimit: 0, paymentMethod: 'PIX' });
     alert('✅ Assinatura criada com sucesso!');
   };
@@ -167,6 +180,26 @@ const Subscriptions: React.FC = () => {
     VENCIDA:  { color: 'text-red-500 bg-red-500/10 border-red-500/20',            icon: AlertCircle },
     CANCELADA:{ color: 'text-zinc-500 bg-white/5 border-white/10',                icon: X },
     PAUSADA:  { color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',      icon: Clock },
+  };
+
+
+  const openEditSub = (sub: any) => {
+    setEditingSub(sub);
+    setFormData({
+      clientId: sub.clientId,
+      planId: sub.planId,
+      startDate: sub.startDate,
+      endDate: sub.endDate,
+      price: sub.price,
+      status: sub.status,
+    } as any);
+    setShowModal(true);
+  };
+
+  const handleDeleteSub = (id: string) => {
+    if (window.confirm('Deseja excluir esta assinatura?')) {
+      (deleteSubscription as any)(id);
+    }
   };
 
   const isDark     = theme !== 'light';
@@ -377,6 +410,16 @@ const Subscriptions: React.FC = () => {
                         ${isDark ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:bg-zinc-200'}`}>
                       {sub.status === 'ATIVA' ? 'Cancelar' : 'Reativar'}
                     </button>
+                    <button onClick={() => openEditSub(sub)}
+                      title="Editar assinatura"
+                      className={`p-3 rounded-xl border transition-all ${isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button onClick={() => handleDeleteSub(sub.id)}
+                      title="Excluir assinatura"
+                      className={`p-3 rounded-xl border transition-all ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -390,8 +433,8 @@ const Subscriptions: React.FC = () => {
         <div className={overlay}>
           <div className={mdl}>
             <div className="flex items-center justify-between">
-              <h2 className={`text-2xl font-black font-display italic ${txt}`}>Nova Assinatura</h2>
-              <button onClick={() => setShowModal(false)}
+              <h2 className={`text-2xl font-black font-display italic ${txt}`}>{editingSub ? 'Editar Assinatura' : 'Nova Assinatura'}</h2>
+              <button onClick={() => { setShowModal(false); setEditingSub(null); }}
                 className={`p-2 rounded-xl ${isDark ? 'bg-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-100 text-zinc-500 hover:text-zinc-900'}`}>
                 <X size={20} />
               </button>
@@ -450,7 +493,7 @@ const Subscriptions: React.FC = () => {
 
               {/* Limite de usos */}
               <div className="space-y-2">
-                <label className={lbl}>Limite de Usos (coloque a quantidade de usos)</label>
+                <label className={lbl}>Limite de Usos (0 = ilimitado)</label>
                 <input
                   type="number" min={0}
                   value={formData.usageLimit}
@@ -476,7 +519,7 @@ const Subscriptions: React.FC = () => {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setShowModal(false)} className={btnCancel}>Cancelar</button>
+              <button onClick={() => { setShowModal(false); setEditingSub(null); }} className={btnCancel}>Cancelar</button>
               <button onClick={handleCreate} className="flex-1 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[9px]">
                 Criar Assinatura
               </button>

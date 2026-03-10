@@ -147,7 +147,7 @@ export async function wppPosAtendimento(
   clientName: string,
   linkAvaliacao: string
 ): Promise<void> {
-  await sendTemplate(phone, 'pos_atendimento', [
+  await sendTemplate(phone, 'pos_atendimento_v2', [
     { name: 'cliente_nome',    value: clientName },
     { name: 'link_avaliacao',  value: linkAvaliacao },
   ]);
@@ -164,7 +164,7 @@ export async function wppVencimentoVip3dias(
   endDate: string,
   linkRenovacao: string
 ): Promise<void> {
-  await sendTemplate(phone, 'vencimento_plano_vip_3dias', [
+  await sendTemplate(phone, 'aviso_vencimento_3dia', [
     { name: 'cliente_nome',     value: clientName },
     { name: 'data_vencimento',  value: formatDate(endDate) },
     { name: 'link_renovacao',   value: linkRenovacao },
@@ -182,7 +182,7 @@ export async function wppVencimentoVip1dia(
   endDate: string,
   linkRenovacao: string
 ): Promise<void> {
-  await sendTemplate(phone, 'vencimento_plano_vip_1dia', [
+  await sendTemplate(phone, 'aviso_vencimento_1dia', [
     { name: 'cliente_nome',     value: clientName },
     { name: 'data_vencimento',  value: formatDate(endDate) },
     { name: 'link_renovacao',   value: linkRenovacao },
@@ -200,7 +200,7 @@ export async function wppClienteInativo(
   diasAusente: number,
   linkAgendamento: string
 ): Promise<void> {
-  await sendTemplate(phone, 'cliente_inativo', [
+  await sendTemplate(phone, 'aviso_cliente_inativo', [
     { name: 'cliente_nome',    value: clientName },
     { name: 'dias_ausente',    value: String(diasAusente) },
     { name: 'link_agendamento',value: linkAgendamento },
@@ -241,7 +241,7 @@ export async function wppAgendaDiariaBarbeiro(
   agendaResumo: string,
   totalAgendamentos: number
 ): Promise<void> {
-  await sendTemplate(phone, 'agenda_diaria_barbeiro', [
+  await sendTemplate(phone, 'agenda_diaria_barbeiro_v3', [
     { name: 'barbeiro_nome',        value: barbeiroNome },
     { name: 'data',                 value: data },
     { name: 'agenda_resumo',        value: agendaResumo },
@@ -285,5 +285,131 @@ export async function wppNovaAssinaturaBarbearia(
     { name: 'descricao_promo', value: `Novo cliente VIP: ${clientName} — ${planName} (${periodLabel})` },
     { name: 'validade',        value: `R$ ${price.toFixed(2)}` },
     { name: 'link',            value: '' },
+  ]);
+}
+
+// ============================================================
+// FUNÇÕES ADICIONAIS — aliases e complementos
+// ============================================================
+
+/**
+ * wppNovoAgendamento — alias de confirmacao_agendamento
+ * Dispara: quando agendamento é criado pelo store
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{data}} {{horario}}
+ */
+export async function wppNovoAgendamento(
+  phone: string,
+  clientName: string,
+  serviceName: string,
+  date: string,
+  time: string,
+  professionalName: string
+): Promise<void> {
+  await sendTemplate(phone, 'confirmacao_agendamento', [
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: professionalName },
+    { name: 'data',         value: formatDate(date) },
+    { name: 'horario',      value: time },
+  ]);
+}
+
+/**
+ * wppReagendamento — usa confirmacao_agendamento com novo horário
+ * Dispara: quando agendamento é editado/remarcado
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{data}} {{horario}}
+ */
+export async function wppReagendamento(
+  phone: string,
+  clientName: string,
+  serviceName: string,
+  date: string,
+  time: string
+): Promise<void> {
+  await sendTemplate(phone, 'confirmacao_agendamento', [
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: 'Barbearia' },
+    { name: 'data',         value: formatDate(date) },
+    { name: 'horario',      value: time },
+  ]);
+}
+
+/**
+ * wppLembreteAgendamento — alias de lembrete_24h
+ * Dispara: lembrete agendado pelo store (cron frontend)
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{horario}}
+ */
+export async function wppLembreteAgendamento(
+  phone: string,
+  clientName: string,
+  serviceName: string,
+  time: string,
+  professionalName: string
+): Promise<void> {
+  await sendTemplate(phone, 'lembrete_24h', [
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: professionalName },
+    { name: 'horario',      value: time },
+  ]);
+}
+
+/**
+ * wppLembrete15min — alias de lembrete_1h (template mais próximo disponível)
+ * Dispara: ~15min antes do agendamento (cron frontend)
+ * Vars: {{cliente_nome}} {{servico}} {{barbeiro}} {{horario}}
+ */
+export async function wppLembrete15min(
+  phone: string,
+  clientName: string,
+  serviceName: string,
+  time: string,
+  professionalName: string
+): Promise<void> {
+  await sendTemplate(phone, 'lembrete_1h', [
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: professionalName },
+    { name: 'horario',      value: time },
+  ]);
+}
+
+/**
+ * wppAssinaturaVencendo — aviso vencimento VIP (3 ou 1 dia)
+ * Dispara: cron scheduled do store
+ * Vars: {{cliente_nome}} {{data_vencimento}} {{link_renovacao}}
+ */
+export async function wppAssinaturaVencendo(
+  phone: string,
+  clientName: string,
+  _planName: string,
+  days: number,
+  endDate: string
+): Promise<void> {
+  const template = days <= 1 ? 'aviso_vencimento_1dia' : 'aviso_vencimento_3dia';
+  await sendTemplate(phone, template, [
+    { name: 'cliente_nome',    value: clientName },
+    { name: 'data_vencimento', value: formatDate(endDate) },
+    { name: 'link_renovacao',  value: 'https://novojeitobarbearia.pages.dev' },
+  ]);
+}
+
+/**
+ * aviso_promocao — promoção em dia fraco / horário vago
+ * Dispara: Cloud Function scheduled (dias com poucos agendamentos)
+ * Vars: {{cliente_nome}} {{descricao_promo}} {{validade}} {{link}}
+ */
+export async function wppPromoDiaFraco(
+  phone: string,
+  clientName: string,
+  descricao: string,
+  validade: string
+): Promise<void> {
+  await sendTemplate(phone, 'aviso_promocao', [
+    { name: 'cliente_nome',    value: clientName },
+    { name: 'descricao_promo', value: descricao },
+    { name: 'validade',        value: validade },
+    { name: 'link',            value: 'https://novojeitobarbearia.pages.dev' },
   ]);
 }

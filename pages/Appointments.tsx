@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Plus, Clock, Check, X, 
-  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User
+  ChevronLeft, ChevronRight, Plus, Clock, Check, X, CreditCard,
+  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote
 } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Appointment, Client } from '../types';
@@ -178,14 +178,14 @@ const Appointments: React.FC = () => {
     if (!finModal) return;
     setFinLoading(true);
     try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, 'LINK');
+      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
       if (result?.paymentLink) {
         window.open(result.paymentLink, '_blank');
       }
-      setFinResult(result || {});
+      setFinResult(result || { _method: finPayMethod });
     } catch(e) {
       console.error('Finalize error:', e);
-      setFinResult({});
+      setFinResult({ _method: finPayMethod });
     } finally { setFinLoading(false); }
   };
 
@@ -347,12 +347,12 @@ const Appointments: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 cartao-vidro rounded-[2rem] border-white/5 shadow-2xl overflow-hidden flex flex-col">
+      <div className={`flex-1 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
         {viewMode === 'grid' ? (
           <div className={`overflow-auto h-full scrollbar-hide ${compactView ? '' : ''}`}>
             <div className={compactView ? 'min-w-[320px]' : 'min-w-[500px]'} style={{minWidth: compactView ? `${60 + professionals.length * 100}px` : `${80 + professionals.length * 160}px`}}>
               {/* CABEÇALHO: Reduzido padding vertical */}
-              <div className={`border-b border-white/5 bg-white/[0.02] sticky top-0 z-10`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
+              <div className={`border-b sticky top-0 z-10 ${theme === 'light' ? 'border-zinc-200 bg-zinc-50' : 'border-white/5 bg-white/[0.02]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
                 <div className={`flex items-center justify-center text-zinc-500 ${compactView ? 'p-2' : 'p-3'}`}><Clock size={compactView ? 14 : 18} /></div>
                 {professionals.map(prof => (
                   <div key={prof.id} className={`flex items-center justify-center gap-3 border-r border-white/5 ${compactView ? 'p-2 flex-col' : 'p-3'}`}>
@@ -363,14 +363,14 @@ const Appointments: React.FC = () => {
               </div>
               {/* LINHAS DE HORÁRIO: Altura reduzida de 100px/50px para 60px/35px */}
               {hours.map(hour => (
-                <div key={hour} className={`border-b border-white/[0.03] ${compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
-                  <div className="flex items-center justify-center border-r border-white/5 bg-white/[0.01]"><span className={`font-black text-zinc-600 ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
+                <div key={hour} className={`border-b ${theme === 'light' ? 'border-zinc-100' : 'border-white/[0.03]'} ${compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
+                  <div className={`flex items-center justify-center border-r ${theme === 'light' ? 'border-zinc-200 bg-zinc-50/50' : 'border-white/5 bg-white/[0.01]'}`}><span className={`font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'} ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
                   {professionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
                     return (
                       <div 
                         key={prof.id} 
-                        className={`border-r border-white/5 last:border-r-0 ${compactView ? 'p-1' : 'p-1.5'} ${!app ? 'cursor-pointer hover:bg-white/5 transition-all' : ''}`}
+                        className={`border-r last:border-r-0 ${theme === 'light' ? 'border-zinc-200' : 'border-white/5'} ${compactView ? 'p-1' : 'p-1.5'} ${!app ? 'cursor-pointer hover:bg-white/5 transition-all' : ''}`}
                         onClick={() => !app && handleClickEmptySlot(prof.id, hour)}
                         title={!app ? `Clique para agendar às ${hour}` : ''}
                       >
@@ -381,9 +381,19 @@ const Appointments: React.FC = () => {
                                 <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
                                   title="Ver detalhes"
                                 >{app.clientName}</h4>
+                                {app.status === 'CONCLUIDO_PAGO' && (
+                                  <span title="Pago" className="flex-shrink-0">
+                                    <Check size={compactView ? 8 : 10} className="text-emerald-400" />
+                                  </span>
+                                )}
                                 {app.awaitingOnlinePayment && app.status !== 'CONCLUIDO_PAGO' && (
                                   <span title="Aguardando pagamento online" className="animate-pulse flex-shrink-0">
                                     <CreditCard size={compactView ? 8 : 10} className="text-blue-400" />
+                                  </span>
+                                )}
+                                {!app.awaitingOnlinePayment && app.status !== 'CONCLUIDO_PAGO' && app.status !== 'CANCELADO' && (
+                                  <span title="Pagamento na barbearia" className="animate-pulse flex-shrink-0">
+                                    <Banknote size={compactView ? 8 : 10} className="text-amber-400" />
                                   </span>
                                 )}
                               </div>
@@ -427,8 +437,8 @@ const Appointments: React.FC = () => {
              {appointmentsFiltered.map(app => (
                <div key={app.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-[#C58A4A]/30 transition-all">
                   <div className="flex items-center gap-4">
-                     <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-[#C58A4A] text-[#C58A4A] bg-[#C58A4A]/10'}`}>
-                        {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : app.awaitingOnlinePayment ? <CreditCard size={20} className="text-blue-400 animate-pulse"/> : <Clock size={20}/>}
+                     <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : app.awaitingOnlinePayment ? 'border-blue-400 text-blue-400 bg-blue-400/10' : 'border-amber-400 text-amber-400 bg-amber-400/10'}`}>
+                        {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : app.awaitingOnlinePayment ? <CreditCard size={20} className="text-blue-400 animate-pulse"/> : <Banknote size={20} className="text-amber-400 animate-pulse"/>}
                      </div>
                      <div>
                         <p 
@@ -631,11 +641,20 @@ const Appointments: React.FC = () => {
               {finResult ? (
                 /* ── Resultado do pagamento ── */
                 <div className="space-y-4 text-center">
-                  <div className="text-4xl">✅</div>
-                  <p className={`font-black text-lg ${isDark ? 'text-white' : 'text-zinc-900'}`}>Atendimento concluído!</p>
+                  <div className="text-4xl">{(finResult as any)._method === 'DINHEIRO' ? '💵' : '✅'}</div>
+                  <p className={`font-black text-lg ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                    {(finResult as any)._method === 'DINHEIRO' ? 'Pago em dinheiro!' : 'Cobrança gerada!'}
+                  </p>
                   <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>R$ {finTotal.toFixed(2)}</p>
-                  {finResult.paymentLink ? (
+                  {(finResult as any)._method === 'DINHEIRO' ? (
+                    <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      Atendimento concluído e registrado com sucesso.
+                    </p>
+                  ) : finResult.paymentLink ? (
                     <div className="space-y-2 pt-2">
+                      <p className={`text-[10px] font-black uppercase tracking-widest text-blue-400`}>
+                        ⏳ Aguardando pagamento do cliente
+                      </p>
                       <a href={finResult.paymentLink} target="_blank" rel="noreferrer"
                         className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center shadow-xl">
                         🔗 Abrir cobrança no Asaas
@@ -708,9 +727,27 @@ const Appointments: React.FC = () => {
                     <p className="font-black text-xl text-[#C58A4A]">R$ {finTotal.toFixed(2)}</p>
                   </div>
 
-                  {/* ── Info pagamento ── */}
-                  <div className={`p-4 rounded-2xl text-center ${isDark ? 'bg-white/5' : 'bg-zinc-50'}`}>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>💳 O cliente escolhe PIX, Cartão ou Boleto na página do Asaas</p>
+                  {/* ── Forma de pagamento ── */}
+                  <div className="space-y-2">
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Forma de pagamento</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setFinPayMethod('DINHEIRO')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'DINHEIRO' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                      >
+                        <span className="text-2xl">💵</span>
+                        Dinheiro
+                        {finPayMethod === 'DINHEIRO' && <span className="text-[8px] text-emerald-400">Conclui na hora</span>}
+                      </button>
+                      <button
+                        onClick={() => setFinPayMethod('LINK')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'LINK' ? 'border-blue-400 bg-blue-400/10 text-blue-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                      >
+                        <span className="text-2xl">🔗</span>
+                        Link / PIX / Cartão
+                        {finPayMethod === 'LINK' && <span className="text-[8px] text-blue-400">Aguarda confirmação</span>}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -720,8 +757,8 @@ const Appointments: React.FC = () => {
             {!finResult && (
               <div className={`p-6 border-t ${isDark ? 'border-white/5' : 'border-zinc-100'}`}>
                 <button onClick={handleFinalize} disabled={finLoading}
-                  className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100">
-                  {finLoading ? '⟳ Processando...' : `✅ Finalizar · R$ ${finTotal.toFixed(2)}`}
+                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100 ${finPayMethod === 'DINHEIRO' ? 'bg-emerald-500 text-white' : 'gradiente-ouro text-black'}`}>
+                  {finLoading ? '⟳ Processando...' : finPayMethod === 'DINHEIRO' ? `💵 Receber R$ ${finTotal.toFixed(2)} em Dinheiro` : `🔗 Gerar cobrança · R$ ${finTotal.toFixed(2)}`}
                 </button>
               </div>
             )}
