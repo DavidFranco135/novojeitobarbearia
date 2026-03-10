@@ -595,6 +595,9 @@ export const asaasProxy = onRequest(
       });
 
       const data = await response.json();
+      if (!response.ok) {
+        console.error(`Asaas ${method} ${endpoint} → ${response.status}:`, JSON.stringify(data));
+      }
       res.status(response.status).json(data);
     } catch (err: any) {
       console.error("asaasProxy error:", err);

@@ -48,10 +48,7 @@ export interface Client {
   lastVisit?: string;
   createdAt: string;
   likedProfessionals?: string[];
-  birthday?: string;        // formato YYYY-MM-DD
-  referralCode?: string;    // código único de indicação
-  referredBy?: string;      // clientId de quem indicou
-  referralCredits?: number; // créditos de indicação acumulados
+  cpfCnpj?: string;
 }
 
 export interface Review {
@@ -87,6 +84,21 @@ export interface Appointment {
   endTime: string;
   status: 'AGENDADO' | 'CONCLUIDO_PAGO' | 'PENDENTE_PAGAMENTO' | 'REAGENDADO' | 'CANCELADO' | 'PENDENTE';
   price: number;
+  // ── Adicionais e Asaas ─────────────────────────────────
+  additionals?: AppointmentAdditional[];
+  totalPrice?: number;
+  paymentMethod?: 'PIX' | 'CARTAO' | 'DINHEIRO' | 'LINK';
+  asaasPaymentId?: string;
+  asaasPaymentLink?: string;
+  asaasPixCode?: string;
+  asaasPixQrCode?: string;
+}
+
+export interface AppointmentAdditional {
+  id: string;
+  name: string;
+  price: number;
+  qty: number;
 }
 
 export interface FinancialEntry {
@@ -152,6 +164,9 @@ export interface ShopConfig {
   masterBarberSurcharge?: number;
   // ── NOVO: Clube de Benefícios ──────────────────────────────
   benefitValidityDays?: number; // padrão: 7 dias
+  // ── Integração Asaas ──────────────────────────────────────
+  asaasKey?: string;
+  asaasEnv?: 'sandbox' | 'producao';
 }
 
 // ── FIDELIDADE ───────────────────────────────────────────────

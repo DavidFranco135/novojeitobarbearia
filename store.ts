@@ -240,12 +240,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, '1');
 
-      await wppLembrete24h(
+      await wppLembreteAgendamento(
         a.clientPhone,
         a.clientName,
         a.serviceName,
-        a.professionalName,
-        a.startTime
+        a.startTime,
+        a.professionalName
       );
     });
 
@@ -264,11 +264,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       const phone = client?.phone || '';
       if (!phone) return;
 
-      await wppVencimentoVip3dias(
+      await wppAssinaturaVencendo(
         phone,
         s.clientName,
-        s.endDate.split('T')[0],
-        'https://novojeitobarbearia.pages.dev'
+        s.planName,
+        3,
+        s.endDate.split('T')[0]
       );
     });
 
@@ -309,12 +310,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         if (localStorage.getItem(key)) return; // já enviado
         localStorage.setItem(key, '1');
 
-        await wppLembrete1h(
+        await wppLembrete15min(
           a.clientPhone,
           a.clientName,
           a.serviceName,
-          a.professionalName,
-          a.startTime
+          a.startTime,
+          a.professionalName
         );
       });
     };
@@ -394,14 +395,18 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
 
     // ── WhatsApp: confirmação de agendamento ──────────────────
-    await wppConfirmacaoAgendamento(
-      data.clientPhone,
-      data.clientName,
-      data.serviceName,
-      data.professionalName,
-      data.date,
-      data.startTime
-    );
+    try {
+      await wppNovoAgendamento(
+        data.clientPhone,
+        data.clientName,
+        data.serviceName,
+        data.date,
+        data.startTime,
+        data.professionalName
+      );
+    } catch (e) {
+      console.warn('WhatsApp confirmação falhou (não crítico):', e);
+    }
   };
 
   const updateAppointmentStatus = async (id: string, status: any) => {
@@ -513,17 +518,132 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
   };
 
+
+  // ── ASAAS: gera cobrança PIX ou link de pagamento ─────────
+  const asaasRequest = async (endpoint: string, method = 'GET', body?: any) => {
+    const key = (config as any).asaasKey || '';
+    const env = (config as any).asaasEnv || 'sandbox';
+    // Usa Cloud Function como proxy para evitar bloqueio CORS do Asaas
+    const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, method, body, key, env }),
+    });
+    if (!res.ok) throw new Error(`Asaas proxy error: ${res.status}`);
+    return res.json();
+  };
+
+  const finalizeAppointment = async (id: string, additionals: any[], paymentMethod: string) => {
+    const appt = appointments.find(a => a.id === id);
+    if (!appt) return {};
+
+    const addTotal   = additionals.reduce((s: number, a: any) => s + a.price * a.qty, 0);
+    const totalPrice = appt.price + addTotal;
+
+    // Salva adicionais + totalPrice no Firestore
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+      additionals,
+      totalPrice,
+      paymentMethod,
+    });
+
+    let result: { pixCode?: string; pixQrCode?: string; paymentLink?: string } = {};
+    const asaasKey = (config as any).asaasKey || '';
+
+    if (asaasKey) {
+      try {
+        // Cria/busca cliente Asaas pelo externalReference (ID do cliente no app)
+        const phone = appt.clientPhone.replace(/\D/g,'');
+        const extRef = `nj_${appt.clientId || appt.clientPhone.replace(/\D/g,'')}`;
+        const env = (config as any).asaasEnv || 'sandbox';
+
+        // Busca CPF do cliente no cadastro do app
+        const clientData = clients.find((cl: any) => cl.id === appt.clientId);
+        const cpfCnpj = clientData?.cpfCnpj?.replace(/\D/g,'') 
+          || (env === 'sandbox' ? '00000000191' : undefined); // CPF teste só em sandbox
+
+        // Busca por externalReference primeiro (mais confiável)
+        const custSearch = await asaasRequest(`/customers?externalReference=${extRef}`);
+        let customerId = custSearch?.data?.[0]?.id;
+
+        // Se não achou, busca por telefone
+        if (!customerId && phone) {
+          const byPhone = await asaasRequest(`/customers?mobilePhone=${phone}`);
+          customerId = byPhone?.data?.[0]?.id;
+        }
+
+        // Se ainda não achou, cria novo cliente
+        if (!customerId) {
+          const newCust = await asaasRequest('/customers', 'POST', {
+            name: appt.clientName || 'Cliente',
+            mobilePhone: phone || undefined,
+            cpfCnpj: cpfCnpj,
+            externalReference: extRef,
+            notificationDisabled: true,
+          });
+          customerId = newCust?.id;
+          if (!customerId) {
+            console.error('Asaas customer creation failed:', JSON.stringify(newCust));
+          }
+        }
+
+        if (customerId) {
+          if (paymentMethod === 'PIX') {
+            // Cria cobrança PIX
+            const charge = await asaasRequest('/payments', 'POST', {
+              customer: customerId,
+              billingType: 'PIX',
+              value: totalPrice,
+              dueDate: new Date().toISOString().split('T')[0],
+              description: `Barbearia Novo Jeito — ${appt.serviceName}`,
+            });
+            if (charge?.id) {
+              const pix = await asaasRequest(`/payments/${charge.id}/pixQrCode`);
+              result = { pixCode: pix?.payload, pixQrCode: pix?.encodedImage };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId: charge.id,
+                asaasPixCode:   pix?.payload    || '',
+                asaasPixQrCode: pix?.encodedImage || '',
+              });
+            }
+          } else if (paymentMethod === 'LINK') {
+            // Cria cobrança com link
+            const charge = await asaasRequest('/payments', 'POST', {
+              customer: customerId,
+              billingType: 'UNDEFINED',
+              value: totalPrice,
+              dueDate: new Date().toISOString().split('T')[0],
+              description: `Barbearia Novo Jeito — ${appt.serviceName}`,
+            });
+            if (charge?.id) {
+              result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '' };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId:   charge.id,
+                asaasPaymentLink: result.paymentLink,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Asaas error:', err);
+      }
+    }
+
+    // Finaliza o status normalmente (reutiliza lógica existente)
+    await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
+    return result;
+  };
+
   const rescheduleAppointment = async (id: string, date: string, startTime: string, endTime: string) => {
     await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { date, startTime, endTime });
 
     // ── WhatsApp: avisa sobre o reagendamento ─────────────────
     const appointment = appointments.find(a => a.id === id);
     if (appointment) {
-      await wppConfirmacaoAgendamento(
+      await wppReagendamento(
         appointment.clientPhone,
         appointment.clientName,
         appointment.serviceName,
-        appointment.professionalName,
         date,
         startTime
       );
@@ -591,10 +711,11 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     const client = clients.find(c => c.id === data.clientId);
     const phone = client?.phone || '';
     if (phone) {
-      await wppPosAtendimento(
+      await wppAssinaturaAtivada(
         phone,
         data.clientName,
-        'https://novojeitobarbearia.pages.dev'
+        data.planName,
+        data.endDate.split('T')[0]
       );
     }
   };
@@ -727,7 +848,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
-      addAppointment, updateAppointmentStatus, rescheduleAppointment, deleteAppointment,
+      addAppointment, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
       addFinancialEntry, deleteFinancialEntry,
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,

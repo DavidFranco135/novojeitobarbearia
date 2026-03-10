@@ -156,7 +156,7 @@ const Appointments: React.FC = () => {
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
-  const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '' });
+  const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '', cpfCnpj: '' });
   // ── Modal Finalização ──────────────────────────────────────
   const [finModal, setFinModal] = useState<any>(null);
   const [finAdditionals, setFinAdditionals] = useState<{id:string;name:string;price:number;qty:number}[]>([]);
@@ -489,6 +489,7 @@ const Appointments: React.FC = () => {
                       <input type="text" placeholder="Nome" value={quickClient.name} onChange={e => setQuickClient({...quickClient, name: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
                       <input type="tel" placeholder="WhatsApp" value={quickClient.phone} onChange={e => setQuickClient({...quickClient, phone: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
                       <input type="email" placeholder="E-mail" value={quickClient.email} onChange={e => setQuickClient({...quickClient, email: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="text" placeholder="CPF (para cobranças Asaas)" value={quickClient.cpfCnpj} onChange={e => setQuickClient({...quickClient, cpfCnpj: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
                       <div className="flex gap-2">
                         <button type="button" onClick={() => setShowQuickClient(false)} className="flex-1 bg-white/5 text-zinc-500 py-2 rounded-lg text-[9px] font-black uppercase hover:bg-white/10 transition-all">Fechar</button>
                         <button type="button" onClick={handleQuickClient} className="flex-1 bg-[#C58A4A] text-black py-2 rounded-lg text-[9px] font-black uppercase">Salvar e Selecionar</button>
