@@ -125,6 +125,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 )}
               </button>
               
+              {/* Botão Agendar — abaixo do sininho */}
+              <button
+                onClick={() => setActiveTab('appointments')}
+                className="gradiente-ouro absolute -bottom-12 right-0 px-4 py-2 rounded-xl text-black font-black text-[10px] uppercase shadow-lg hover:scale-105 transition-all whitespace-nowrap z-30"
+              >
+                Agendar
+              </button>
+
               {showNotifs && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)}></div>
@@ -147,10 +155,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 </>
               )}
             </div>
-            
-            <button onClick={() => setActiveTab('appointments')} className="gradiente-ouro px-5 py-3 rounded-2xl text-black font-black text-xs uppercase hidden sm:block shadow-lg hover:scale-105 transition-all">
-               Agendar
-            </button>
+
           </div>
         </header>
 

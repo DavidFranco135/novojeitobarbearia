@@ -150,7 +150,7 @@ const Services: React.FC = () => {
             </div>
             {/* botão fixo fora do scroll — nunca bloqueado pelo Safari */}
             <div className="px-10 py-6 flex-shrink-0">
-              <button type="button" onClick={handleSave} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
+              <button type="button" onClick={handleSave} onTouchEnd={e => { e.preventDefault(); handleSave(); }} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
             </div>
           </div>
         </div>
