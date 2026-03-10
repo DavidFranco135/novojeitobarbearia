@@ -265,11 +265,6 @@ const App: React.FC = () => {
       <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
         {renderContent()}
       </Layout>
-jsx
-<button onClick={handleGoToClientView} className="fixed bottom-4 right-4 z-[100] gradiente-ouro text-black px-2 py-1 sm:px-4 sm:py-2 rounded-2xl sm:rounded-[2rem] font-black text-[9px] sm:text-xs uppercase tracking-widest shadow-2xl hover:scale-110 active:scale-95 transition-all">
-  <span className="sm:hidden">👁 CLIENTE</span>
-  <span className="hidden sm:inline">VISÃO DO CLIENTE</span>
-</button>
 
     </div>
   );
