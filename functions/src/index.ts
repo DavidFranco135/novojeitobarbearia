@@ -617,6 +617,15 @@ export const asaasWebhook = onRequest(
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
+    // ── Validação do token Asaas ──────────────────────────────
+    const WEBHOOK_TOKEN = "whsec_Or3lfJgfub5vn8C-NrXj7JE4rJcTmurvVhP-tOhLMKs";
+    const receivedToken = req.headers["asaas-access-token"] || req.body?.token;
+    if (receivedToken !== WEBHOOK_TOKEN) {
+      console.warn("asaasWebhook: token inválido →", receivedToken);
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
     try {
       const event   = req.body;
       const payment = event?.payment;
