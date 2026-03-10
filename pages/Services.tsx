@@ -42,8 +42,7 @@ const Services: React.FC = () => {
     });
   }, [services, searchTerm, activeCategory]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     if (editingId) await updateService(editingId, formData);
     else await addService(formData);
     setShowModal(false);
@@ -107,12 +106,15 @@ const Services: React.FC = () => {
 
       {showModal && (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
-          <div className={`w-full max-w-lg rounded-[2.5rem] p-10 space-y-8 border relative shadow-2xl overflow-y-auto max-h-[90vh] scrollbar-hide ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
-            <div className="flex justify-between items-center">
+          <div className={`w-full max-w-lg rounded-[2.5rem] border relative shadow-2xl flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
+            {/* header fixo */}
+            <div className="flex justify-between items-center px-10 pt-10 pb-4 flex-shrink-0">
               <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Configurar Serviço</h2>
               <button onClick={() => setShowModal(false)} className={`transition-colors ${theme === 'light' ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-500 hover:text-white'}`}><X size={24} /></button>
             </div>
-            <form onSubmit={handleSave} className="space-y-6">
+            {/* conteúdo scrollável */}
+            <div className="overflow-y-auto scrollbar-hide px-10 flex-1">
+              <div className="space-y-6 pb-4">
                <div className="flex flex-col items-center gap-4">
                   <div className="relative group w-32 h-32">
                     <img src={formData.image} className="w-full h-full object-cover rounded-3xl border-2 border-white/5 shadow-lg" alt="Preview" />
@@ -144,8 +146,12 @@ const Services: React.FC = () => {
                     <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className={`w-full border p-4 rounded-xl text-xs font-bold resize-none h-20 outline-none transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} placeholder="Descreva o serviço..."></textarea>
                   </div>
                </div>
-               <button type="submit" className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
-            </form>
+              </div>
+            </div>
+            {/* botão fixo fora do scroll — nunca bloqueado pelo Safari */}
+            <div className="px-10 py-6 flex-shrink-0">
+              <button type="button" onClick={handleSave} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
+            </div>
           </div>
         </div>
       )}

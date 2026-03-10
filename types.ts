@@ -89,6 +89,7 @@ export interface Appointment {
   totalPrice?: number;
   paymentMethod?: 'PIX' | 'CARTAO' | 'DINHEIRO' | 'LINK';
   asaasPaymentId?: string;
+  awaitingOnlinePayment?: boolean;
   asaasPaymentLink?: string;
   asaasPixCode?: string;
   asaasPixQrCode?: string;
@@ -130,6 +131,7 @@ export interface VipPlan {
   customDays?: number;
   benefits: string[];
   discount?: number;
+  featured?: boolean;
   status: 'ATIVO' | 'INATIVO';
 }
 

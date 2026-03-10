@@ -45,6 +45,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [forgotStep, setForgotStep] = useState<'phone' | 'reset'>('phone');
+  const [bookingPayLink, setBookingPayLink] = useState<string | null>(null);
+  const [wantsPayNow, setWantsPayNow] = useState(false);
   const [forgotClient, setForgotClient] = useState<any>(null);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState(false);
@@ -295,8 +297,62 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       const finalPrice = (serv?.price || 0) + surcharge;
       const [h, m] = selecao.time.split(':').map(Number);
       const endTime = `${Math.floor((h * 60 + m + (serv?.durationMinutes || 30)) / 60).toString().padStart(2, '0')}:${((h * 60 + m + (serv?.durationMinutes || 30)) % 60).toString().padStart(2, '0')}`;
-      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice }, true);
+      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice, ...(wantsPayNow ? { awaitingOnlinePayment: true } : {}) }, true);
       setSuccess(true);
+      // Gera link de pagamento Asaas apenas se cliente escolheu pagar online
+      if (wantsPayNow) {
+        try {
+          const asaasKey = (config as any).asaasKey || '';
+          const asaasEnv = (config as any).asaasEnv || 'sandbox';
+          if (asaasKey) {
+            const proxy = (endpoint: string, method = 'GET', body?: any) =>
+              fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint, method, key: asaasKey, env: asaasEnv, body })
+              }).then(r => r.json());
+
+            // 1. Cria ou busca cliente no Asaas
+            const phone = client.phone.replace(/\D/g, '');
+            const extRef = `nj_${client.id}`;
+            const cpfCnpj = (client as any).cpfCnpj?.replace(/\D/g, '')
+              || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
+
+            let customerId: string | undefined;
+            const byRef = await proxy(`/customers?externalReference=${extRef}`);
+            customerId = byRef?.data?.[0]?.id;
+            if (!customerId && phone) {
+              const byPhone = await proxy(`/customers?mobilePhone=${phone}`);
+              customerId = byPhone?.data?.[0]?.id;
+            }
+            if (!customerId) {
+              const newCust = await proxy('/customers', 'POST', {
+                name: client.name || 'Cliente',
+                mobilePhone: phone || undefined,
+                cpfCnpj,
+                externalReference: extRef,
+                notificationDisabled: true,
+              });
+              customerId = newCust?.id;
+            } else if (cpfCnpj) {
+              await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
+            }
+
+            if (customerId) {
+              // 2. Cria cobrança UNDEFINED (cliente escolhe PIX/cartão/boleto no link)
+              const charge = await proxy('/payments', 'POST', {
+                customer: customerId,
+                billingType: 'UNDEFINED',
+                value: finalPrice,
+                dueDate: selecao.date,
+                description: `${serv?.name || 'Serviço'} — ${prof?.name || 'Barbeiro'}`,
+                externalReference: `booking_${client.id}_${selecao.date}`,
+              });
+              if (charge?.invoiceUrl) setBookingPayLink(charge.invoiceUrl);
+            }
+          }
+        } catch(e) { console.warn('Asaas booking payment failed:', e); }
+      }
     } catch (err) { alert("Erro ao agendar."); }
     finally { setLoading(false); }
   };
@@ -470,7 +526,16 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
         <div className="w-20 h-20 gradiente-ouro rounded-full mx-auto flex items-center justify-center"><Check className="w-10 h-10 text-black" /></div>
         <h2 className="text-3xl font-black font-display italic text-[#C58A4A]">Reserva Confirmada!</h2>
         <p className={`text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>Aguardamos você para sua melhor experiência da sua vida.</p>
-        <button onClick={() => window.location.reload()} className="bg-[#C58A4A] text-black px-10 py-4 rounded-xl text-[10px] font-black uppercase">Voltar à Início</button>
+        {bookingPayLink && (
+          <a href={bookingPayLink} target="_blank" rel="noreferrer"
+            className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl text-center">
+            ⚡ Pagar Agora
+          </a>
+        )}
+        <button onClick={() => { setSuccess(false); setBookingPayLink(null); window.location.reload(); }}
+          className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest ${theme === 'light' ? 'bg-zinc-100 text-zinc-700' : 'bg-white/5 text-zinc-400'}`}>
+          Voltar ao Início
+        </button>
       </div>
     </div>
   );
@@ -519,7 +584,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   >
                    {sortedServicesForHighlights.map(svc => (
                      <div key={svc.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-blue-300' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}>
-                        <div className="h-48 overflow-hidden"><img src={svc.image} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-700" alt="" /></div>
+                        <img src={svc.image} className="w-full rounded-t-[2rem] object-cover aspect-[4/3] group-hover:scale-105 transition-all duration-700 shadow-inner" alt="" />
                         <div className="p-6">
                            <h3 className={`text-xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{svc.name}</h3>
                            <p className={`text-xl font-black mt-2 ${theme === 'light' ? 'text-blue-600' : 'text-[#C58A4A]'}`}>R$ {svc.price.toFixed(2)}</p>
@@ -611,7 +676,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   >
                    {(Array.isArray(config.gallery) ? config.gallery : []).map((img, i) => (
                      <div key={i} className={`snap-center flex-shrink-0 w-80 md:w-[500px] h-64 md:h-80 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200' : 'border-4 border-white/5'}`}>
-                        <img src={img} className="w-full h-full object-cover" alt="" />
+                        <img src={img} className="w-full rounded-[2rem] object-contain shadow-2xl" alt="" />
                      </div>
                    ))}
                    {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
@@ -758,7 +823,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
                         >
                           <div className="relative mx-auto w-24 h-24">
-                            <img src={prof.avatar} className="w-full h-full rounded-2xl object-cover border-2 border-[#C58A4A]" alt="" />
+                            <img src={prof.avatar} className="w-full rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg" alt="" />
                             <div className="absolute -right-10 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
                               <Heart size={12} fill="currentColor" /> <span>{prof.likes || 0}</span>
                             </div>
@@ -781,19 +846,19 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    Planos VIP <Crown size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan, i) => (
-                     <div key={plan.id} className={`rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${i === 0 ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
-                       {i === 0 && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
+                   {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan) => (
+                     <div key={plan.id} className={`rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
+                       {!!plan.featured && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
                        <div className="flex items-center gap-3 mb-6">
-                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${i === 0 ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
-                           <Crown size={18} className={i === 0 ? 'text-black' : 'text-[#C58A4A]'} />
+                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
+                           <Crown size={18} className={!!plan.featured ? 'text-black' : 'text-[#C58A4A]'} />
                          </div>
                          <div>
                            <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
                            {plan.discount && plan.discount > 0 ? <span className="text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full">{plan.discount}% OFF</span> : null}
                          </div>
                        </div>
-                       <p className={`text-4xl font-black mb-1 ${i === 0 ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                       <p className={`text-4xl font-black mb-1 ${!!plan.featured ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                          R$ {plan.price.toFixed(2)}
                          <span className={`text-sm font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>/{plan.period === 'MENSAL' ? 'mês' : 'ano'}</span>
                        </p>
@@ -807,7 +872,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                        </div>
                        <button
                          onClick={() => { const w = `Olá! Tenho interesse no plano ${plan.name} (R$ ${plan.price.toFixed(2)}/${plan.period === 'MENSAL' ? 'mês' : 'ano'}). Como faço para assinar?`; window.open(`https://wa.me/55${config.whatsapp?.replace(/\D/g,'')}?text=${encodeURIComponent(w)}`, '_blank'); }}
-                         className={`w-full mt-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all hover:scale-105 ${i === 0 ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
+                         className={`w-full mt-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
                        >
                          Quero esse plano
                        </button>
@@ -907,8 +972,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
                            {/* Banner / imagem do parceiro */}
                            {partner.image ? (
-                             <div className="h-36 overflow-hidden">
-                               <img src={partner.image} alt={partner.businessName} className="w-full h-full object-cover" />
+                             <div>
+                               <img src={partner.image} alt={partner.businessName} className="w-full rounded-t-[2rem] object-contain" />
                              </div>
                            ) : (
                              <div className={`h-36 flex items-center justify-center text-5xl ${theme === 'light' ? 'bg-zinc-100' : 'bg-white/5'}`}>
@@ -979,9 +1044,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Onde Nos Encontrar <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
                 <div className={`rounded-[2.5rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'border border-zinc-200' : 'border border-white/5'}`}>
-                   <div className="h-48 bg-zinc-900 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-all" onClick={() => config.locationUrl && window.open(config.locationUrl, '_blank')}>
+                   <div className="overflow-hidden rounded-[2rem] shadow-2xl cursor-pointer hover:opacity-90 transition-all" onClick={() => config.locationUrl && window.open(config.locationUrl, '_blank')}>
                       {config.locationImage ? (
-                        <img src={config.locationImage} className="w-full h-full object-cover" alt="Nossa localização" />
+                        <img src={config.locationImage} className="w-full rounded-[2rem] object-contain shadow-2xl" alt="Nossa localização" />
                       ) : (
                         <MapPin className="text-[#C58A4A]" size={48}/>
                       )}
@@ -1013,7 +1078,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    <div className="grid md:grid-cols-2 gap-8 items-center">
                       {config.aboutImage && (
                         <div className="h-64 md:h-80 rounded-2xl overflow-hidden">
-                           <img src={config.aboutImage} className="w-full h-full object-cover" alt="Sobre nós" />
+                           <img src={config.aboutImage} className="w-full rounded-[2rem] object-contain shadow-xl" alt="Sobre nós" />
                         </div>
                       )}
                       <p className={`text-base leading-relaxed ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
@@ -1597,12 +1662,30 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                         {selecao.clientEmail && <p className="text-zinc-500 text-xs">{selecao.clientEmail}</p>}
                       </div>
                       {bookingError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{bookingError}</div>}
+                      
+                      {/* Opção de pagamento antecipado */}
+                      {(config as any).asaasKey && (
+                        <div className={`p-4 rounded-2xl border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                          <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>💳 Deseja pagar agora?</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => setWantsPayNow(false)}
+                              className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${!wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                              Pagar na barbearia
+                            </button>
+                            <button onClick={() => setWantsPayNow(true)}
+                              className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                              ⚡ Pagar online
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <button 
                         onClick={handleConfirmBooking} 
                         disabled={loading} 
                         className="w-full gradiente-ouro text-black py-4 sm:py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all disabled:opacity-60"
                       >
-                        {loading ? 'Processando...' : 'Confirmar Serviço'}
+                        {loading ? 'Processando...' : wantsPayNow ? '⚡ Confirmar e Pagar' : 'Confirmar Serviço'}
                       </button>
                       <button 
                         onClick={() => { setClientVerified(false); setLookupInput(''); setLookupError(null); setLookupClientFound(null); setLookupPassword(''); setLookupPasswordError(null); }} 
@@ -1671,7 +1754,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
         <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
            <div className={`w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
               <div className="relative h-96">
-                 <img src={selectedProfessional.avatar} className="w-full h-full object-contain bg-black" alt={selectedProfessional.name} />
+                 <img src={selectedProfessional.avatar} className="w-full rounded-[2rem] object-contain shadow-xl" alt={selectedProfessional.name} />
                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                  <button 
                    onClick={() => setShowProfessionalModal(false)} 

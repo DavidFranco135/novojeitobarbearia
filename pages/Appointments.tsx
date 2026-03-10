@@ -178,20 +178,15 @@ const Appointments: React.FC = () => {
     if (!finModal) return;
     setFinLoading(true);
     try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
-      if (finPayMethod === 'DINHEIRO' || finPayMethod === 'CARTAO') {
-        // Pagamento físico — só fecha o modal
-        setFinModal(null);
-      } else {
-        // PIX ou LINK — mostra resultado (mesmo que vazio = Asaas não configurado)
-        setFinResult(result || {});
+      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, 'LINK');
+      if (result?.paymentLink) {
+        window.open(result.paymentLink, '_blank');
       }
+      setFinResult(result || {});
     } catch(e) {
       console.error('Finalize error:', e);
-      // Mesmo com erro no Asaas, mostra tela de conclusão
       setFinResult({});
-    }
-    finally { setFinLoading(false); }
+    } finally { setFinLoading(false); }
   };
 
   const addFinItem = () => {
@@ -242,8 +237,7 @@ const Appointments: React.FC = () => {
     setShowAddModal(true);
   };
 
-  const handleCreateAppointment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateAppointment = async () => {
     try {
       const service = services.find(s => s.id === newApp.serviceId);
       if (!service) return;
@@ -381,11 +375,18 @@ const Appointments: React.FC = () => {
                         title={!app ? `Clique para agendar às ${hour}` : ''}
                       >
                         {app ? (
-                          <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
+                          <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : app.awaitingOnlinePayment ? 'border-blue-400/50 bg-blue-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
                             <div className="truncate" onClick={(e) => { e.stopPropagation(); setShowDetailModal(app); }} style={{cursor:'pointer'}}>
-                              <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
-                                title="Ver detalhes"
-                              >{app.clientName}</h4>
+                              <div className="flex items-center gap-1">
+                                <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
+                                  title="Ver detalhes"
+                                >{app.clientName}</h4>
+                                {app.awaitingOnlinePayment && app.status !== 'CONCLUIDO_PAGO' && (
+                                  <span title="Aguardando pagamento online" className="animate-pulse flex-shrink-0">
+                                    <CreditCard size={compactView ? 8 : 10} className="text-blue-400" />
+                                  </span>
+                                )}
+                              </div>
                               {!compactView && (
                                 <>
                                   <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName}</p>
@@ -427,7 +428,7 @@ const Appointments: React.FC = () => {
                <div key={app.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-[#C58A4A]/30 transition-all">
                   <div className="flex items-center gap-4">
                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-[#C58A4A] text-[#C58A4A] bg-[#C58A4A]/10'}`}>
-                        {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : <Clock size={20}/>}
+                        {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : app.awaitingOnlinePayment ? <CreditCard size={20} className="text-blue-400 animate-pulse"/> : <Clock size={20}/>}
                      </div>
                      <div>
                         <p 
@@ -474,7 +475,7 @@ const Appointments: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
           <div className="cartao-vidro w-full max-w-lg rounded-[2.5rem] p-10 space-y-8 border-[#C58A4A]/20 relative">
             <h2 className="text-2xl font-black font-display italic">Novo Agendamento</h2>
-            <form onSubmit={handleCreateAppointment} className="space-y-6">
+            <div className="space-y-6">
                <div className="space-y-4">
                   <div className="flex gap-2">
                     <select required value={newApp.clientId} onChange={e => setNewApp({...newApp, clientId: e.target.value})} className="flex-1 bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
@@ -508,9 +509,9 @@ const Appointments: React.FC = () => {
                </div>
                <div className="flex gap-3">
                   <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
-                  <button type="submit" className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px]">Agendar Agora</button>
+                  <button type="button" onClick={handleCreateAppointment} className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px]">Agendar Agora</button>
                </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -521,8 +522,8 @@ const Appointments: React.FC = () => {
         const client = clients.find(c => c.name === app.clientName || c.phone === app.clientPhone);
         const service = services.find(s => s.id === app.serviceId);
         const professional = professionals.find(p => p.id === app.professionalId);
-        const statusLabel = app.status === 'CONCLUIDO_PAGO' ? 'Concluído e Pago' : app.status === 'CANCELADO' ? 'Cancelado' : 'Pendente';
-        const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
+        const statusLabel = app.status === 'CONCLUIDO_PAGO' ? 'Concluído e Pago' : app.status === 'CANCELADO' ? 'Cancelado' : app.awaitingOnlinePayment ? '💳 Pag. Online Pendente' : 'Pendente';
+        const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : app.awaitingOnlinePayment ? 'text-blue-400 bg-blue-500/10 border-blue-400/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
         return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
             <div className={`w-full max-w-md rounded-[2.5rem] p-8 space-y-6 shadow-2xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
@@ -632,36 +633,22 @@ const Appointments: React.FC = () => {
                 <div className="space-y-4 text-center">
                   <div className="text-4xl">✅</div>
                   <p className={`font-black text-lg ${isDark ? 'text-white' : 'text-zinc-900'}`}>Atendimento concluído!</p>
-                  {finResult.pixCode && (
-                    <div className="space-y-3">
-                      <p className={`text-[10px] font-black uppercase tracking-widest text-emerald-500`}>PIX gerado — R$ {finTotal.toFixed(2)}</p>
-                      {finResult.pixQrCode && (
-                        <img src={`data:image/png;base64,${finResult.pixQrCode}`} alt="QR Code PIX" className="w-48 h-48 mx-auto rounded-2xl border-4 border-emerald-500/30" />
-                      )}
-                      <div className={`p-3 rounded-xl text-left break-all text-[9px] font-mono ${isDark ? 'bg-white/5' : 'bg-zinc-50'}`}>
-                        <p className={`text-[9px] font-black uppercase mb-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Copia e cola</p>
-                        <p className={`${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{finResult.pixCode}</p>
-                      </div>
-                      <button onClick={() => navigator.clipboard.writeText(finResult.pixCode!)} className="w-full gradiente-ouro text-black py-3 rounded-xl font-black text-[10px] uppercase">📋 Copiar código PIX</button>
+                  <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>R$ {finTotal.toFixed(2)}</p>
+                  {finResult.paymentLink ? (
+                    <div className="space-y-2 pt-2">
+                      <a href={finResult.paymentLink} target="_blank" rel="noreferrer"
+                        className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center shadow-xl">
+                        🔗 Abrir cobrança no Asaas
+                      </a>
+                      <button onClick={() => navigator.clipboard.writeText(finResult!.paymentLink!)}
+                        className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'}`}>
+                        📋 Copiar link
+                      </button>
                     </div>
-                  )}
-                  {finResult.paymentLink && (
-                    <div className="space-y-3">
-                      <p className={`text-[10px] font-black uppercase tracking-widest text-blue-400`}>Link gerado — R$ {finTotal.toFixed(2)}</p>
-                      <a href={finResult.paymentLink} target="_blank" rel="noreferrer" className="block w-full bg-blue-600 text-white py-3 rounded-xl font-black text-[10px] uppercase text-center">🔗 Abrir link de pagamento</a>
-                      <button onClick={() => navigator.clipboard.writeText(finResult.paymentLink!)} className="w-full bg-white/10 border border-white/10 text-white py-3 rounded-xl font-black text-[10px] uppercase">📋 Copiar link</button>
-                    </div>
-                  )}
-                  {!finResult.pixCode && !finResult.paymentLink && (
-                    <div className="space-y-3 text-center">
-                      <p className="text-4xl">✅</p>
-                      <p className={`font-black text-lg ${isDark ? 'text-white' : 'text-zinc-900'}`}>Atendimento finalizado!</p>
-                      <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                        {finPayMethod === 'PIX' || finPayMethod === 'LINK'
-                          ? 'Configure a API do Asaas em Ajustes para gerar cobranças automáticas.'
-                          : `Pagamento em ${finPayMethod} registrado.`}
-                      </p>
-                    </div>
+                  ) : (
+                    <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      Configure a API do Asaas em Ajustes para gerar cobranças automáticas.
+                    </p>
                   )}
                   <button onClick={() => setFinModal(null)} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'border-white/10 text-zinc-400' : 'border-zinc-200 text-zinc-500'}`}>Fechar</button>
                 </div>
@@ -721,22 +708,9 @@ const Appointments: React.FC = () => {
                     <p className="font-black text-xl text-[#C58A4A]">R$ {finTotal.toFixed(2)}</p>
                   </div>
 
-                  {/* ── Forma de pagamento ── */}
-                  <div className="space-y-2">
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Forma de pagamento</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {(['PIX','LINK','CARTAO','DINHEIRO'] as const).map(m => (
-                        <button key={m} onClick={() => setFinPayMethod(m)}
-                          className={`py-3 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all border ${finPayMethod === m ? 'gradiente-ouro text-black border-transparent' : isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-900'}`}>
-                          {m === 'PIX' ? '⚡ PIX' : m === 'LINK' ? '🔗 Link' : m === 'CARTAO' ? '💳 Cartão' : '💵 Dinheiro'}
-                        </button>
-                      ))}
-                    </div>
-                    {(finPayMethod === 'PIX' || finPayMethod === 'LINK') && (
-                      <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                        {finPayMethod === 'PIX' ? '⚡ QR Code gerado pelo Asaas (requer API key configurada em Ajustes)' : '🔗 Link enviável por WhatsApp (requer API key configurada em Ajustes)'}
-                      </p>
-                    )}
+                  {/* ── Info pagamento ── */}
+                  <div className={`p-4 rounded-2xl text-center ${isDark ? 'bg-white/5' : 'bg-zinc-50'}`}>
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>💳 O cliente escolhe PIX, Cartão ou Boleto na página do Asaas</p>
                   </div>
                 </>
               )}

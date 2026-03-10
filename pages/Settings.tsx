@@ -62,8 +62,7 @@ const Settings: React.FC = () => {
     setFormData(prev => ({ ...prev, gallery: (prev.gallery || []).filter((_, i) => i !== index) }));
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     setLoading(true);
     try {
       const updatedConfig = { ...formData, logo: userData.avatar, adminName: userData.name };
@@ -93,6 +92,7 @@ const Settings: React.FC = () => {
       customDays: newPlan.customDays,
       benefits: newPlan.benefits!.filter(b => b.trim()),
       discount: newPlan.discount ?? 0,
+      featured: newPlan.featured ?? false,
       status: newPlan.status!
     };
     const current = formData.vipPlans || [];
@@ -102,7 +102,7 @@ const Settings: React.FC = () => {
     }));
     setShowVipPlanModal(false);
     setEditingPlan(null);
-    setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30 });
+    setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30, featured: false });
   };
 
   const handleEditPlan   = (plan: VipPlan) => { setEditingPlan(plan); setNewPlan(plan); setShowVipPlanModal(true); };
@@ -150,15 +150,16 @@ const Settings: React.FC = () => {
           <p className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Configurações Avançadas · Página Pública · Planos</p>
         </div>
         <button
-          form="settings-form" type="submit" disabled={loading}
+          type="button" disabled={loading}
           className="flex items-center justify-center gap-3 text-white px-12 py-5 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all"
+          onClick={handleSave}
           style={{ backgroundColor: '#66360f' }}
         >
           {loading ? '⏳ Sincronizando...' : <><Save size={20} /> Gravar Tudo</>}
         </button>
       </div>
 
-      <form id="settings-form" onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
         {/* ══ Coluna Principal ══ */}
         <div className="lg:col-span-2 space-y-10">
@@ -377,7 +378,7 @@ const Settings: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className={h3}><Crown size={22} className="text-[#C58A4A]" /> Planos VIP</h3>
               <button type="button"
-                onClick={() => { setEditingPlan(null); setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30 }); setShowVipPlanModal(true); }}
+                onClick={() => { setEditingPlan(null); setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30, featured: false }); setShowVipPlanModal(true); }}
                 className="flex items-center gap-2 gradiente-ouro text-black px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-105 transition-all">
                 <Plus size={14} /> Adicionar
               </button>
@@ -391,7 +392,10 @@ const Settings: React.FC = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h4 className={`text-lg font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{plan.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className={`text-lg font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{plan.name}</h4>
+                          {(plan as any).featured && <span className="text-[9px] font-black text-[#C58A4A] bg-[#C58A4A]/10 border border-[#C58A4A]/30 px-2 py-0.5 rounded-full">⭐ DESTAQUE</span>}
+                        </div>
                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${plan.status === 'ATIVO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{plan.status}</span>
                       </div>
                       <p className={`text-2xl font-black mb-2 ${isDark ? 'text-[#C58A4A]' : 'text-blue-600'}`}>
@@ -486,8 +490,8 @@ const Settings: React.FC = () => {
               </div>
             </div>
             <button
-              type="submit"
-              form="settings-form"
+              type="button"
+              onClick={handleSave}
               disabled={loading}
               className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:scale-105 transition-all mt-2"
             >
@@ -496,7 +500,7 @@ const Settings: React.FC = () => {
           </div>
 
         </aside>
-      </form>
+      </div>
 
       {/* ── Modal Plano VIP ── */}
       {showVipPlanModal && (
@@ -557,6 +561,22 @@ const Settings: React.FC = () => {
                     onChange={e => setNewPlan({ ...newPlan, discount: parseInt(e.target.value) || 0 })} className={inp} />
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setNewPlan({ ...newPlan, featured: !newPlan.featured })}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${newPlan.featured ? 'border-[#C58A4A] bg-[#C58A4A]/10' : isDark ? 'border-white/10 bg-white/5' : 'border-zinc-200 bg-zinc-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">⭐</span>
+                  <div className="text-left">
+                    <p className={`font-black text-[11px] uppercase tracking-widest ${newPlan.featured ? 'text-[#C58A4A]' : isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Plano em Destaque</p>
+                    <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Aparece com borda dourada no portal do cliente</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-all relative ${newPlan.featured ? 'bg-[#C58A4A]' : isDark ? 'bg-zinc-700' : 'bg-zinc-300'}`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${newPlan.featured ? 'left-5' : 'left-1'}`} />
+                </div>
+              </button>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className={lbl}>Benefícios</label>

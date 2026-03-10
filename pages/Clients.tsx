@@ -10,7 +10,7 @@ const Clients: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '', password: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', password: '', cpfCnpj: '', birthday: '' });
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => 
@@ -41,7 +41,7 @@ const Clients: React.FC = () => {
       } else {
         await addClient(formData);
       }
-      setFormData({ name: '', phone: '', email: '', password: '' });
+      setFormData({ name: '', phone: '', email: '', password: '', cpfCnpj: '', birthday: '' });
       setShowAddModal(false);
       setEditingId(null);
     }
@@ -200,7 +200,7 @@ const Clients: React.FC = () => {
 
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95 duration-300">
-          <div className="cartao-vidro w-full max-w-lg rounded-[3rem] p-8 md:p-12 space-y-10 border-[#C58A4A]/20 shadow-2xl relative">
+          <div className="cartao-vidro w-full max-w-lg rounded-[3rem] p-8 md:p-12 space-y-6 border-[#C58A4A]/20 shadow-2xl relative overflow-y-auto max-h-[90vh] scrollbar-hide">
             <h2 className="text-2xl font-black font-display italic text-white tracking-tight">{editingId ? 'Refinar Cadastro' : 'Novo Cliente '}</h2>
             <div className="space-y-6">
               <div className="space-y-2">
@@ -225,6 +225,14 @@ const Clients: React.FC = () => {
                      💡 Sem senha: o cliente define a própria senha no primeiro acesso ao portal.
                    </p>
                  )}
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">CPF / CNPJ <span className="normal-case text-zinc-700">(para cobranças Asaas)</span></label>
+                 <input type="text" placeholder="000.000.000-00" value={(formData as any).cpfCnpj || ''} onChange={e => setFormData({...formData, cpfCnpj: e.target.value} as any)} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none text-white font-bold focus:border-[#C58A4A]/50" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Data de Nascimento <span className="normal-case text-zinc-700">(para automação de aniversário)</span></label>
+                 <input type="date" value={(formData as any).birthday || ''} onChange={e => setFormData({...formData, birthday: e.target.value} as any)} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none text-white font-bold focus:border-[#C58A4A]/50" />
               </div>
               <div className="flex gap-4 pt-4">
                  <button onClick={() => setShowAddModal(false)} className="flex-1 bg-white/5 py-5 rounded-[1.5rem] font-black uppercase tracking-widest text-[9px] text-zinc-600 hover:text-white transition-all">Cancelar</button>

@@ -27,7 +27,7 @@ function formatDate(dateStr: string): string {
 async function sendTemplate(
   to: string,
   templateName: string,
-  params: string[]
+  params: { name: string; value: string }[]
 ): Promise<void> {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
     console.warn('[WhatsApp] Token ou Phone ID não configurados no .env');
@@ -53,7 +53,7 @@ async function sendTemplate(
           components: [
             {
               type: 'body',
-              parameters: params.map(text => ({ type: 'text', text })),
+              parameters: params.map(({ name, value }) => ({ type: 'text', parameter_name: name, text: value })),
             },
           ],
         },
@@ -89,11 +89,11 @@ export async function wppConfirmacaoAgendamento(
   time: string
 ): Promise<void> {
   await sendTemplate(phone, 'confirmacao_agendamento', [
-    clientName,
-    serviceName,
-    professionalName,
-    formatDate(date),
-    time,
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: professionalName },
+    { name: 'data',         value: formatDate(date) },
+    { name: 'horario',      value: time },
   ]);
 }
 
@@ -110,10 +110,10 @@ export async function wppLembrete24h(
   time: string
 ): Promise<void> {
   await sendTemplate(phone, 'lembrete_24h', [
-    clientName,
-    serviceName,
-    professionalName,
-    time,
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: professionalName },
+    { name: 'horario',      value: time },
   ]);
 }
 
@@ -130,10 +130,10 @@ export async function wppLembrete1h(
   time: string
 ): Promise<void> {
   await sendTemplate(phone, 'lembrete_1h', [
-    clientName,
-    serviceName,
-    professionalName,
-    time,
+    { name: 'cliente_nome', value: clientName },
+    { name: 'servico',      value: serviceName },
+    { name: 'barbeiro',     value: professionalName },
+    { name: 'horario',      value: time },
   ]);
 }
 
@@ -148,8 +148,8 @@ export async function wppPosAtendimento(
   linkAvaliacao: string
 ): Promise<void> {
   await sendTemplate(phone, 'pos_atendimento', [
-    clientName,
-    linkAvaliacao,
+    { name: 'cliente_nome',    value: clientName },
+    { name: 'link_avaliacao',  value: linkAvaliacao },
   ]);
 }
 
@@ -165,9 +165,9 @@ export async function wppVencimentoVip3dias(
   linkRenovacao: string
 ): Promise<void> {
   await sendTemplate(phone, 'vencimento_plano_vip_3dias', [
-    clientName,
-    formatDate(endDate),
-    linkRenovacao,
+    { name: 'cliente_nome',     value: clientName },
+    { name: 'data_vencimento',  value: formatDate(endDate) },
+    { name: 'link_renovacao',   value: linkRenovacao },
   ]);
 }
 
@@ -183,9 +183,9 @@ export async function wppVencimentoVip1dia(
   linkRenovacao: string
 ): Promise<void> {
   await sendTemplate(phone, 'vencimento_plano_vip_1dia', [
-    clientName,
-    formatDate(endDate),
-    linkRenovacao,
+    { name: 'cliente_nome',     value: clientName },
+    { name: 'data_vencimento',  value: formatDate(endDate) },
+    { name: 'link_renovacao',   value: linkRenovacao },
   ]);
 }
 
@@ -201,9 +201,9 @@ export async function wppClienteInativo(
   linkAgendamento: string
 ): Promise<void> {
   await sendTemplate(phone, 'cliente_inativo', [
-    clientName,
-    String(diasAusente),
-    linkAgendamento,
+    { name: 'cliente_nome',    value: clientName },
+    { name: 'dias_ausente',    value: String(diasAusente) },
+    { name: 'link_agendamento',value: linkAgendamento },
   ]);
 }
 
@@ -221,11 +221,11 @@ export async function wppNovoAgendamentoBarbeiro(
   date: string
 ): Promise<void> {
   await sendTemplate(phone, 'novo_agendamento_barbeiro', [
-    barbeiroNome,
-    clientName,
-    serviceName,
-    time,
-    formatDate(date),
+    { name: 'barbeiro_nome',  value: barbeiroNome },
+    { name: 'cliente_nome',   value: clientName },
+    { name: 'servico',        value: serviceName },
+    { name: 'horario',        value: time },
+    { name: 'data',           value: formatDate(date) },
   ]);
 }
 
@@ -242,9 +242,48 @@ export async function wppAgendaDiariaBarbeiro(
   totalAgendamentos: number
 ): Promise<void> {
   await sendTemplate(phone, 'agenda_diaria_barbeiro', [
-    barbeiroNome,
-    data,
-    agendaResumo,
-    String(totalAgendamentos),
+    { name: 'barbeiro_nome',        value: barbeiroNome },
+    { name: 'data',                 value: data },
+    { name: 'agenda_resumo',        value: agendaResumo },
+    { name: 'total_agendamentos',   value: String(totalAgendamentos) },
+  ]);
+}
+
+/**
+ * ativacao_plano_vip_3
+ * Dispara: quando assinatura VIP é ativada
+ * Vars: {{cliente_nome}} {{plano}} {{data_vencimento}}
+ */
+export async function wppAssinaturaAtivada(
+  phone: string,
+  clientName: string,
+  planName: string,
+  endDate: string
+): Promise<void> {
+  await sendTemplate(phone, 'ativacao_plano_vip_3', [
+    { name: 'cliente_nome',    value: clientName },
+    { name: 'plano',           value: planName },
+    { name: 'data_vencimento', value: formatDate(endDate) },
+  ]);
+}
+
+/**
+ * aviso_promocao — reaproveitado para avisar barbearia de nova assinatura
+ * Dispara: quando cliente adere a um plano
+ * Vars: {{cliente_nome}} {{descricao_promo}} {{validade}} {{link}}
+ */
+export async function wppNovaAssinaturaBarbearia(
+  phone: string,
+  clientName: string,
+  planName: string,
+  price: number,
+  period: string
+): Promise<void> {
+  const periodLabel = period === 'MENSAL' ? 'Mensal' : period === 'ANUAL' ? 'Anual' : period;
+  await sendTemplate(phone, 'aviso_promocao', [
+    { name: 'cliente_nome',    value: 'Barbearia Novo Jeito' },
+    { name: 'descricao_promo', value: `Novo cliente VIP: ${clientName} — ${planName} (${periodLabel})` },
+    { name: 'validade',        value: `R$ ${price.toFixed(2)}` },
+    { name: 'link',            value: '' },
   ]);
 }

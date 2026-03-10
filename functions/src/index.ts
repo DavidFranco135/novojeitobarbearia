@@ -605,3 +605,80 @@ export const asaasProxy = onRequest(
     }
   }
 );
+
+// ─────────────────────────────────────────────────────────────
+// WEBHOOK — Asaas pagamento confirmado
+// Cadastrar no Asaas: Configurações → Integrações → Webhooks
+// URL: https://us-central1-financeiro-a7116.cloudfunctions.net/asaasWebhook
+// Eventos: PAYMENT_RECEIVED, PAYMENT_CONFIRMED
+// ─────────────────────────────────────────────────────────────
+export const asaasWebhook = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+
+    try {
+      const event   = req.body;
+      const payment = event?.payment;
+      if (!payment) { res.status(200).send("ok"); return; }
+
+      const extRef  = payment.externalReference || "";
+      const status  = event.event; // PAYMENT_RECEIVED | PAYMENT_CONFIRMED | PAYMENT_OVERDUE
+
+      console.log(`Asaas webhook: ${status} | ref: ${extRef} | id: ${payment.id}`);
+
+      // ── Cobrança de agendamento (ref: booking_clientId_date) ──
+      if (extRef.startsWith("booking_") && (status === "PAYMENT_RECEIVED" || status === "PAYMENT_CONFIRMED")) {
+        // Busca agendamento pelo asaasPaymentId ou externalReference
+        const snap = await db.collection("appointments")
+          .where("awaitingOnlinePayment", "==", true)
+          .get();
+
+        const match = snap.docs.find(d =>
+          d.data().asaasPaymentId === payment.id ||
+          `booking_${d.data().clientId}_${d.data().date}` === extRef
+        );
+
+        if (match) {
+          await match.ref.update({
+            status: "CONCLUIDO_PAGO",
+            awaitingOnlinePayment: false,
+            asaasPaymentId: payment.id,
+          });
+          console.log(`✅ Agendamento ${match.id} marcado como CONCLUIDO_PAGO via webhook`);
+        }
+      }
+
+      // ── Cobrança de assinatura (ref: sub_subscriptionId) ──
+      if (extRef.startsWith("sub_") && (status === "PAYMENT_RECEIVED" || status === "PAYMENT_CONFIRMED")) {
+        const subId = extRef.replace("sub_", "");
+        const subDoc = await db.collection("subscriptions").doc(subId).get();
+        if (subDoc.exists) {
+          await subDoc.ref.update({
+            status: "ATIVA",
+            lastPaymentDate: new Date().toISOString(),
+            lastAsaasPaymentId: payment.id,
+          });
+          console.log(`✅ Assinatura ${subId} renovada via webhook`);
+        }
+      }
+
+      // ── Pagamento vencido ──
+      if (status === "PAYMENT_OVERDUE") {
+        if (extRef.startsWith("sub_")) {
+          const subId = extRef.replace("sub_", "");
+          const subDoc = await db.collection("subscriptions").doc(subId).get();
+          if (subDoc.exists) {
+            await subDoc.ref.update({ status: "VENCIDA" });
+            console.log(`⚠️ Assinatura ${subId} marcada como VENCIDA via webhook`);
+          }
+        }
+      }
+
+      res.status(200).json({ received: true });
+    } catch (err: any) {
+      console.error("asaasWebhook error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
