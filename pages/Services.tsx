@@ -105,7 +105,7 @@ const Services: React.FC = () => {
       </div>
 
       {showModal && (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`} onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div className={`w-full max-w-lg rounded-[2.5rem] border relative shadow-2xl flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
             {/* header fixo */}
             <div className="flex justify-between items-center px-10 pt-10 pb-4 flex-shrink-0">
@@ -150,7 +150,7 @@ const Services: React.FC = () => {
             </div>
             {/* botão fixo fora do scroll — nunca bloqueado pelo Safari */}
             <div className="px-10 py-6 flex-shrink-0">
-              <button type="button" onClick={handleSave} onTouchEnd={e => { e.preventDefault(); handleSave(); }} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
+              <button type="button" onClick={handleSave} style={{ cursor: 'pointer', WebkitTapHighlightColor: 'rgba(0,0,0,0)', touchAction: 'manipulation' }} className="w-full gradiente-ouro text-black py-5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Salvar Serviço</button>
             </div>
           </div>
         </div>
