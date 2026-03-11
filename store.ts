@@ -627,22 +627,32 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
 
         if (customerId) {
           // Cria cobrança com link (cliente escolhe PIX, Cartão ou Boleto)
+          // externalReference usa o ID único do agendamento para evitar duplicatas
           const charge = await asaasRequest('/payments', 'POST', {
             customer: customerId,
             billingType: 'UNDEFINED',
             value: totalPrice,
             dueDate: new Date().toISOString().split('T')[0],
             description: `Barbearia Novo Jeito — ${appt.serviceName}`,
-            externalReference: `booking_${appt.clientId}_${appt.date}`,
+            externalReference: `booking_${id}`,
           });
           if (charge?.id) {
-            result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '', _method: 'LINK' };
-            // Salva ID da cobrança e mantém awaitingOnlinePayment=true para o webhook finalizar
+            // Sandbox às vezes não retorna invoiceUrl na criação — busca o pagamento separado
+            let paymentLink = charge.invoiceUrl || charge.bankSlipUrl || '';
+            if (!paymentLink) {
+              try {
+                const fetched = await asaasRequest(`/payments/${charge.id}`);
+                paymentLink = fetched?.invoiceUrl || fetched?.bankSlipUrl || '';
+              } catch(_) {}
+            }
+            result = { paymentLink, _method: 'LINK' };
             await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
-              asaasPaymentId:       charge.id,
-              asaasPaymentLink:     result.paymentLink,
+              asaasPaymentId:        charge.id,
+              asaasPaymentLink:      paymentLink,
               awaitingOnlinePayment: true,
             });
+          } else {
+            console.error('Asaas charge creation failed:', JSON.stringify(charge));
           }
         }
       } catch (err) {
