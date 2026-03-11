@@ -1191,6 +1191,17 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
           </main>
 
+          {/* ── Botão Flutuante: Agendar Agora ── */}
+          <div className="fixed bottom-6 right-6 z-[90] flex flex-col items-end gap-3 animate-in slide-in-from-bottom-4 duration-700">
+            <button
+              onClick={() => { setView('BOOKING'); setPasso(1); }}
+              className="flex items-center gap-3 gradiente-ouro text-black px-6 py-4 rounded-full font-black text-sm uppercase tracking-widest shadow-2xl shadow-[#C58A4A]/40 hover:scale-105 active:scale-95 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><line x1="12" y1="11" x2="12" y2="21"/><line x1="8" y1="15" x2="16" y2="15"/></svg>
+              Agendar Agora
+            </button>
+          </div>
+
           <footer className={`py-10 text-center border-t ${theme === 'light' ? 'border-zinc-200 bg-zinc-50 text-zinc-600' : 'border-white/5 bg-white/[0.01] text-zinc-600'}`}>
              <p className="text-[10px] font-black uppercase tracking-widest">© 2026 {config.name}. PRODUZIDO POR ©NIKLAUS. Todos os direitos reservados.</p>
           </footer>
