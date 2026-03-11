@@ -15,6 +15,7 @@ interface PublicBookingProps {
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
   const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
+  const { products } = useBarberStore() as any;
   
   const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
   const [passo, setPasso] = useState(1);
@@ -721,6 +722,33 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    })}
                 </div>
              </section>
+
+             {/* 2.5 Produtos */}
+             {products && products.filter((p: any) => p.active !== false).length > 0 && (
+             <section className="mb-24">
+                <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                  Produtos <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {products.filter((p: any) => p.active !== false).map((p: any) => (
+                    <div key={p.id} className={`rounded-[2rem] overflow-hidden border transition-all hover:scale-[1.02] hover:border-[#C58A4A]/30 ${theme === 'light' ? 'bg-black border-zinc-800' : 'bg-black border-white/10'}`}>
+                      <div className="w-full aspect-square bg-black flex items-center justify-center overflow-hidden">
+                        {p.image
+                          ? <img src={p.image} alt={p.name} className="w-full h-full object-contain hover:scale-105 transition-all duration-500"/>
+                          : <span className="text-4xl">🛒</span>
+                        }
+                      </div>
+                      <div className="p-4 space-y-1">
+                        <p className={`font-black text-sm leading-tight ${theme === 'light' ? 'text-white' : 'text-white'}`}>{p.name}</p>
+                        {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{p.category}</p>}
+                        {p.description && <p className="text-[10px] text-zinc-500 line-clamp-2 leading-snug">{p.description}</p>}
+                        <p className="text-base font-black text-[#C58A4A] pt-1">R$ {Number(p.price).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </section>
+             )}
 
              {/* 3. A Experiência Signature */}
              <section className="mb-24">
