@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Save, Store, Upload, ImageIcon, User as UserIcon, Trash2, Plus,
   MapPin, RotateCcw, Crown, X, Star, Image, Phone, Instagram,
-  Clock, Link, Edit3
+  Clock, Link, Edit3, Eye, EyeOff, Wifi, WifiOff, AlertTriangle
 } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { VipPlan } from '../types';
@@ -15,6 +15,9 @@ const Settings: React.FC = () => {
     avatar: user?.avatar || config.logo || 'https://i.pravatar.cc/150'
   });
   const [loading, setLoading] = useState(false);
+  const [showAsaasKey, setShowAsaasKey] = useState(false);
+  const [asaasTestStatus, setAsaasTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [asaasTestMsg, setAsaasTestMsg] = useState('');
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<VipPlan | null>(null);
   const [newPlan, setNewPlan] = useState<Partial<VipPlan>>({
@@ -60,6 +63,47 @@ const Settings: React.FC = () => {
 
   const removeGalleryImage = (index: number) => {
     setFormData(prev => ({ ...prev, gallery: (prev.gallery || []).filter((_, i) => i !== index) }));
+  };
+
+  // ── Testa conexão com Asaas ──────────────────────────────────
+  const testAsaasConnection = async () => {
+    const rawKey = ((formData as any).asaasKey || '').trim().replace(/[\r\n\t ]/g, '');
+    const env    = (formData as any).asaasEnv || 'sandbox';
+
+    if (!rawKey) {
+      setAsaasTestStatus('error');
+      setAsaasTestMsg('Chave não preenchida. Cole a chave e clique em Testar.');
+      return;
+    }
+
+    setAsaasTestStatus('testing');
+    setAsaasTestMsg('Conectando...');
+
+    try {
+      const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: '/customers?limit=1', method: 'GET', key: rawKey, env }),
+      });
+      const data = await res.json();
+
+      if (res.status === 401 || data?.errors?.[0]?.code === 'invalid_access_token') {
+        setAsaasTestStatus('error');
+        const envLabel = env === 'sandbox' ? 'Sandbox' : 'Produção';
+        setAsaasTestMsg(`Chave inválida para ambiente ${envLabel}. Verifique se copiou a chave correta em sandbox.asaas.com → Minha Conta → Integrações.`);
+      } else if (data?.data !== undefined || data?.totalCount !== undefined) {
+        setAsaasTestStatus('ok');
+        setAsaasTestMsg(`✅ Conexão OK! Ambiente: ${env === 'sandbox' ? 'Sandbox' : 'Produção'}.`);
+        // Salva automaticamente a chave saneada no formData
+        setFormData(prev => ({ ...prev, asaasKey: rawKey } as any));
+      } else {
+        setAsaasTestStatus('error');
+        setAsaasTestMsg(`Resposta inesperada: ${JSON.stringify(data).substring(0, 120)}`);
+      }
+    } catch (err: any) {
+      setAsaasTestStatus('error');
+      setAsaasTestMsg(`Erro de rede: ${err?.message || 'verifique sua conexão'}`);
+    }
   };
 
   const handleSave = async () => {
@@ -340,14 +384,71 @@ const Settings: React.FC = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Chave de API</label>
-                  <input
-                    type="password"
-                    placeholder="$aas_... (cole sua chave de API)"
-                    value={(formData as any).asaasKey || ''}
-                    onChange={e => setFormData({ ...formData, asaasKey: e.target.value } as any)}
-                    className={`w-full border p-4 rounded-2xl outline-none font-mono text-sm transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-[#00a650]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#00a650]'}`}
-                  />
-                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Encontre em: Asaas → Minha Conta → Integrações → Chave de API</p>
+                  <div className="relative flex gap-2">
+                    <input
+                      type={showAsaasKey ? 'text' : 'password'}
+                      placeholder="$aact_... (cole sua chave sandbox)"
+                      value={(formData as any).asaasKey || ''}
+                      onChange={e => {
+                        // FIX: sanitiza na digitação — remove espaços/quebras acidentais
+                        const clean = e.target.value.replace(/[\r\n\t]/g, '').trimStart();
+                        setFormData({ ...formData, asaasKey: clean } as any);
+                        setAsaasTestStatus('idle');
+                      }}
+                      className={`flex-1 border p-4 rounded-2xl outline-none font-mono text-sm transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-[#00a650]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#00a650]'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAsaasKey(v => !v)}
+                      title={showAsaasKey ? 'Ocultar chave' : 'Mostrar chave'}
+                      className={`px-4 rounded-2xl border transition-all flex-shrink-0 ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-100 border-zinc-300 text-zinc-500 hover:text-zinc-900'}`}
+                    >
+                      {showAsaasKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    Sandbox: acesse <strong>sandbox.asaas.com</strong> → Minha Conta → Integrações → Chave de API
+                  </p>
+
+                  {/* Botão Testar Conexão */}
+                  <button
+                    type="button"
+                    onClick={testAsaasConnection}
+                    disabled={asaasTestStatus === 'testing'}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all
+                      ${asaasTestStatus === 'testing'
+                        ? 'opacity-60 cursor-wait bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                        : isDark
+                          ? 'bg-[#00a650]/10 border-[#00a650]/30 text-[#00a650] hover:bg-[#00a650]/20'
+                          : 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'}`}
+                  >
+                    {asaasTestStatus === 'testing'
+                      ? <><span className="animate-spin">⏳</span> Testando...</>
+                      : asaasTestStatus === 'ok'
+                        ? <><Wifi size={14} /> Conexão OK — Testar Novamente</>
+                        : asaasTestStatus === 'error'
+                          ? <><WifiOff size={14} /> Falhou — Testar Novamente</>
+                          : <><Wifi size={14} /> Testar Conexão Asaas</>}
+                  </button>
+
+                  {/* Resultado do teste */}
+                  {asaasTestStatus !== 'idle' && asaasTestStatus !== 'testing' && (
+                    <div className={`p-4 rounded-2xl border text-[10px] font-bold leading-relaxed flex items-start gap-2
+                      ${asaasTestStatus === 'ok'
+                        ? isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-200 text-red-700'}`}
+                    >
+                      {asaasTestStatus === 'ok' ? <Wifi size={13} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />}
+                      {asaasTestMsg}
+                    </div>
+                  )}
+
+                  {/* Aviso sobre chave sandbox vs produção */}
+                  <div className={`p-3 rounded-xl border ${isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+                    <p className={`text-[9px] font-bold ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                      ⚠️ <strong>Sandbox e Produção têm chaves diferentes.</strong> A chave sandbox começa com <code>$aact_</code> e só funciona em <code>sandbox.asaas.com</code>. Não misture os ambientes.
+                    </p>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Ambiente</label>
