@@ -558,6 +558,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     const phone = loggedClient?.phone || vipForm.phone.trim();
     const cpf   = (loggedClient as any)?.cpfCnpj || vipForm.cpf.trim();
     if (!name || !phone) { setVipError('Preencha nome e telefone.'); return; }
+
     const asaasKey = (config as any).asaasKey || '';
     const asaasEnv = (config as any).asaasEnv || 'sandbox';
     if (!asaasKey) {
@@ -565,54 +566,33 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       window.open(`https://wa.me/55${(config as any).whatsapp?.replace(/[^0-9]/g,'')}?text=${encodeURIComponent(w)}`, '_blank');
       return;
     }
+
     setVipLoading(true); setVipError(null);
     try {
-      const proxy = (endpoint: string, method = 'GET', body?: any) =>
-        fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint, method, key: asaasKey, env: asaasEnv, body })
-        }).then(r => r.json());
-      const phoneClean = phone.replace(/[^0-9]/g, '');
-      const cpfClean = cpf.replace(/[^0-9]/g, '') || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
-      let customerId: string | undefined;
-      if (phoneClean) { const r = await proxy('/customers?mobilePhone=' + phoneClean); customerId = r?.data?.[0]?.id; }
-      if (!customerId) { const r = await proxy('/customers', 'POST', { name, mobilePhone: phoneClean||undefined, cpfCnpj: cpfClean, notificationDisabled: true }); customerId = r?.id; }
-      else if (cpfClean) { await proxy('/customers/' + customerId, 'PUT', { cpfCnpj: cpfClean }); }
-      if (!customerId) throw new Error('Erro ao criar cliente no Asaas.');
-      const periodMap: {[key: string]: string} = { ANUAL: 'YEARLY', SEMANAL: 'WEEKLY', MENSAL: 'MONTHLY' };
-      const cycle = periodMap[vipModal.period] || 'MONTHLY';
-      const sub = await proxy('/subscriptions', 'POST', {
-        customer: customerId, billingType: 'UNDEFINED', value: vipModal.price,
-        nextDueDate: new Date().toISOString().split('T')[0], cycle,
-        description: vipModal.name + ' — Barbearia Novo Jeito',
-      });
-      if (!sub?.id) throw new Error((sub?.errors?.[0]?.description) || 'Erro ao criar assinatura.');
-      const charges = await proxy('/payments?subscription=' + sub.id);
-      const invoiceUrl = charges?.data?.[0]?.invoiceUrl || sub.invoiceUrl || '';
+      const planEndDate = new Date();
+      if (vipModal.period === 'ANUAL') planEndDate.setFullYear(planEndDate.getFullYear() + 1);
+      else if (vipModal.period === 'SEMANAL') planEndDate.setDate(planEndDate.getDate() + 7);
+      else planEndDate.setMonth(planEndDate.getMonth() + 1);
 
-      // ── Salva assinatura no Firestore para aparecer no painel ──
-      try {
-        const planEndDate = new Date();
-        if (vipModal.period === 'ANUAL') planEndDate.setFullYear(planEndDate.getFullYear() + 1);
-        else if (vipModal.period === 'SEMANAL') planEndDate.setDate(planEndDate.getDate() + 7);
-        else planEndDate.setMonth(planEndDate.getMonth() + 1);
-        const clientFound = clients.find((c: any) => c.phone?.replace(/\D/g,'') === phoneClean);
-        await addSubscription({
-          clientId:            clientFound?.id || phoneClean,
-          clientName:          name,
-          clientPhone:         phone,
-          planId:              vipModal.id,
-          planName:            vipModal.name,
-          price:               vipModal.price,
-          status:              'PENDENTE_PAGAMENTO',
-          startDate:           new Date().toISOString(),
-          endDate:             planEndDate.toISOString(),
-          asaasSubscriptionId: sub.id,
-          asaasInvoiceUrl:     invoiceUrl,
-        });
-      } catch(e) { console.warn('Firestore subscription save failed:', e); }
+      const phoneClean  = phone.replace(/[^0-9]/g, '');
+      const clientFound = clients.find((cl: any) => cl.phone?.replace(/\D/g,'') === phoneClean);
 
-      setVipPayLink(invoiceUrl);
+      // ── 1. Salva no Firestore PRIMEIRO para obter o ID do documento ──
+      // O externalReference no Asaas usa esse ID para o webhook encontrar a assinatura
+      const { id: subDocId, invoiceUrl } = await addSubscription({
+        clientId:    clientFound?.id || phoneClean,
+        clientName:  name,
+        clientPhone: phone,
+        planId:      vipModal.id,
+        planName:    vipModal.name,
+        price:       vipModal.price,
+        status:      'PENDENTE_PAGAMENTO',
+        startDate:   new Date().toISOString(),
+        endDate:     planEndDate.toISOString(),
+      } as any);
+
+      // invoiceUrl vem do store (que criou no Asaas com externalReference: sub_${subDocId})
+      setVipPayLink(invoiceUrl || null);
       if (invoiceUrl) window.open(invoiceUrl, '_blank');
     } catch(err: any) {
       setVipError(err.message || 'Erro ao processar.');
