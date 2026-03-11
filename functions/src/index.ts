@@ -683,17 +683,30 @@ export const asaasWebhook = onRequest(
 
       console.log(`Asaas webhook: ${status} | ref: ${extRef} | id: ${payment.id}`);
 
-      // ── Cobrança de agendamento (ref: booking_clientId_date) ──
+      // ── Cobrança de agendamento (ref: booking_<appointmentId>) ──
       if (extRef.startsWith("booking_") && (status === "PAYMENT_RECEIVED" || status === "PAYMENT_CONFIRMED")) {
-        // Busca agendamento pelo asaasPaymentId ou externalReference
-        const snap = await db.collection("appointments")
-          .where("awaitingOnlinePayment", "==", true)
-          .get();
+        // Busca agendamento:
+        //   1. Pelo ID direto (formato novo: booking_<apptId>)
+        //   2. Pelo asaasPaymentId (fallback para cobranças antigas)
+        const apptIdFromRef = extRef.startsWith("booking_") ? extRef.replace("booking_", "") : null;
 
-        const match = snap.docs.find(d =>
-          d.data().asaasPaymentId === payment.id ||
-          `booking_${d.data().clientId}_${d.data().date}` === extRef
-        );
+        let match: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+
+        // Tenta busca direta pelo ID do documento (mais eficiente)
+        if (apptIdFromRef) {
+          const directDoc = await db.collection("appointments").doc(apptIdFromRef).get();
+          if (directDoc.exists) {
+            match = directDoc as any;
+          }
+        }
+
+        // Fallback: busca por asaasPaymentId (formato antigo booking_clientId_date)
+        if (!match) {
+          const snap = await db.collection("appointments")
+            .where("awaitingOnlinePayment", "==", true)
+            .get();
+          match = snap.docs.find(d => d.data().asaasPaymentId === payment.id);
+        }
 
         if (match) {
           await match.ref.update({
