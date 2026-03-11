@@ -656,7 +656,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   >
                    {sortedServicesForHighlights.map(svc => (
                      <div key={svc.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-blue-300' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}>
-                        <img src={svc.image} className="w-full rounded-t-[2rem] object-cover aspect-[4/3] group-hover:scale-105 transition-all duration-700 shadow-inner" alt="" />
+                        <div className="w-full aspect-[4/3] overflow-hidden rounded-t-[2.5rem] bg-zinc-900 flex items-center justify-center">
+                          <img src={svc.image} className="w-full h-full object-contain group-hover:scale-105 transition-all duration-700" alt="" />
+                        </div>
                         <div className="p-6">
                            <h3 className={`text-xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{svc.name}</h3>
                            <p className={`text-xl font-black mt-2 ${theme === 'light' ? 'text-blue-600' : 'text-[#C58A4A]'}`}>R$ {svc.price.toFixed(2)}</p>
@@ -747,8 +749,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, experienciaRef)}
                   >
                    {(Array.isArray(config.gallery) ? config.gallery : []).map((img, i) => (
-                     <div key={i} className={`snap-center flex-shrink-0 w-72 md:w-[420px] h-72 md:h-96 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200' : 'border-4 border-white/5'}`}>
-                        <img src={img} className="w-full h-full object-cover" alt="" />
+                     <div key={i} className={`snap-center flex-shrink-0 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200 bg-zinc-100' : 'border-4 border-white/5 bg-zinc-900'}`}>
+                        <img src={img} className="max-h-[480px] w-auto max-w-[85vw] md:max-w-[500px] object-contain block" alt="" />
                      </div>
                    ))}
                    {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
@@ -895,7 +897,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
                         >
                           <div className="relative mx-auto w-24 h-24">
-                            <img src={prof.avatar} className="w-full rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg" alt="" />
+                            <img src={prof.avatar} className="w-full h-full rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg" alt="" />
                             <div className="absolute -right-10 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
                               <Heart size={12} fill="currentColor" /> <span>{prof.likes || 0}</span>
                             </div>
@@ -1044,8 +1046,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
                            {/* Banner / imagem do parceiro */}
                            {partner.image ? (
-                             <div>
-                               <img src={partner.image} alt={partner.businessName} className="w-full rounded-t-[2rem] object-contain" />
+                             <div className={`w-full aspect-[16/9] overflow-hidden rounded-t-[2.5rem] flex items-center justify-center ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+                               <img src={partner.image} alt={partner.businessName} className="w-full h-full object-contain" />
                              </div>
                            ) : (
                              <div className={`h-36 flex items-center justify-center text-5xl ${theme === 'light' ? 'bg-zinc-100' : 'bg-white/5'}`}>
