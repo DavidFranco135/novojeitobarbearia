@@ -550,15 +550,30 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
 
   // ── ASAAS: gera cobrança PIX ou link de pagamento ─────────
   const asaasRequest = async (endpoint: string, method = 'GET', body?: any) => {
-    const key = (config as any).asaasKey || '';
-    const env = (config as any).asaasEnv || 'sandbox';
-    // Usa Cloud Function como proxy para evitar bloqueio CORS do Asaas
+    // Lê do state React; se vazio busca direto do Firestore (evita closure desatualizado)
+    let key = (config as any).asaasKey || '';
+    let env = (config as any).asaasEnv || 'sandbox';
+    if (!key) {
+      try {
+        const snap = await getDoc(doc(db, 'config', 'main'));
+        if (snap.exists()) {
+          key = (snap.data() as any).asaasKey || '';
+          env = (snap.data() as any).asaasEnv || 'sandbox';
+        }
+      } catch (_) {}
+    }
+    if (!key) throw new Error('Chave Asaas não configurada. Acesse Ajustes → Integrações.');
+    console.log(`[asaas] ${method} ${endpoint} | env=${env} | key=${key.slice(0,12)}...`);
     const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ endpoint, method, body, key, env }),
     });
-    if (!res.ok) throw new Error(`Asaas proxy error: ${res.status}`);
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`[asaas] proxy ${res.status}:`, errBody);
+      throw new Error(`Asaas proxy error: ${res.status} — ${errBody}`);
+    }
     return res.json();
   };
 
