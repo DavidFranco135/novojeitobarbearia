@@ -179,9 +179,6 @@ const Appointments: React.FC = () => {
     setFinLoading(true);
     try {
       const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
-      if (result?.paymentLink) {
-        window.open(result.paymentLink, '_blank');
-      }
       setFinResult(result || { _method: finPayMethod });
     } catch(e) {
       console.error('Finalize error:', e);
@@ -683,22 +680,36 @@ const Appointments: React.FC = () => {
                       Atendimento concluído e registrado com sucesso.
                     </p>
                   ) : finResult.paymentLink ? (
-                    <div className="space-y-2 pt-2">
-                      <p className={`text-[10px] font-black uppercase tracking-widest text-blue-400`}>
+                    <div className="space-y-3 pt-2 w-full">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
                         ⏳ Aguardando pagamento do cliente
                       </p>
-                      <a href={finResult.paymentLink} target="_blank" rel="noreferrer"
-                        className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center shadow-xl">
-                        🔗 Abrir cobrança no Asaas
+                      <a
+                        href={finResult.paymentLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="block w-full gradiente-ouro text-black py-5 rounded-2xl font-black text-sm uppercase tracking-widest text-center shadow-xl hover:scale-105 transition-all"
+                      >
+                        🔗 Abrir link de pagamento
                       </a>
-                      <button onClick={() => navigator.clipboard.writeText(finResult!.paymentLink!)}
-                        className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(finResult!.paymentLink!);
+                          alert('Link copiado!');
+                        }}
+                        className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-900'}`}
+                      >
                         📋 Copiar link
                       </button>
+                      <p className={`text-[9px] text-center ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                        {finResult.paymentLink}
+                      </p>
                     </div>
                   ) : (
                     <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      Configure a API do Asaas em Ajustes para gerar cobranças automáticas.
+                      Cobrança registrada. Verifique a API do Asaas em Ajustes.
                     </p>
                   )}
                   <button onClick={() => setFinModal(null)} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'border-white/10 text-zinc-400' : 'border-zinc-200 text-zinc-500'}`}>Fechar</button>
