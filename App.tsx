@@ -17,6 +17,7 @@ import BenefitValidator from './pages/BenefitValidator';  // ── NOVO ──
 import Automacoes from './pages/Automacoes';
 import Staff from './pages/Staff';
 import Products from './pages/Products';
+import Inbox from './pages/Inbox';
 import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
@@ -265,6 +266,7 @@ const App: React.FC = () => {
         case 'automacoes':    return <Automacoes />;
         case 'settings':      return <Settings />;
         case 'products':      return <Products />;
+        case 'inbox':         return <Inbox />;
         default:              return <Appointments />;
       }
     };
@@ -295,6 +297,7 @@ const App: React.FC = () => {
       case 'automacoes':    return <Automacoes />;
       case 'settings':      return <Settings />;
       case 'staff':         return <Staff />;
+      case 'inbox':         return <Inbox />;
       case 'products':      return <Products />;
       default:              return <Dashboard onNavigate={setActiveTab} />;
     }
