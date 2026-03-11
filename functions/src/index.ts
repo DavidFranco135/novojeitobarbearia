@@ -7,7 +7,12 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
+import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+
+// ── Secrets do WhatsApp (configurar via: firebase functions:secrets:set) ──
+const PHONE_NUMBER_ID_SECRET = defineSecret("PHONE_NUMBER_ID");
+const ACCESS_TOKEN_SECRET    = defineSecret("ACCESS_TOKEN");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -55,8 +60,8 @@ async function send(
   template: string,
   params: { name: string; value: string }[]
 ): Promise<boolean> {
-  const phoneId = process.env.PHONE_NUMBER_ID || "";
-  const token   = process.env.ACCESS_TOKEN    || "";
+  const phoneId = PHONE_NUMBER_ID_SECRET.value() || process.env.PHONE_NUMBER_ID || "";
+  const token   = ACCESS_TOKEN_SECRET.value()    || process.env.ACCESS_TOKEN    || "";
 
   if (!phoneId || !token) {
     console.warn("⚠️  PHONE_NUMBER_ID ou ACCESS_TOKEN não configurados no Cloud Run.");
@@ -112,7 +117,7 @@ async function send(
 // → Aviso para BARBEIRO
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCreated = onDocumentCreated(
-  "appointments/{id}",
+  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async (event) => {
     const a = event.data?.data();
     if (!a || a.status === "CANCELADO") return;
@@ -149,7 +154,7 @@ export const onAppointmentCreated = onDocumentCreated(
 // TRIGGER 2 — Agendamento concluído → pós-atendimento
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCompleted = onDocumentUpdated(
-  "appointments/{id}",
+  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -158,6 +163,8 @@ export const onAppointmentCompleted = onDocumentUpdated(
     if (before.status === "CONCLUIDO_PAGO") return;
     if (after.status  !== "CONCLUIDO_PAGO") return;
     if (!after.clientPhone) return;
+    // Só envia pós-atendimento quando o barbeiro clica em Concluir (não quando cliente paga online)
+    if (!after.completedByBarber) return;
 
     await send(after.clientPhone, T.posAtendimento, [
       { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
@@ -169,32 +176,14 @@ export const onAppointmentCompleted = onDocumentUpdated(
 );
 
 
-// ─────────────────────────────────────────────────────────────
-// TRIGGER 3 — Nova assinatura VIP ativada
-// ─────────────────────────────────────────────────────────────
-export const onSubscriptionCreated = onDocumentCreated(
-  "subscriptions/{id}",
-  async (event) => {
-    const sub = event.data?.data();
-    if (!sub || sub.status !== "ATIVA") return;
-
-    const cDoc = await db.collection("clients").doc(sub.clientId).get();
-    const cli  = cDoc.data();
-    if (!cli?.phone) return;
-
-    await send(cli.phone, T.vipAtivado, [
-      { name: "cliente_nome",    value: sub.clientName     || cli.name },
-      { name: "plano",           value: sub.planName       || "VIP"    },
-      { name: "data_vencimento", value: fmt(sub.endDate.split("T")[0]) },
-    ]);
-  }
-);
+// ── onSubscriptionCreated removido: o webhook asaasWebhook cuida de ativar
+// a assinatura e enviar o WhatsApp após confirmação do pagamento Asaas ──
 
 // ─────────────────────────────────────────────────────────────
 // SCHEDULED 1 — Lembrete 24h antes (todo dia às 10:00)
 // ─────────────────────────────────────────────────────────────
 export const sendReminders24h = onSchedule(
-  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -226,7 +215,7 @@ export const sendReminders24h = onSchedule(
 // Usa flag wppLembrete1hSent no agendamento para não repetir
 // ─────────────────────────────────────────────────────────────
 export const sendReminders1h = onSchedule(
-  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const now      = new Date();
     const todayStr = now.toISOString().split("T")[0];
@@ -266,7 +255,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
+  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -318,7 +307,7 @@ export const sendDailyAgenda = onSchedule(
 // SCHEDULED 4 — VIP vencendo em 3 dias (todo dia às 09:00)
 // ─────────────────────────────────────────────────────────────
 export const sendVipExpiry3days = onSchedule(
-  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const d3 = new Date();
     d3.setDate(d3.getDate() + 3);
@@ -351,7 +340,7 @@ export const sendVipExpiry3days = onSchedule(
 // SCHEDULED 5 — VIP vencendo em 1 dia (todo dia às 09:05)
 // ─────────────────────────────────────────────────────────────
 export const sendVipExpiry1day = onSchedule(
-  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const d1 = new Date();
     d1.setDate(d1.getDate() + 1);
@@ -384,7 +373,7 @@ export const sendVipExpiry1day = onSchedule(
 // SCHEDULED 6 — Clientes inativos 30+ dias (toda segunda 09:10)
 // ─────────────────────────────────────────────────────────────
 export const sendInactiveClients = onSchedule(
-  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo" },
+  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -420,7 +409,7 @@ export const sendInactiveClients = onSchedule(
 // que costumam cortar naquele dia da semana (horário vago)
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCancelled = onDocumentUpdated(
-  "appointments/{id}",
+  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -466,7 +455,7 @@ export const onAppointmentCancelled = onDocumentUpdated(
 // SCHEDULED 7 — Aniversariantes do dia (todo dia às 09:30)
 // ─────────────────────────────────────────────────────────────
 export const sendBirthdayMessages = onSchedule(
-  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const hoje = new Date();
     const mmdd  = `${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
@@ -495,7 +484,7 @@ export const sendBirthdayMessages = onSchedule(
 // SCHEDULED 8 — Lembrete manutenção 15-20 dias (todo dia 10:30)
 // ─────────────────────────────────────────────────────────────
 export const sendMaintenanceReminders = onSchedule(
-  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async () => {
     const snap = await db.collection("clients").get();
     let count = 0;
@@ -530,12 +519,73 @@ export const sendMaintenanceReminders = onSchedule(
   }
 );
 
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 9 — Promoção dia fraco (toda terça e quinta 11:00)
+// Detecta dias com poucos agendamentos e avisa clientes inativos há 15-45 dias
+// ─────────────────────────────────────────────────────────────
+export const sendPromoDiaFraco = onSchedule(
+  { schedule: "0 11 * * 2,4", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  async () => {
+    // Verifica se amanhã tem poucos agendamentos (< 3)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+    const apptSnap = await db.collection("appointments")
+      .where("date", "==", tomorrowStr)
+      .where("status", "in", ["AGENDADO", "CONFIRMADO"])
+      .get();
+
+    // Só dispara se tiver menos de 3 agendamentos amanhã
+    if (apptSnap.size >= 3) {
+      console.log(`📅 Promo dia fraco: amanhã tem ${apptSnap.size} agendamentos, não disparando.`);
+      return;
+    }
+
+    const clientSnap = await db.collection("clients").get();
+    const cfgDoc     = await db.collection("config").doc("main").get();
+    const shopLink   = cfgDoc.data()?.bookingUrl || APP_URL;
+    let count = 0;
+
+    for (const doc of clientSnap.docs) {
+      const cli = doc.data();
+      if (!cli.phone) continue;
+
+      // Clientes inativos há 15-45 dias (fora da janela de manutenção e inatividade)
+      const dias = cli.lastVisit
+        ? Math.floor((Date.now() - new Date(cli.lastVisit).getTime()) / 86_400_000)
+        : 999;
+      if (dias < 15 || dias > 45) continue;
+
+      // Evita reenvio na mesma semana
+      const lastPromo = cli.wppPromoSentAt ? new Date(cli.wppPromoSentAt) : null;
+      if (lastPromo && (Date.now() - lastPromo.getTime()) < 7 * 86_400_000) continue;
+
+      const fmtTomorrow = fmt(tomorrowStr);
+      await send(cli.phone, T.promoDiaFraco, [
+        { name: "cliente_nome",    value: cli.name || "Cliente" },
+        { name: "descricao_promo", value: `Horários disponíveis amanhã (${fmtTomorrow}) com condição especial para você! ✂️` },
+        { name: "validade",        value: `amanhã, ${fmtTomorrow}` },
+        { name: "link",            value: shopLink },
+      ]);
+
+      await doc.ref.update({
+        wppPromoSentAt: new Date().toISOString(),
+      });
+      count++;
+    }
+
+    console.log(`🎯 Promo dia fraco: ${count} mensagens enviadas para amanhã (${tomorrowStr})`);
+  }
+);
+
 // ─────────────────────────────────────────────────────────────
 // TRIGGER 5 — Agendamento concluído → cashback automático
 // Envia mensagem de cashback após CONCLUIDO_PAGO
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCashback = onDocumentUpdated(
-  "appointments/{id}",
+  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -615,6 +665,8 @@ export const asaasProxy = onRequest(
 export const asaasWebhook = onRequest(
   { cors: true, region: "us-central1" },
   async (req, res) => {
+    // GET = ping de verificação do Asaas (retorna 200 para confirmar que o endpoint existe)
+    if (req.method === "GET") { res.status(200).send("ok"); return; }
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
     // ── Validação do token Asaas ──────────────────────────────
@@ -655,6 +707,29 @@ export const asaasWebhook = onRequest(
             asaasPaymentId: payment.id,
           });
           console.log(`✅ Agendamento ${match.id} marcado como CONCLUIDO_PAGO via webhook`);
+
+          // ── Lista negra: cliente pagou → limpa requirePrepayment ──
+          const apptData = match.data();
+          if (apptData.clientId) {
+            try {
+              const clientSnap = await db.collection("clients").doc(apptData.clientId).get();
+              if (clientSnap.exists && clientSnap.data()?.requirePrepayment) {
+                await clientSnap.ref.update({ requirePrepayment: false });
+                console.log(`✅ Cliente ${apptData.clientId} removido da lista negra após pagamento`);
+              }
+            } catch(e) { console.warn("Erro ao limpar requirePrepayment:", e); }
+          }
+
+          // ── Envia pós-atendimento ao cliente após pagamento online ──
+          const appt = match.data();
+          if (appt.clientPhone) {
+            await send(appt.clientPhone, T.posAtendimento, [
+              { name: "cliente_nome",   value: appt.clientName       || "Cliente"  },
+              { name: "link_avaliacao", value: APP_URL                             },
+              { name: "servico",        value: appt.serviceName      || "Serviço"  },
+              { name: "barbeiro",       value: appt.professionalName || "Barbeiro" },
+            ]);
+          }
         }
       }
 
@@ -663,12 +738,45 @@ export const asaasWebhook = onRequest(
         const subId = extRef.replace("sub_", "");
         const subDoc = await db.collection("subscriptions").doc(subId).get();
         if (subDoc.exists) {
+          const sub = subDoc.data()!;
+          const wasPending = sub.status === "PENDENTE_PAGAMENTO";
+
           await subDoc.ref.update({
-            status: "ATIVA",
-            lastPaymentDate: new Date().toISOString(),
+            status:             "ATIVA",
+            lastPaymentDate:    new Date().toISOString(),
             lastAsaasPaymentId: payment.id,
           });
-          console.log(`✅ Assinatura ${subId} renovada via webhook`);
+          console.log(`✅ Assinatura ${subId} ativada/renovada via webhook`);
+
+          // ── Dispara WhatsApp apenas na 1ª ativação (era PENDENTE_PAGAMENTO) ──
+          if (wasPending) {
+            const clientPhone = (sub.clientPhone || "").replace(/\D/g, "");
+            if (clientPhone) {
+              const endDate = typeof sub.endDate === "string"
+                ? sub.endDate.split("T")[0]
+                : new Date(sub.endDate?.toDate?.() || sub.endDate).toISOString().split("T")[0];
+
+              await send(clientPhone, T.vipAtivado, [
+                { name: "cliente_nome",    value: sub.clientName || "Cliente" },
+                { name: "plano",           value: sub.planName   || "VIP"     },
+                { name: "data_vencimento", value: fmt(endDate)                 },
+              ]);
+            }
+
+            // Avisa a barbearia
+            const cfgDoc    = await db.collection("config").doc("main").get();
+            const shopPhone = (cfgDoc.data()?.whatsapp || "").replace(/\D/g, "");
+            if (shopPhone) {
+              const today = new Date().toISOString().split("T")[0];
+              await send(shopPhone, T.novoAgendBarbeiro, [
+                { name: "barbeiro_nome", value: cfgDoc.data()?.name || "Barbearia" },
+                { name: "cliente_nome",  value: sub.clientName      || "Cliente"    },
+                { name: "servico",       value: sub.planName         || "Plano VIP"  },
+                { name: "horario",       value: ""                                   },
+                { name: "data",          value: fmt(today)                           },
+              ]);
+            }
+          }
         }
       }
 
