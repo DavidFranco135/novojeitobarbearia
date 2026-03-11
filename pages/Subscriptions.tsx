@@ -113,26 +113,28 @@ const Subscriptions: React.FC = () => {
       });
       setEditingSub(null);
     } else {
-    await addSubscription({
-      clientId:    formData.clientId,
-      clientName:  client.name,
-      planId:      formData.planId,
-      planName:    plan.name,
-      price:       plan.price,
-      startDate:   startDate.toISOString().split('T')[0],
-      endDate:     endDate.toISOString().split('T')[0],
-      status:      'ATIVA',
-      usageCount:  0,
-      usageLimit:  formData.usageLimit || undefined,
-      paymentHistory: [{
-        id:     `pay_${Date.now()}`,
-        date:   new Date().toLocaleDateString('pt-BR'),
-        amount: plan.price,
-        method: formData.paymentMethod,
-        status: 'PAGO',
-      }],
-      createdAt: new Date().toISOString(),
-    });
+      // FIX: paymentMethod passado no nível raiz para o store.ts detectar corretamente
+      await addSubscription({
+        clientId:      formData.clientId,
+        clientName:    client.name,
+        planId:        formData.planId,
+        planName:      plan.name,
+        price:         plan.price,
+        startDate:     startDate.toISOString().split('T')[0],
+        endDate:       endDate.toISOString().split('T')[0],
+        status:        'ATIVA',
+        usageCount:    0,
+        usageLimit:    formData.usageLimit || undefined,
+        paymentMethod: formData.paymentMethod,   // FIX: campo no nível raiz
+        paymentHistory: [{
+          id:     `pay_${Date.now()}`,
+          date:   new Date().toLocaleDateString('pt-BR'),
+          amount: plan.price,
+          method: formData.paymentMethod,
+          status: 'PAGO',
+        }],
+        createdAt: new Date().toISOString(),
+      });
     }
     setShowModal(false); setEditingSub(null);
     setFormData({ clientId: '', planId: '', usageLimit: 0, paymentMethod: 'PIX' });
