@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Zap, 
-  LayoutDashboard, Calendar, Users, Scissors, Briefcase, DollarSign, Settings, 
+  LayoutDashboard, Package, Calendar, Users, Scissors, Briefcase, DollarSign, Settings, 
   Menu, LogOut, Bell, Sparkles, ChevronLeft, Sun, Moon, X, Trash2, ChevronRight,
   MessageSquare, Star, Crown, QrCode, CalendarX
 } from 'lucide-react';
