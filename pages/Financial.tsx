@@ -17,7 +17,10 @@ const Financial: React.FC = () => {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [filterProfId, setFilterProfId] = useState<string>('TODOS');
-  const [newEntry, setNewEntry] = useState({ description: '', amount: 0, type: 'RECEITA' as 'RECEITA' | 'DESPESA', category: 'Geral' });
+  const [newEntry, setNewEntry] = useState({ description: '', amount: 0, type: 'RECEITA' as 'RECEITA' | 'DESPESA', category: 'Geral', dueDate: '', isFixed: false });
+  const [expenseTab, setExpenseTab] = useState<'TODAS' | 'FIXAS' | 'VARIAVEIS' | 'PENDENTES'>('TODAS');
+
+  const EXPENSE_CATEGORIES = ['Aluguel', 'Energia', 'Água', 'Internet', 'Folha de pagamento', 'Produto', 'Equipamento', 'Marketing', 'Manutenção', 'Outros'];
 
   const isDark = theme !== 'light';
   const cardClass = isDark ? 'cartao-vidro border-white/5' : 'bg-white border border-zinc-200 shadow-sm';
@@ -61,7 +64,11 @@ const Financial: React.FC = () => {
     // Saldo total global
     const totalReceitas = financialEntries.filter(e => e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
     const totalDespesas = financialEntries.filter(e => e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
-    return { receitas, despesas, lucro: receitas - despesas, saldoGlobal: totalReceitas - totalDespesas };
+    const contasPendentes = financialEntries.filter(e => e.type === 'DESPESA' && (e as any).dueDate && !(e as any).paid);
+    const totalPendente = contasPendentes.reduce((acc, e) => acc + e.amount, 0);
+    const despesasFixas = periodEntries.filter(e => e.type === 'DESPESA' && (e as any).isFixed).reduce((acc, e) => acc + e.amount, 0);
+    const despesasVarveis = despesas - despesasFixas;
+    return { receitas, despesas, lucro: receitas - despesas, saldoGlobal: totalReceitas - totalDespesas, totalPendente, contasPendentes: contasPendentes.length, despesasFixas, despesasVarveis };
   }, [financialEntries, dateRange]);
 
   // ── Comissões por profissional ────────────────────────────────
@@ -209,6 +216,27 @@ const Financial: React.FC = () => {
           <p className={`text-3xl font-black mt-2 font-display italic ${metrics.saldoGlobal >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
             R$ {metrics.saldoGlobal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
+        </div>
+      </div>
+
+      {/* ── Custos Fixos vs Variáveis ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className={`${cardClass} rounded-[2rem] p-6`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>📌 Custos Fixos</p>
+          <p className="text-2xl font-black text-orange-400 font-display italic">R$ {metrics.despesasFixas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Aluguel, salários, contratos</p>
+        </div>
+        <div className={`${cardClass} rounded-[2rem] p-6`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>🔀 Custos Variáveis</p>
+          <p className="text-2xl font-black text-yellow-400 font-display italic">R$ {metrics.despesasVarveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Produtos, manutenção, etc</p>
+        </div>
+        <div className={`${cardClass} rounded-[2rem] p-6 ${metrics.contasPendentes > 0 ? 'border-red-500/30 bg-red-500/5' : ''}`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${metrics.contasPendentes > 0 ? 'text-red-400' : isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>⏰ Contas a Vencer</p>
+          <p className={`text-2xl font-black font-display italic ${metrics.contasPendentes > 0 ? 'text-red-400' : isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            R$ {metrics.totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
+          <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>{metrics.contasPendentes} conta(s) pendente(s)</p>
         </div>
       </div>
 
@@ -389,24 +417,54 @@ const Financial: React.FC = () => {
       {/* ── Modal Lançamento ── */}
       {showAddModal && (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${isDark ? 'bg-black/95' : 'bg-black/70'}`}>
-          <div className={`w-full max-w-md rounded-[2.5rem] p-10 space-y-6 shadow-2xl ${isDark ? 'cartao-vidro border-[#C58A4A]/20' : 'bg-white border border-zinc-200'}`}>
-            <h2 className={`text-2xl font-black font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>Lançamento Avulso</h2>
-            <div className="space-y-4">
-              <input type="text" placeholder="Descrição" value={newEntry.description} onChange={e => setNewEntry({ ...newEntry, description: e.target.value })} className={inputClass} />
-              <input type="number" placeholder="Valor" value={newEntry.amount || ''} onChange={e => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })} className={inputClass} />
-              <select value={newEntry.type} onChange={e => setNewEntry({ ...newEntry, type: e.target.value as any })} className={inputClass}>
-                <option value="RECEITA" className="bg-zinc-950">Entrada (Receita)</option>
-                <option value="DESPESA" className="bg-zinc-950">Saída (Despesa)</option>
-              </select>
-              <input type="text" placeholder="Categoria (ex: Aluguel, Produto...)" value={newEntry.category} onChange={e => setNewEntry({ ...newEntry, category: e.target.value })} className={inputClass} />
+          <div className={`w-full max-w-md rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] ${isDark ? 'cartao-vidro border-[#C58A4A]/20' : 'bg-white border border-zinc-200'}`}>
+            <div className="p-8 pb-4 shrink-0">
+              <h2 className={`text-2xl font-black font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>Novo Lançamento</h2>
             </div>
-            <div className="flex gap-3">
+            <div className="overflow-y-auto flex-1 px-8 pb-4 space-y-4">
+              {/* Tipo */}
+              <div className="grid grid-cols-2 gap-3">
+                {(['RECEITA', 'DESPESA'] as const).map(t => (
+                  <button key={t} type="button"
+                    onClick={() => setNewEntry({ ...newEntry, type: t })}
+                    className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 transition-all ${newEntry.type === t ? (t === 'RECEITA' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-red-500 text-white border-red-500') : isDark ? 'bg-white/5 border-white/10 text-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-400'}`}>
+                    {t === 'RECEITA' ? '📈 Receita' : '📉 Despesa'}
+                  </button>
+                ))}
+              </div>
+              <input type="text" placeholder="Descrição" value={newEntry.description} onChange={e => setNewEntry({ ...newEntry, description: e.target.value })} className={inputClass} />
+              <input type="number" placeholder="Valor R$" value={newEntry.amount || ''} onChange={e => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })} className={inputClass} />
+              {/* Categoria */}
+              {newEntry.type === 'DESPESA' ? (
+                <select value={newEntry.category} onChange={e => setNewEntry({ ...newEntry, category: e.target.value })} className={inputClass}>
+                  {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-zinc-950">{cat}</option>)}
+                </select>
+              ) : (
+                <input type="text" placeholder="Categoria (ex: Corte, Barba...)" value={newEntry.category} onChange={e => setNewEntry({ ...newEntry, category: e.target.value })} className={inputClass} />
+              )}
+              {/* Opções extras para despesa */}
+              {newEntry.type === 'DESPESA' && (
+                <>
+                  <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10">
+                    <input type="checkbox" id="isFixed" checked={newEntry.isFixed} onChange={e => setNewEntry({ ...newEntry, isFixed: e.target.checked })} className="w-5 h-5 rounded accent-amber-500"/>
+                    <label htmlFor="isFixed" className={`text-sm font-black cursor-pointer ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                      Custo Fixo <span className={`text-[9px] font-bold ml-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>(aluguel, salário, etc)</span>
+                    </label>
+                  </div>
+                  <div className="space-y-1">
+                    <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Data de vencimento (opcional)</label>
+                    <input type="date" value={newEntry.dueDate} onChange={e => setNewEntry({ ...newEntry, dueDate: e.target.value })} className={inputClass} />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="p-8 pt-4 flex gap-3 shrink-0 border-t border-white/5">
               <button onClick={() => setShowAddModal(false)} className={`flex-1 py-4 rounded-xl font-black text-[9px] uppercase ${isDark ? 'bg-white/5 text-zinc-500' : 'bg-zinc-100 text-zinc-500'}`}>Cancelar</button>
               <button
                 onClick={() => {
-                  addFinancialEntry({ ...newEntry, date: new Date().toISOString().split('T')[0] });
+                  addFinancialEntry({ ...newEntry, date: new Date().toISOString().split('T')[0] } as any);
                   setShowAddModal(false);
-                  setNewEntry({ description: '', amount: 0, type: 'RECEITA', category: 'Geral' });
+                  setNewEntry({ description: '', amount: 0, type: 'RECEITA', category: 'Geral', dueDate: '', isFixed: false });
                 }}
                 className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black text-[9px] uppercase"
               >
