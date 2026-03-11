@@ -123,6 +123,7 @@ const COLLECTIONS = {
   BLOCKED_SLOTS: 'blockedSlots',
   INACTIVITY_CAMPAIGNS: 'inactivityCampaigns',
   CLIENT_BENEFITS: 'clientBenefits',  // ── NOVO ──
+  PRODUCTS: 'products',
 };
 
 // ── Gerador de token único para QR Code de benefício ─────────
@@ -174,6 +175,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [inactivityCampaigns, setInactivityCampaigns] = useState<InactivityCampaign[]>([]);
   const [clientBenefits, setClientBenefits] = useState<ClientBenefit[]>([]);  // ── NOVO ──
 
@@ -198,6 +200,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       onSnapshot(collection(db, COLLECTIONS.BLOCKED_SLOTS), snap => setBlockedSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlockedSlot)))),
       onSnapshot(collection(db, COLLECTIONS.INACTIVITY_CAMPAIGNS), snap => setInactivityCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as InactivityCampaign)))),
       onSnapshot(collection(db, 'staff'), snap => setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+      onSnapshot(collection(db, COLLECTIONS.PRODUCTS), snap => setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       // ── NOVO: Escuta em tempo real para benefícios ──
       onSnapshot(collection(db, COLLECTIONS.CLIENT_BENEFITS), snap => setClientBenefits(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientBenefit)))),
       onSnapshot(doc(db, COLLECTIONS.CONFIG, 'main'), docSnap => {
@@ -363,6 +366,17 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const logout = () => setUser(null);
 
   // ── Staff CRUD ──────────────────────────────────────────────────────
+  // ── Products CRUD ─────────────────────────────────────────────
+  const addProduct = async (data: any) => {
+    await addDoc(collection(db, COLLECTIONS.PRODUCTS), { ...data, createdAt: new Date().toISOString() });
+  };
+  const updateProduct = async (id: string, data: any) => {
+    await updateDoc(doc(db, COLLECTIONS.PRODUCTS, id), data);
+  };
+  const deleteProduct = async (id: string) => {
+    await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, id));
+  };
+
   const addStaff = async (data: any) => {
     const ref = await addDoc(collection(db, 'staff'), { ...data, createdAt: new Date().toISOString() });
     return ref.id;
@@ -990,6 +1004,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns,
       clientBenefits,  // ── NOVO ──
       toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
+      products, addProduct, updateProduct, deleteProduct,
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
