@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, Check, X, CreditCard,
-  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote
+  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, Camera, NotebookPen
 } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Appointment, Client } from '../types';
@@ -93,8 +93,8 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, markNoShow, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, theme
-  } = useBarberStore() as any;
+    addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, theme
+  } = useBarberStore();
   const isDark = theme !== 'light';
 
   // ── Referência ao momento em que o componente montou.
@@ -149,6 +149,8 @@ const Appointments: React.FC = () => {
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [compactView, setCompactView] = useState(false);
+  const [showClientProfile, setShowClientProfile] = useState<any | null>(null);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState<string>(getTodayString);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Appointment | null>(null);
@@ -179,6 +181,9 @@ const Appointments: React.FC = () => {
     setFinLoading(true);
     try {
       const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
+      if (result?.paymentLink) {
+        window.open(result.paymentLink, '_blank');
+      }
       setFinResult(result || { _method: finPayMethod });
     } catch(e) {
       console.error('Finalize error:', e);
@@ -372,10 +377,10 @@ const Appointments: React.FC = () => {
                         title={!app ? `Clique para agendar às ${hour}` : ''}
                       >
                         {app ? (
-                          <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : app.status === 'NAO_COMPARECEU' ? 'border-red-500/40 bg-red-500/10' : app.awaitingOnlinePayment ? 'border-blue-400/50 bg-blue-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
+                          <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : app.awaitingOnlinePayment ? 'border-blue-400/50 bg-blue-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
                             <div className="truncate" onClick={(e) => { e.stopPropagation(); setShowDetailModal(app); }} style={{cursor:'pointer'}}>
-                              <div className="flex items-center gap-1">
-                                <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${app.status === 'NAO_COMPARECEU' ? 'text-red-400' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
+                              <div className=\"flex items-center gap-1\">
+                                <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
                                   title="Ver detalhes"
                                 >{app.clientName}</h4>
                                 {app.status === 'CONCLUIDO_PAGO' && (
@@ -388,15 +393,20 @@ const Appointments: React.FC = () => {
                                     <CreditCard size={compactView ? 8 : 10} className="text-blue-400" />
                                   </span>
                                 )}
-                                {!app.awaitingOnlinePayment && app.status !== 'CONCLUIDO_PAGO' && app.status !== 'CANCELADO' && app.status !== 'NAO_COMPARECEU' && (
+                                {!app.awaitingOnlinePayment && app.status !== 'CONCLUIDO_PAGO' && app.status !== 'CANCELADO' && (
                                   <span title="Pagamento na barbearia" className="animate-pulse flex-shrink-0">
                                     <Banknote size={compactView ? 8 : 10} className="text-amber-400" />
                                   </span>
                                 )}
-                                {app.status === 'NAO_COMPARECEU' && (
-                                  <span title="Não compareceu" className="flex-shrink-0 text-[8px]">🚫</span>
-                                )}
-                                {app.status !== 'NAO_COMPARECEU' && (() => { const cl = clients.find((cl:any) => cl.id === app.clientId || cl.phone === app.clientPhone); return cl?.requirePrepayment ? <span title="Exige pagamento antecipado" className="flex-shrink-0 text-[8px]">⚠️</span> : null; })()}
+                                {(() => { const cl = clients.find((c: any) => c.name === app.clientName || c.phone === app.clientPhone); return (cl?.photos?.length > 0 || cl?.notes) ? (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setShowClientProfile(cl); }}
+                                    title="Ver fotos e observações do cliente"
+                                    className="flex-shrink-0 animate-none"
+                                  >
+                                    <Camera size={compactView ? 8 : 10} className="text-[#C58A4A]" />
+                                  </button>
+                                ) : null; })()}
                               </div>
                               {!compactView && (
                                 <>
@@ -533,30 +543,37 @@ const Appointments: React.FC = () => {
         const client = clients.find(c => c.name === app.clientName || c.phone === app.clientPhone);
         const service = services.find(s => s.id === app.serviceId);
         const professional = professionals.find(p => p.id === app.professionalId);
-        const statusLabel = app.status === 'CONCLUIDO_PAGO' ? 'Concluído e Pago' : app.status === 'CANCELADO' ? 'Cancelado' : app.status === 'NAO_COMPARECEU' ? '🚫 Não Compareceu' : app.awaitingOnlinePayment ? '💳 Pag. Online Pendente' : 'Pendente';
-        const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : app.status === 'NAO_COMPARECEU' ? 'text-red-400 bg-red-500/10 border-red-500/30' : app.awaitingOnlinePayment ? 'text-blue-400 bg-blue-500/10 border-blue-400/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
+        const statusLabel = app.status === 'CONCLUIDO_PAGO' ? 'Concluído e Pago' : app.status === 'CANCELADO' ? 'Cancelado' : app.awaitingOnlinePayment ? '💳 Pag. Online Pendente' : 'Pendente';
+        const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : app.awaitingOnlinePayment ? 'text-blue-400 bg-blue-500/10 border-blue-400/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
         return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
-            <div className={`w-full max-w-md rounded-[2.5rem] shadow-2xl border flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
-              {/* Header — fixo */}
-              <div className="p-8 pb-0 flex items-start justify-between">
+            <div className={`w-full max-w-md rounded-[2.5rem] p-8 space-y-6 shadow-2xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
+              {/* Header */}
+              <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Detalhes do Agendamento</p>
                   <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.clientName}</h2>
                 </div>
-                <button onClick={() => setShowDetailModal(null)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-all"><X size={20} className="text-zinc-400"/></button>
+                <div className="flex items-center gap-2">
+                  {client && (client.photos?.length > 0 || client.notes) && (
+                    <button
+                      onClick={() => { setShowDetailModal(null); setShowClientProfile(client); }}
+                      title="Ver fotos e observações"
+                      className="p-2 rounded-xl bg-[#C58A4A]/10 hover:bg-[#C58A4A]/20 transition-all"
+                    >
+                      <Camera size={18} className="text-[#C58A4A]"/>
+                    </button>
+                  )}
+                  <button onClick={() => setShowDetailModal(null)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-all"><X size={20} className="text-zinc-400"/></button>
+                </div>
               </div>
 
               {/* Status badge */}
-              <div className="px-8 pt-4">
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest ${statusColor}`}>
                 {app.status === 'CONCLUIDO_PAGO' ? <Check size={12}/> : app.status === 'CANCELADO' ? <X size={12}/> : <Clock size={12}/>}
                 {statusLabel}
               </div>
-              </div>
 
-              {/* Scrollable body */}
-              <div className="overflow-y-auto flex-1 px-8 py-4 space-y-3">
               {/* Info grid */}
               <div className="space-y-3">
                 <div className={`flex items-center gap-4 p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
@@ -605,45 +622,21 @@ const Appointments: React.FC = () => {
                 )}
               </div>
 
-              </div>{/* end scrollable body */}
-              {/* Actions — fixo no rodapé */}
-              <div className="px-8 pb-8 pt-4 border-t border-white/5">
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => { setShowDetailModal(null); setShowRescheduleModal(app); }} 
-                    className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl font-black uppercase text-[9px] text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2"
-                  >
-                    <RefreshCw size={12}/> Reagendar
-                  </button>
-                  <button 
-                    onClick={() => { app.status === 'CONCLUIDO_PAGO' ? updateAppointmentStatus(app.id, 'PENDENTE') : (setShowDetailModal(null), openFinModal(app)); }} 
-                    className={`flex-1 py-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 ${app.status === 'CONCLUIDO_PAGO' ? 'bg-white/10 text-zinc-300 border border-white/10' : 'gradiente-ouro text-black'}`}
-                  >
-                    <DollarSign size={12}/> {app.status === 'CONCLUIDO_PAGO' ? 'Voltar a Pendente' : 'Finalizar e Pagar'}
-                  </button>
-                </div>
-                {app.status !== 'CONCLUIDO_PAGO' && app.status !== 'NAO_COMPARECEU' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Marcar ${app.clientName} como não compareceu? O próximo agendamento exigirá pagamento antecipado.`)) {
-                        markNoShow(app.id);
-                        setShowDetailModal(null);
-                      }
-                    }}
-                    className="w-full py-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all"
-                  >
-                    🚫 Não Compareceu
-                  </button>
-                )}
-                {app.status === 'NAO_COMPARECEU' && (
-                  <div className="w-full py-3 rounded-xl text-center text-[9px] font-black uppercase bg-red-500/10 border border-red-500/30 text-red-400">
-                    🚫 Marcado como Não Compareceu
-                  </div>
-                )}
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => { setShowDetailModal(null); setShowRescheduleModal(app); }} 
+                  className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl font-black uppercase text-[9px] text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw size={12}/> Reagendar
+                </button>
+                <button 
+                  onClick={() => { app.status === 'CONCLUIDO_PAGO' ? updateAppointmentStatus(app.id, 'PENDENTE') : (setShowDetailModal(null), openFinModal(app)); }} 
+                  className={`flex-1 py-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 ${app.status === 'CONCLUIDO_PAGO' ? 'bg-white/10 text-zinc-300 border border-white/10' : 'gradiente-ouro text-black'}`}
+                >
+                  <DollarSign size={12}/> {app.status === 'CONCLUIDO_PAGO' ? 'Voltar a Pendente' : 'Finalizar e Pagar'}
+                </button>
               </div>
-              </div>{/* end footer */}
             </div>
           </div>
         );
@@ -680,36 +673,22 @@ const Appointments: React.FC = () => {
                       Atendimento concluído e registrado com sucesso.
                     </p>
                   ) : finResult.paymentLink ? (
-                    <div className="space-y-3 pt-2 w-full">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+                    <div className="space-y-2 pt-2">
+                      <p className={`text-[10px] font-black uppercase tracking-widest text-blue-400`}>
                         ⏳ Aguardando pagamento do cliente
                       </p>
-                      <a
-                        href={finResult.paymentLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="block w-full gradiente-ouro text-black py-5 rounded-2xl font-black text-sm uppercase tracking-widest text-center shadow-xl hover:scale-105 transition-all"
-                      >
-                        🔗 Abrir link de pagamento
+                      <a href={finResult.paymentLink} target="_blank" rel="noreferrer"
+                        className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center shadow-xl">
+                        🔗 Abrir cobrança no Asaas
                       </a>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(finResult!.paymentLink!);
-                          alert('Link copiado!');
-                        }}
-                        className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-900'}`}
-                      >
+                      <button onClick={() => navigator.clipboard.writeText(finResult!.paymentLink!)}
+                        className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'}`}>
                         📋 Copiar link
                       </button>
-                      <p className={`text-[9px] text-center ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                        {finResult.paymentLink}
-                      </p>
                     </div>
                   ) : (
                     <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      Cobrança registrada. Verifique a API do Asaas em Ajustes.
+                      Configure a API do Asaas em Ajustes para gerar cobranças automáticas.
                     </p>
                   )}
                   <button onClick={() => setFinModal(null)} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'border-white/10 text-zinc-400' : 'border-zinc-200 text-zinc-500'}`}>Fechar</button>
@@ -806,6 +785,83 @@ const Appointments: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          MODAL: Perfil do Cliente — Fotos e Observações
+      ══════════════════════════════════════════════════════ */}
+      {showClientProfile && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
+          <div className={`w-full max-w-lg rounded-[3rem] shadow-2xl flex flex-col max-h-[88vh] ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/10'}`}>
+
+            {/* Header */}
+            <div className="p-7 pb-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#C58A4A] text-black flex items-center justify-center text-xl font-black italic">
+                  {showClientProfile.name?.charAt(0)}
+                </div>
+                <div>
+                  <h2 className={`text-xl font-black font-display italic tracking-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{showClientProfile.name}</h2>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Ficha do Cliente</p>
+                </div>
+              </div>
+              <button onClick={() => setShowClientProfile(null)} className={`p-3 rounded-2xl transition-all ${theme === 'light' ? 'bg-zinc-100 text-zinc-500' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
+                <X size={20}/>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-7 pb-7 space-y-6 scrollbar-hide">
+
+              {/* Observações */}
+              {showClientProfile.notes && (
+                <div className="space-y-2">
+                  <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-400 flex items-center gap-2">
+                    <NotebookPen size={12}/> Observações do Barbeiro
+                  </h3>
+                  <div className={`p-4 rounded-2xl border text-sm leading-relaxed font-medium ${theme === 'light' ? 'bg-amber-50 border-amber-200 text-zinc-700' : 'bg-amber-500/5 border-amber-500/20 text-zinc-300'}`}>
+                    {showClientProfile.notes}
+                  </div>
+                </div>
+              )}
+
+              {/* Fotos */}
+              {showClientProfile.photos?.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C58A4A] flex items-center gap-2">
+                    <Camera size={12}/> Fotos do Corte ({showClientProfile.photos.length})
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {showClientProfile.photos.map((url: string, i: number) => (
+                      <div
+                        key={i}
+                        className="aspect-square rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-[#C58A4A]/40 transition-all"
+                        onClick={() => setLightboxImg(url)}
+                      >
+                        <img src={url} alt={`Corte ${i+1}`} className="w-full h-full object-cover hover:scale-105 transition-all duration-300"/>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!showClientProfile.notes && (!showClientProfile.photos || showClientProfile.photos.length === 0) && (
+                <div className="py-12 text-center">
+                  <Camera size={36} className="mx-auto mb-3 text-zinc-700"/>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Nenhuma foto ou observação registrada.</p>
+                  <p className="text-[9px] text-zinc-700 mt-1">Adicione na página Membros.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxImg && (
+        <div className="fixed inset-0 z-[500] bg-black/98 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setLightboxImg(null)}>
+          <button className="absolute top-6 right-6 p-3 bg-white/10 rounded-2xl text-white hover:bg-white/20 transition-all"><X size={24}/></button>
+          <img src={lightboxImg} alt="Ampliado" className="max-w-full max-h-full rounded-3xl object-contain" onClick={e => e.stopPropagation()}/>
         </div>
       )}
     </div>
