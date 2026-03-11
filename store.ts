@@ -633,7 +633,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           if (!customerId) {
             console.error('Asaas customer creation failed:', JSON.stringify(newCust));
           }
-        } else if (cpfCnpj) {
+        } else if (cpfCnpj && cpfCnpj !== '00000000191') {
+          // Só atualiza CPF se for um CPF real (não o fallback de sandbox)
           await asaasRequest(`/customers/${customerId}`, 'PUT', {
             cpfCnpj: cpfCnpj,
             notificationDisabled: true,
@@ -793,7 +794,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             cpfCnpj, externalReference: extRef, notificationDisabled: true,
           });
           customerId = newCust?.id;
-        } else if (cpfCnpj) {
+        } else if (cpfCnpj && cpfCnpj !== '00000000191') {
           await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
         }
 
