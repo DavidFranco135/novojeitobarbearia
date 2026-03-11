@@ -173,6 +173,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [inactivityCampaigns, setInactivityCampaigns] = useState<InactivityCampaign[]>([]);
   const [clientBenefits, setClientBenefits] = useState<ClientBenefit[]>([]);  // ── NOVO ──
 
@@ -196,6 +197,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       onSnapshot(collection(db, COLLECTIONS.PARTNERS), snap => setPartners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Partner)))),
       onSnapshot(collection(db, COLLECTIONS.BLOCKED_SLOTS), snap => setBlockedSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlockedSlot)))),
       onSnapshot(collection(db, COLLECTIONS.INACTIVITY_CAMPAIGNS), snap => setInactivityCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as InactivityCampaign)))),
+      onSnapshot(collection(db, 'staff'), snap => setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       // ── NOVO: Escuta em tempo real para benefícios ──
       onSnapshot(collection(db, COLLECTIONS.CLIENT_BENEFITS), snap => setClientBenefits(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientBenefit)))),
       onSnapshot(doc(db, COLLECTIONS.CONFIG, 'main'), docSnap => {
@@ -344,6 +346,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       setUser({ id: 'admin', name: adminName, email: id, role: 'ADMIN', avatar: adminAvatar });
       return;
     }
+    // Check staff members
+    const staffMember = staff.find((s: any) => s.email === id && s.password === pass && s.active !== false);
+    if (staffMember) {
+      setUser({ id: staffMember.id, name: staffMember.name, email: staffMember.email, role: staffMember.role, allowedPages: staffMember.allowedPages, defaultPage: staffMember.defaultPage } as any);
+      return;
+    }
     const client = clients.find(c => (c.phone === id || c.email === id) && c.password === pass);
     if (client) {
       setUser({ id: client.id, name: client.name, email: client.email, role: 'CLIENTE', phone: client.phone });
@@ -353,6 +361,18 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   };
 
   const logout = () => setUser(null);
+
+  // ── Staff CRUD ──────────────────────────────────────────────────────
+  const addStaff = async (data: any) => {
+    const ref = await addDoc(collection(db, 'staff'), { ...data, createdAt: new Date().toISOString() });
+    return ref.id;
+  };
+  const updateStaff = async (id: string, data: any) => {
+    await updateDoc(doc(db, 'staff', id), data);
+  };
+  const deleteStaff = async (id: string) => {
+    await deleteDoc(doc(db, 'staff', id));
+  };
 
   const updateUser = (data: Partial<User>) => {
     setUser(prev => {
@@ -969,7 +989,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       notifications, suggestions, config, loading, theme,
       loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns,
       clientBenefits,  // ── NOVO ──
-      toggleTheme, login, logout, updateUser,
+      toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
