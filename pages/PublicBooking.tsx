@@ -655,8 +655,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, destaqueRef)}
                   >
                    {sortedServicesForHighlights.map(svc => (
-                     <div key={svc.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-blue-300' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}>
-                        <div className="w-full aspect-[4/3] overflow-hidden rounded-t-[2.5rem] bg-black flex items-center justify-center">
+                     <div key={svc.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-black border border-zinc-800 hover:border-[#C58A4A]/30' : 'bg-black border border-white/5 hover:border-[#C58A4A]/30'}`}>
+                        <div className="w-full aspect-[4/3] overflow-hidden bg-black flex items-center justify-center">
                           <img src={svc.image} className="w-full h-full object-contain group-hover:scale-105 transition-all duration-700" alt="" />
                         </div>
                         <div className="p-6">
@@ -1042,11 +1042,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                        };
                        const icon = categoryIcons[partner.category || 'Outro'] || '🏪';
                        return (
-                         <div key={partner.id} className={`rounded-[2.5rem] overflow-hidden border transition-all hover:scale-[1.02] ${theme === 'light' ? 'bg-white border-zinc-200 shadow-sm' : 'cartao-vidro border-white/10'}`}>
+                         <div key={partner.id} className={`rounded-[2.5rem] overflow-hidden border transition-all hover:scale-[1.02] ${theme === 'light' ? 'bg-black border-zinc-800' : 'bg-black border-white/10'}`}>
 
                            {/* Banner / imagem do parceiro */}
                            {partner.image ? (
-                             <div className={`w-full aspect-[16/9] overflow-hidden rounded-t-[2.5rem] flex items-center justify-center bg-black`}>
+                             <div className={`w-full aspect-[16/9] overflow-hidden flex items-center justify-center bg-black`}>
                                <img src={partner.image} alt={partner.businessName} className="w-full h-full object-contain" />
                              </div>
                            ) : (
