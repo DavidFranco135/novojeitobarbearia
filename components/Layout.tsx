@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Zap, 
-  LayoutDashboard, Package, Calendar, Users, Scissors, Briefcase, DollarSign, Settings, 
+  LayoutDashboard, Package, MessageCircle, Calendar, Users, Scissors, Briefcase, DollarSign, Settings, 
   Menu, LogOut, Bell, Sparkles, ChevronLeft, Sun, Moon, X, Trash2, ChevronRight,
   MessageSquare, Star, Crown, QrCode, CalendarX
 } from 'lucide-react';
@@ -44,6 +44,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, allo
     { id: 'financial',     label: 'Fluxo de Caixa',    icon: DollarSign },
     { id: 'suggestions',   label: 'Sugestões',         icon: MessageSquare },
     { id: 'automacoes',    label: 'Automações',         icon: Zap },
+    { id: 'inbox',         label: 'Mensagens',         icon: MessageCircle },
     { id: 'products',      label: 'Produtos',          icon: Package },
     { id: 'staff',         label: 'Colaboradores',     icon: Users },
     { id: 'settings',      label: 'Ajustes Master',    icon: Settings },
