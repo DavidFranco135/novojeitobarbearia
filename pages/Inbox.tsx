@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, orderBy, query, updateDoc } from 'firebase/firestore';
 import { useBarberStore } from '../store';
 
-const REPLY_URL = 'https://whatsappreply-3ktxcdddwq-uc.a.run.app';
+const REPLY_URL = 'https://us-central1-financeiro-a7116.cloudfunctions.net/whatsappReply';
 
 type Conversation = {
   id: string;
