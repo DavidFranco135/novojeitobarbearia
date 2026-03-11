@@ -14,7 +14,7 @@ interface PublicBookingProps {
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
   const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
-  const { partners, loyaltyCards = [], subscriptions = [] } = useBarberStore() as any;
+  const { partners } = useBarberStore() as any;
   
   const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
   const [passo, setPasso] = useState(1);
@@ -296,13 +296,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
         return emailMatch || phoneMatch;
       });
       if (!client) { alert("Cliente não encontrado. Verifique seu cadastro."); setLoading(false); return; }
-      // ── Lista negra: se cliente tem requirePrepayment, força pagamento antecipado ──
-      if ((client as any).requirePrepayment && !wantsPayNow) {
-        setWantsPayNow(true);
-        setLoading(false);
-        alert("⚠️ Notamos que você não compareceu ao último agendamento. O pagamento antecipado é obrigatório desta vez.");
-        return;
-      }
       const serv = services.find(s => s.id === selecao.serviceId);
       const prof = professionals.find(p => p.id === selecao.professionalId);
       const surcharge = (prof?.isMaster && prof?.masterSurcharge) ? prof.masterSurcharge : 0;
@@ -346,7 +339,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 notificationDisabled: true,
               });
               customerId = newCust?.id;
-            } else if (cpfCnpj && cpfCnpj !== '00000000191') {
+            } else if (cpfCnpj) {
               await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
             }
 
@@ -558,7 +551,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     const phone = loggedClient?.phone || vipForm.phone.trim();
     const cpf   = (loggedClient as any)?.cpfCnpj || vipForm.cpf.trim();
     if (!name || !phone) { setVipError('Preencha nome e telefone.'); return; }
-
     const asaasKey = (config as any).asaasKey || '';
     const asaasEnv = (config as any).asaasEnv || 'sandbox';
     if (!asaasKey) {
@@ -566,33 +558,54 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       window.open(`https://wa.me/55${(config as any).whatsapp?.replace(/[^0-9]/g,'')}?text=${encodeURIComponent(w)}`, '_blank');
       return;
     }
-
     setVipLoading(true); setVipError(null);
     try {
-      const planEndDate = new Date();
-      if (vipModal.period === 'ANUAL') planEndDate.setFullYear(planEndDate.getFullYear() + 1);
-      else if (vipModal.period === 'SEMANAL') planEndDate.setDate(planEndDate.getDate() + 7);
-      else planEndDate.setMonth(planEndDate.getMonth() + 1);
+      const proxy = (endpoint: string, method = 'GET', body?: any) =>
+        fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint, method, key: asaasKey, env: asaasEnv, body })
+        }).then(r => r.json());
+      const phoneClean = phone.replace(/[^0-9]/g, '');
+      const cpfClean = cpf.replace(/[^0-9]/g, '') || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
+      let customerId: string | undefined;
+      if (phoneClean) { const r = await proxy('/customers?mobilePhone=' + phoneClean); customerId = r?.data?.[0]?.id; }
+      if (!customerId) { const r = await proxy('/customers', 'POST', { name, mobilePhone: phoneClean||undefined, cpfCnpj: cpfClean, notificationDisabled: true }); customerId = r?.id; }
+      else if (cpfClean) { await proxy('/customers/' + customerId, 'PUT', { cpfCnpj: cpfClean }); }
+      if (!customerId) throw new Error('Erro ao criar cliente no Asaas.');
+      const periodMap: {[key: string]: string} = { ANUAL: 'YEARLY', SEMANAL: 'WEEKLY', MENSAL: 'MONTHLY' };
+      const cycle = periodMap[vipModal.period] || 'MONTHLY';
+      const sub = await proxy('/subscriptions', 'POST', {
+        customer: customerId, billingType: 'UNDEFINED', value: vipModal.price,
+        nextDueDate: new Date().toISOString().split('T')[0], cycle,
+        description: vipModal.name + ' — Barbearia Novo Jeito',
+      });
+      if (!sub?.id) throw new Error((sub?.errors?.[0]?.description) || 'Erro ao criar assinatura.');
+      const charges = await proxy('/payments?subscription=' + sub.id);
+      const invoiceUrl = charges?.data?.[0]?.invoiceUrl || sub.invoiceUrl || '';
 
-      const phoneClean  = phone.replace(/[^0-9]/g, '');
-      const clientFound = clients.find((cl: any) => cl.phone?.replace(/\D/g,'') === phoneClean);
+      // ── Salva assinatura no Firestore para aparecer no painel ──
+      try {
+        const planEndDate = new Date();
+        if (vipModal.period === 'ANUAL') planEndDate.setFullYear(planEndDate.getFullYear() + 1);
+        else if (vipModal.period === 'SEMANAL') planEndDate.setDate(planEndDate.getDate() + 7);
+        else planEndDate.setMonth(planEndDate.getMonth() + 1);
+        const clientFound = clients.find((c: any) => c.phone?.replace(/\D/g,'') === phoneClean);
+        await addSubscription({
+          clientId:            clientFound?.id || phoneClean,
+          clientName:          name,
+          clientPhone:         phone,
+          planId:              vipModal.id,
+          planName:            vipModal.name,
+          price:               vipModal.price,
+          status:              'PENDENTE_PAGAMENTO',
+          startDate:           new Date().toISOString(),
+          endDate:             planEndDate.toISOString(),
+          asaasSubscriptionId: sub.id,
+          asaasInvoiceUrl:     invoiceUrl,
+        });
+      } catch(e) { console.warn('Firestore subscription save failed:', e); }
 
-      // ── 1. Salva no Firestore PRIMEIRO para obter o ID do documento ──
-      // O externalReference no Asaas usa esse ID para o webhook encontrar a assinatura
-      const { id: subDocId, invoiceUrl } = await addSubscription({
-        clientId:    clientFound?.id || phoneClean,
-        clientName:  name,
-        clientPhone: phone,
-        planId:      vipModal.id,
-        planName:    vipModal.name,
-        price:       vipModal.price,
-        status:      'PENDENTE_PAGAMENTO',
-        startDate:   new Date().toISOString(),
-        endDate:     planEndDate.toISOString(),
-      } as any);
-
-      // invoiceUrl vem do store (que criou no Asaas com externalReference: sub_${subDocId})
-      setVipPayLink(invoiceUrl || null);
+      setVipPayLink(invoiceUrl);
       if (invoiceUrl) window.open(invoiceUrl, '_blank');
     } catch(err: any) {
       setVipError(err.message || 'Erro ao processar.');
@@ -734,8 +747,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, experienciaRef)}
                   >
                    {(Array.isArray(config.gallery) ? config.gallery : []).map((img, i) => (
-                     <div key={i} className={`snap-center flex-shrink-0 w-80 md:w-[500px] h-64 md:h-80 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200' : 'border-4 border-white/5'}`}>
-                        <img src={img} className="w-full rounded-[2rem] object-contain shadow-2xl" alt="" />
+                     <div key={i} className={`snap-center flex-shrink-0 w-72 md:w-[420px] h-72 md:h-96 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200' : 'border-4 border-white/5'}`}>
+                        <img src={img} className="w-full h-full object-cover" alt="" />
                      </div>
                    ))}
                    {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
@@ -1396,77 +1409,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
            </div>
 
-           {/* ── Cartão de Fidelidade com selos reais ── */}
-           {((config as any).stampsForFreeCut || (config as any).cashbackPercent) && (() => {
-             const card = loyaltyCards.find((lc: any) => lc.clientId === loggedClient.id);
-             const stamps = card?.stamps || 0;
-             const credits = card?.credits || 0;
-             const total = (config as any).stampsForFreeCut || 10;
-             const freeCuts = card?.freeCutsPending || 0;
-             const sub = subscriptions.find((s: any) => s.clientId === loggedClient.id && s.status === 'ATIVA');
-             return (
-               <div className={`rounded-[2rem] p-8 mb-6 border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
-                 <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro rounded-t-[2rem]" />
-                 <div className="flex items-center justify-between mb-6">
-                   <div>
-                     <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Programa de Fidelidade</p>
-                     <h3 className={`text-lg font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Seu Cartão Digital</h3>
-                   </div>
-                   {freeCuts > 0 && (
-                     <div className="gradiente-ouro text-black px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">
-                       🎁 {freeCuts} corte{freeCuts > 1 ? 's' : ''} grátis!
-                     </div>
-                   )}
-                 </div>
-                 {/* Selos */}
-                 <div className={`grid gap-2 mb-6`} style={{ gridTemplateColumns: `repeat(${Math.min(total, 5)}, minmax(0, 1fr))` }}>
-                   {Array.from({ length: total }).map((_, i) => (
-                     <div key={i} className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-all ${
-                       i < stamps
-                         ? 'gradiente-ouro border-transparent shadow-lg scale-105'
-                         : theme === 'light' ? 'bg-zinc-100 border-zinc-200' : 'bg-white/5 border-white/10'
-                     }`}>
-                       {i < stamps
-                         ? <Scissors size={14} className="text-black" />
-                         : <span className={`text-[10px] font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{i + 1}</span>
-                       }
-                     </div>
-                   ))}
-                 </div>
-                 {/* Info row */}
-                 <div className="flex items-center justify-between flex-wrap gap-3">
-                   <div className="flex items-center gap-4">
-                     <div className={`text-center px-4 py-2 rounded-xl ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                       <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Selos</p>
-                       <p className={`text-xl font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{stamps}<span className="text-zinc-500 text-sm">/{total}</span></p>
-                     </div>
-                     {(config as any).cashbackPercent > 0 && (
-                       <div className={`text-center px-4 py-2 rounded-xl ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                         <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Créditos</p>
-                         <p className="text-xl font-black text-emerald-400">R$ {credits.toFixed(2)}</p>
-                       </div>
-                     )}
-                   </div>
-                   {sub && (
-                     <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C58A4A]/10 border border-[#C58A4A]/30">
-                       <Star size={12} className="text-[#C58A4A]" fill="currentColor"/>
-                       <div>
-                         <p className="text-[8px] font-black uppercase tracking-widest text-[#C58A4A]">Plano Ativo</p>
-                         <p className={`text-[10px] font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{sub.planName}</p>
-                       </div>
-                     </div>
-                   )}
-                 </div>
-                 {stamps >= total && (
-                   <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center">
-                     <p className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">🎉 Cartão completo! Apresente ao barbeiro para resgatar seu corte grátis.</p>
-                   </div>
-                 )}
-               </div>
-             );
-           })()}
-
-                      <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
+           <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
               <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Meus Agendamentos</h3>
               <div className="space-y-4">
                  {appointments.filter(a => a.clientPhone === loggedClient.phone).length === 0 && (
@@ -1793,35 +1736,21 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                       {bookingError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{bookingError}</div>}
                       
                       {/* Opção de pagamento antecipado */}
-                      {(config as any).asaasKey && (() => {
-                        const cl = clients.find((cl:any) => cl.phone?.replace(/\D/g,'') === selecao.clientPhone?.replace(/\D/g,'') || cl.email === selecao.clientEmail);
-                        const needsPrepay = !!(cl as any)?.requirePrepayment;
-                        return (
-                          <div className={`p-4 rounded-2xl border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                            {needsPrepay && (
-                              <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
-                                <p className="text-red-400 text-[10px] font-black uppercase tracking-widest leading-relaxed">
-                                  ⚠️ Percebemos que você não compareceu ao seu último agendamento. O pagamento antecipado é obrigatório desta vez.
-                                </p>
-                              </div>
-                            )}
-                            <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>💳 Deseja pagar agora?</p>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => { if (!needsPrepay) setWantsPayNow(false); }}
-                                disabled={needsPrepay}
-                                className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${needsPrepay ? 'opacity-30 cursor-not-allowed bg-white/5 border-white/10 text-zinc-500' : !wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
-                                Pagar na barbearia
-                              </button>
-                              <button
-                                onClick={() => setWantsPayNow(true)}
-                                className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${wantsPayNow || needsPrepay ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
-                                ⚡ Pagar online
-                              </button>
-                            </div>
+                      {(config as any).asaasKey && (
+                        <div className={`p-4 rounded-2xl border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                          <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>💳 Deseja pagar agora?</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => setWantsPayNow(false)}
+                              className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${!wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                              Pagar na barbearia
+                            </button>
+                            <button onClick={() => setWantsPayNow(true)}
+                              className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                              ⚡ Pagar online
+                            </button>
                           </div>
-                        );
-                      })()}
+                        </div>
+                      )}
 
                       <button 
                         onClick={handleConfirmBooking} 
