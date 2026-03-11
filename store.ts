@@ -643,8 +643,10 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
               try {
                 const fetched = await asaasRequest(`/payments/${charge.id}`);
                 paymentLink = fetched?.invoiceUrl || fetched?.bankSlipUrl || '';
-              } catch(_) {}
+                console.log('Asaas payment fetched:', JSON.stringify(fetched));
+              } catch(fetchErr) { console.warn('Fetch payment err:', fetchErr); }
             }
+            console.log('Asaas charge result — id:', charge.id, '| invoiceUrl:', paymentLink);
             result = { paymentLink, _method: 'LINK' };
             await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
               asaasPaymentId:        charge.id,
