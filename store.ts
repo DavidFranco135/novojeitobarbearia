@@ -733,6 +733,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     const paymentMethod = (data as any).paymentMethod || '';
     const isPendente    = (data as any).status === 'PENDENTE_PAGAMENTO';
     const isDinheiro    = paymentMethod === 'Dinheiro';
+    let resolvedInvoiceUrl = '';
 
     // ── Asaas: pula se pagamento é dinheiro OU se já tem ID do Asaas ─────
     const asaasKey = (config as any).asaasKey || '';
@@ -786,9 +787,12 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           });
 
           if (sub?.id) {
+            // Busca a primeira cobrança para obter o invoiceUrl real
+            const charges = await proxy(`/payments?subscription=${sub.id}&limit=1`);
+            resolvedInvoiceUrl = charges?.data?.[0]?.invoiceUrl || '';
             await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, docRef.id), {
               asaasSubscriptionId: sub.id,
-              asaasInvoiceUrl:     sub.invoiceUrl || '',
+              asaasInvoiceUrl:     resolvedInvoiceUrl,
             });
           }
         }
@@ -816,6 +820,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         }
       } catch(e) { console.warn('WPP assinatura barbearia failed:', e); }
     }
+
+    return { id: docRef.id, invoiceUrl: resolvedInvoiceUrl };
   };
   const updateSubscription = async (id: string, data: Partial<Subscription>) => { await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id), data); };
   const deleteSubscription = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id)); };
