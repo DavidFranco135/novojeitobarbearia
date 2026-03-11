@@ -28,13 +28,6 @@ import {
   wppLembrete1h,
   wppPosAtendimento,
   wppVencimentoVip3dias,
-  wppNovaAssinaturaBarbearia,
-  wppAssinaturaAtivada,
-  wppAssinaturaVencendo,
-  wppReagendamento,
-  wppNovoAgendamento,
-  wppLembreteAgendamento,
-  wppLembrete15min,
 } from './services/whatsapp';
 
 interface BarberContextType {
@@ -85,7 +78,7 @@ interface BarberContextType {
   addShopReview: (review: Omit<Review, 'id' | 'date'>) => void;
   addLoyaltyCard: (data: Omit<LoyaltyCard, 'id'>) => Promise<void>;
   updateLoyaltyCard: (clientId: string, data: Partial<LoyaltyCard>) => Promise<void>;
-  addSubscription: (data: Omit<Subscription, 'id'>) => Promise<{ id: string; invoiceUrl: string }>;
+  addSubscription: (data: Omit<Subscription, 'id'>) => Promise<void>;
   updateSubscription: (id: string, data: Partial<Subscription>) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
   addPartner: (data: Omit<Partner, 'id'>) => Promise<void>;
@@ -554,36 +547,32 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       paymentMethod,
     });
 
-    // ── DINHEIRO: finaliza na hora, sem Asaas ────────────────
-    if (paymentMethod === 'DINHEIRO') {
-      await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { completedByBarber: true });
-      await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
-      return { _method: 'DINHEIRO' };
-    }
-
-    // ── LINK: gera cobrança no Asaas mas NÃO finaliza ────────
-    // O status só muda para CONCLUIDO_PAGO quando o webhook confirmar o pagamento
-    let result: { pixCode?: string; pixQrCode?: string; paymentLink?: string; _method?: string } = { _method: 'LINK' };
+    let result: { pixCode?: string; pixQrCode?: string; paymentLink?: string } = {};
     const asaasKey = (config as any).asaasKey || '';
 
     if (asaasKey) {
       try {
+        // Cria/busca cliente Asaas pelo externalReference (ID do cliente no app)
         const phone = appt.clientPhone.replace(/\D/g,'');
         const extRef = `nj_${appt.clientId || appt.clientPhone.replace(/\D/g,'')}`;
         const env = (config as any).asaasEnv || 'sandbox';
 
+        // Busca CPF do cliente no cadastro do app
         const clientData = clients.find((cl: any) => cl.id === appt.clientId);
-        const cpfCnpj = clientData?.cpfCnpj?.replace(/\D/g,'')
-          || (env === 'sandbox' ? '00000000191' : undefined);
+        const cpfCnpj = clientData?.cpfCnpj?.replace(/\D/g,'') 
+          || (env === 'sandbox' ? '00000000191' : undefined); // CPF teste só em sandbox
 
+        // Busca por externalReference primeiro (mais confiável)
         const custSearch = await asaasRequest(`/customers?externalReference=${extRef}`);
         let customerId = custSearch?.data?.[0]?.id;
 
+        // Se não achou, busca por telefone
         if (!customerId && phone) {
           const byPhone = await asaasRequest(`/customers?mobilePhone=${phone}`);
           customerId = byPhone?.data?.[0]?.id;
         }
 
+        // Se ainda não achou, cria novo cliente
         if (!customerId) {
           const newCust = await asaasRequest('/customers', 'POST', {
             name: appt.clientName || 'Cliente',
@@ -596,31 +585,43 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           if (!customerId) {
             console.error('Asaas customer creation failed:', JSON.stringify(newCust));
           }
-        } else if (cpfCnpj) {
-          await asaasRequest(`/customers/${customerId}`, 'PUT', {
-            cpfCnpj: cpfCnpj,
-            notificationDisabled: true,
-          });
         }
 
         if (customerId) {
-          // Cria cobrança com link (cliente escolhe PIX, Cartão ou Boleto)
-          const charge = await asaasRequest('/payments', 'POST', {
-            customer: customerId,
-            billingType: 'UNDEFINED',
-            value: totalPrice,
-            dueDate: new Date().toISOString().split('T')[0],
-            description: `Barbearia Novo Jeito — ${appt.serviceName}`,
-            externalReference: `booking_${appt.clientId}_${appt.date}`,
-          });
-          if (charge?.id) {
-            result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '', _method: 'LINK' };
-            // Salva ID da cobrança e mantém awaitingOnlinePayment=true para o webhook finalizar
-            await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
-              asaasPaymentId:       charge.id,
-              asaasPaymentLink:     result.paymentLink,
-              awaitingOnlinePayment: true,
+          if (paymentMethod === 'PIX') {
+            // Cria cobrança PIX
+            const charge = await asaasRequest('/payments', 'POST', {
+              customer: customerId,
+              billingType: 'PIX',
+              value: totalPrice,
+              dueDate: new Date().toISOString().split('T')[0],
+              description: `Barbearia Novo Jeito — ${appt.serviceName}`,
             });
+            if (charge?.id) {
+              const pix = await asaasRequest(`/payments/${charge.id}/pixQrCode`);
+              result = { pixCode: pix?.payload, pixQrCode: pix?.encodedImage };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId: charge.id,
+                asaasPixCode:   pix?.payload    || '',
+                asaasPixQrCode: pix?.encodedImage || '',
+              });
+            }
+          } else if (paymentMethod === 'LINK') {
+            // Cria cobrança com link
+            const charge = await asaasRequest('/payments', 'POST', {
+              customer: customerId,
+              billingType: 'UNDEFINED',
+              value: totalPrice,
+              dueDate: new Date().toISOString().split('T')[0],
+              description: `Barbearia Novo Jeito — ${appt.serviceName}`,
+            });
+            if (charge?.id) {
+              result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '' };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId:   charge.id,
+                asaasPaymentLink: result.paymentLink,
+              });
+            }
           }
         }
       } catch (err) {
@@ -628,7 +629,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       }
     }
 
-    // NÃO chama updateAppointmentStatus aqui — o webhook fará isso ao receber PAYMENT_RECEIVED
+    // Finaliza o status normalmente (reutiliza lógica existente)
+    await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
     return result;
   };
 
@@ -702,106 +704,20 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   };
 
   // ── SUBSCRIPTIONS ─────────────────────────────────────────────
-  const addSubscription = async (data: Omit<Subscription, 'id'>): Promise<{ id: string; invoiceUrl: string }> => {
-    const docRef = await addDoc(collection(db, COLLECTIONS.SUBSCRIPTIONS), data);
+  const addSubscription = async (data: Omit<Subscription, 'id'>) => {
+    await addDoc(collection(db, COLLECTIONS.SUBSCRIPTIONS), data);
+
+    // ── WhatsApp: boas-vindas ao novo assinante ───────────────
     const client = clients.find(c => c.id === data.clientId);
-    // Fallback: tenta buscar pelo nome ou usa clientPhone direto se vier no data
-    const phone  = client?.phone || (data as any).clientPhone || '';
-
-    const paymentMethod = (data as any).paymentMethod || '';
-    const isPendente    = (data as any).status === 'PENDENTE_PAGAMENTO';
-    const isDinheiro    = paymentMethod === 'Dinheiro';
-
-    let resolvedInvoiceUrl = '';
-
-    // ── Asaas: pula se pagamento é dinheiro OU se já tem ID do Asaas ─────
-    const asaasKey = (config as any).asaasKey || '';
-    const asaasEnv = (config as any).asaasEnv || 'sandbox';
-    if (asaasKey && !isDinheiro && !(data as any).asaasSubscriptionId) {
-      try {
-        const proxy = (endpoint: string, method = 'GET', body?: any) =>
-          fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ endpoint, method, key: asaasKey, env: asaasEnv, body })
-          }).then(r => r.json());
-
-        // Cria/busca cliente Asaas
-        const clientPhone = phone.replace(/\D/g, '');
-        const extRef      = `nj_${data.clientId}`;
-        const cpfCnpj     = (client as any)?.cpfCnpj?.replace(/\D/g, '')
-          || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
-
-        let customerId: string | undefined;
-        const byRef = await proxy(`/customers?externalReference=${extRef}`);
-        customerId  = byRef?.data?.[0]?.id;
-        if (!customerId && clientPhone) {
-          const byPhone = await proxy(`/customers?mobilePhone=${clientPhone}`);
-          customerId    = byPhone?.data?.[0]?.id;
-        }
-        if (!customerId) {
-          const newCust  = await proxy('/customers', 'POST', {
-            name: data.clientName, mobilePhone: clientPhone || undefined,
-            cpfCnpj, externalReference: extRef, notificationDisabled: true,
-          });
-          customerId = newCust?.id;
-        } else if (cpfCnpj) {
-          await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
-        }
-
-        if (customerId) {
-          const plan = (config as any).vipPlans?.find((p: any) => p.id === data.planId);
-          const cycle = plan?.period === 'ANUAL' ? 'YEARLY'
-                      : plan?.period === 'SEMANAL' ? 'WEEKLY'
-                      : 'MONTHLY';
-
-          // externalReference = sub_${docRef.id} para o webhook encontrar a assinatura no Firestore
-          const sub = await proxy('/subscriptions', 'POST', {
-            customer:          customerId,
-            billingType:       'UNDEFINED',
-            value:             data.price,
-            nextDueDate:       new Date().toISOString().split('T')[0],
-            cycle,
-            description:       `${data.planName} — Barbearia Novo Jeito`,
-            externalReference: `sub_${docRef.id}`,
-          });
-
-          if (sub?.id) {
-            // Busca a primeira cobrança gerada para pegar o invoiceUrl
-            const charges = await proxy(`/payments?subscription=${sub.id}&limit=1`);
-            resolvedInvoiceUrl = charges?.data?.[0]?.invoiceUrl || '';
-            await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, docRef.id), {
-              asaasSubscriptionId: sub.id,
-              asaasInvoiceUrl:     resolvedInvoiceUrl,
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Asaas subscription error:', err);
-      }
+    const phone = client?.phone || '';
+    if (phone) {
+      await wppAssinaturaAtivada(
+        phone,
+        data.clientName,
+        data.planName,
+        data.endDate.split('T')[0]
+      );
     }
-
-    // ── WhatsApp: só dispara se NÃO for pendente de pagamento online ──
-    // Quando PENDENTE_PAGAMENTO, o webhook do Asaas aciona as mensagens após confirmar
-    if (!isPendente) {
-      try {
-        if (phone) {
-          await wppAssinaturaAtivada(phone, data.clientName, data.planName, (data.endDate as string).split('T')[0]);
-        }
-      } catch(e) { console.warn('WPP assinatura cliente failed:', e); }
-
-      try {
-        const shopPhone = (config as any).whatsapp?.replace(/\D/g, '');
-        const plan = (config as any).vipPlans?.find((p: any) => p.id === data.planId);
-        if (shopPhone) {
-          await wppNovaAssinaturaBarbearia(
-            shopPhone, data.clientName, data.planName, data.price, plan?.period || 'MENSAL'
-          );
-        }
-      } catch(e) { console.warn('WPP assinatura barbearia failed:', e); }
-    }
-
-    return { id: docRef.id, invoiceUrl: resolvedInvoiceUrl };
   };
   const updateSubscription = async (id: string, data: Partial<Subscription>) => { await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id), data); };
   const deleteSubscription = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id)); };
