@@ -15,6 +15,7 @@ import Partners from './pages/Partners';
 import Schedule from './pages/Schedule';
 import BenefitValidator from './pages/BenefitValidator';  // ── NOVO ──
 import Automacoes from './pages/Automacoes';
+import Staff from './pages/Staff';
 import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
@@ -240,6 +241,41 @@ const App: React.FC = () => {
     );
   }
 
+  // Se o usuário logado for um COLABORADOR (BARBEIRO ou RECEPCAO)
+  if (user && (user.role === 'BARBEIRO' || user.role === 'RECEPCAO')) {
+    const allowedPages: string[] = (user as any).allowedPages || ['appointments'];
+    const defaultPage: string   = (user as any).defaultPage  || allowedPages[0] || 'appointments';
+    // Garantir que activeTab está numa página permitida
+    const safeTab = allowedPages.includes(activeTab) ? activeTab : defaultPage;
+
+    const staffRender = () => {
+      switch (safeTab) {
+        case 'dashboard':     return <Dashboard onNavigate={(t) => { if (allowedPages.includes(t)) setActiveTab(t); }} />;
+        case 'appointments':  return <Appointments />;
+        case 'clients':       return <Clients />;
+        case 'professionals': return <Professionals />;
+        case 'services':      return <Services />;
+        case 'loyalty':       return <Loyalty />;
+        case 'subscriptions': return <Subscriptions />;
+        case 'partners':      return <Partners />;
+        case 'schedule':      return <Schedule />;
+        case 'financial':     return <Financial />;
+        case 'suggestions':   return <Suggestions />;
+        case 'automacoes':    return <Automacoes />;
+        case 'settings':      return <Settings />;
+        default:              return <Appointments />;
+      }
+    };
+
+    return (
+      <div className={`h-screen overflow-hidden theme-transition ${theme === 'light' ? 'bg-[#F8F9FA]' : 'bg-[#050505]'}`}>
+        <Layout activeTab={safeTab} setActiveTab={(t) => { if (allowedPages.includes(t)) setActiveTab(t); }} allowedPages={allowedPages}>
+          {staffRender()}
+        </Layout>
+      </div>
+    );
+  }
+
   // Se o usuário logado for ADMIN, mostra o Layout de Gestão
   const renderContent = () => {
     switch (activeTab) {
@@ -256,6 +292,7 @@ const App: React.FC = () => {
       case 'suggestions':   return <Suggestions />;
       case 'automacoes':    return <Automacoes />;
       case 'settings':      return <Settings />;
+      case 'staff':         return <Staff />;
       default:              return <Dashboard onNavigate={setActiveTab} />;
     }
   };
@@ -265,6 +302,11 @@ const App: React.FC = () => {
       <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
         {renderContent()}
       </Layout>
+jsx
+<button onClick={handleGoToClientView} className="fixed bottom-4 right-4 z-[100] gradiente-ouro text-black px-2 py-1 sm:px-4 sm:py-2 rounded-2xl sm:rounded-[2rem] font-black text-[9px] sm:text-xs uppercase tracking-widest shadow-2xl hover:scale-110 active:scale-95 transition-all">
+  <span className="sm:hidden">👁 CLIENTE</span>
+  <span className="hidden sm:inline">VISÃO DO CLIENTE</span>
+</button>
 
     </div>
   );
