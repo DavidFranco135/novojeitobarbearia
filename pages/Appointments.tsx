@@ -540,9 +540,9 @@ const Appointments: React.FC = () => {
         const statusColor = app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : app.status === 'CANCELADO' ? 'text-red-400 bg-red-500/10 border-red-500/30' : app.status === 'NAO_COMPARECEU' ? 'text-red-400 bg-red-500/10 border-red-500/30' : app.awaitingOnlinePayment ? 'text-blue-400 bg-blue-500/10 border-blue-400/30' : 'text-[#C58A4A] bg-[#C58A4A]/10 border-[#C58A4A]/30';
         return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
-            <div className={`w-full max-w-md rounded-[2.5rem] p-8 space-y-6 shadow-2xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
-              {/* Header */}
-              <div className="flex items-start justify-between">
+            <div className={`w-full max-w-md rounded-[2.5rem] shadow-2xl border flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
+              {/* Header — fixo */}
+              <div className="p-8 pb-0 flex items-start justify-between">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Detalhes do Agendamento</p>
                   <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.clientName}</h2>
@@ -551,11 +551,15 @@ const Appointments: React.FC = () => {
               </div>
 
               {/* Status badge */}
+              <div className="px-8 pt-4">
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest ${statusColor}`}>
                 {app.status === 'CONCLUIDO_PAGO' ? <Check size={12}/> : app.status === 'CANCELADO' ? <X size={12}/> : <Clock size={12}/>}
                 {statusLabel}
               </div>
+              </div>
 
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 px-8 py-4 space-y-3">
               {/* Info grid */}
               <div className="space-y-3">
                 <div className={`flex items-center gap-4 p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
@@ -604,7 +608,9 @@ const Appointments: React.FC = () => {
                 )}
               </div>
 
-              {/* Actions */}
+              </div>{/* end scrollable body */}
+              {/* Actions — fixo no rodapé */}
+              <div className="px-8 pb-8 pt-4 border-t border-white/5">
               <div className="flex flex-col gap-2">
                 <div className="flex gap-3">
                   <button 
@@ -640,6 +646,7 @@ const Appointments: React.FC = () => {
                   </div>
                 )}
               </div>
+              </div>{/* end footer */}
             </div>
           </div>
         );
