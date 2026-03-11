@@ -656,7 +656,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   >
                    {sortedServicesForHighlights.map(svc => (
                      <div key={svc.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-blue-300' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}>
-                        <div className="w-full aspect-[4/3] overflow-hidden rounded-t-[2.5rem] bg-zinc-900 flex items-center justify-center">
+                        <div className="w-full aspect-[4/3] overflow-hidden rounded-t-[2.5rem] bg-black flex items-center justify-center">
                           <img src={svc.image} className="w-full h-full object-contain group-hover:scale-105 transition-all duration-700" alt="" />
                         </div>
                         <div className="p-6">
@@ -749,7 +749,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, experienciaRef)}
                   >
                    {(Array.isArray(config.gallery) ? config.gallery : []).map((img, i) => (
-                     <div key={i} className={`snap-center flex-shrink-0 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200 bg-zinc-100' : 'border-4 border-white/5 bg-zinc-900'}`}>
+                     <div key={i} className={`snap-center flex-shrink-0 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200 bg-black' : 'border-4 border-white/5 bg-black'}`}>
                         <img src={img} className="max-h-[480px] w-auto max-w-[85vw] md:max-w-[500px] object-contain block" alt="" />
                      </div>
                    ))}
@@ -1046,7 +1046,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
                            {/* Banner / imagem do parceiro */}
                            {partner.image ? (
-                             <div className={`w-full aspect-[16/9] overflow-hidden rounded-t-[2.5rem] flex items-center justify-center ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+                             <div className={`w-full aspect-[16/9] overflow-hidden rounded-t-[2.5rem] flex items-center justify-center bg-black`}>
                                <img src={partner.image} alt={partner.businessName} className="w-full h-full object-contain" />
                              </div>
                            ) : (
