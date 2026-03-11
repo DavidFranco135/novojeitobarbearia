@@ -7,12 +7,7 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
-import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-
-// ── Secrets do WhatsApp (configurar via: firebase functions:secrets:set) ──
-const PHONE_NUMBER_ID_SECRET = defineSecret("PHONE_NUMBER_ID");
-const ACCESS_TOKEN_SECRET    = defineSecret("ACCESS_TOKEN");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -60,8 +55,8 @@ async function send(
   template: string,
   params: { name: string; value: string }[]
 ): Promise<boolean> {
-  const phoneId = PHONE_NUMBER_ID_SECRET.value() || process.env.PHONE_NUMBER_ID || "";
-  const token   = ACCESS_TOKEN_SECRET.value()    || process.env.ACCESS_TOKEN    || "";
+  const phoneId = process.env.PHONE_NUMBER_ID || "";
+  const token   = process.env.ACCESS_TOKEN    || "";
 
   if (!phoneId || !token) {
     console.warn("⚠️  PHONE_NUMBER_ID ou ACCESS_TOKEN não configurados no Cloud Run.");
@@ -117,7 +112,7 @@ async function send(
 // → Aviso para BARBEIRO
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCreated = onDocumentCreated(
-  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { document: "appointments/{id}" },
   async (event) => {
     const a = event.data?.data();
     if (!a || a.status === "CANCELADO") return;
@@ -154,7 +149,7 @@ export const onAppointmentCreated = onDocumentCreated(
 // TRIGGER 2 — Agendamento concluído → pós-atendimento
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCompleted = onDocumentUpdated(
-  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { document: "appointments/{id}" },
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -183,7 +178,7 @@ export const onAppointmentCompleted = onDocumentUpdated(
 // SCHEDULED 1 — Lembrete 24h antes (todo dia às 10:00)
 // ─────────────────────────────────────────────────────────────
 export const sendReminders24h = onSchedule(
-  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -215,7 +210,7 @@ export const sendReminders24h = onSchedule(
 // Usa flag wppLembrete1hSent no agendamento para não repetir
 // ─────────────────────────────────────────────────────────────
 export const sendReminders1h = onSchedule(
-  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const now      = new Date();
     const todayStr = now.toISOString().split("T")[0];
@@ -255,7 +250,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -307,7 +302,7 @@ export const sendDailyAgenda = onSchedule(
 // SCHEDULED 4 — VIP vencendo em 3 dias (todo dia às 09:00)
 // ─────────────────────────────────────────────────────────────
 export const sendVipExpiry3days = onSchedule(
-  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const d3 = new Date();
     d3.setDate(d3.getDate() + 3);
@@ -340,7 +335,7 @@ export const sendVipExpiry3days = onSchedule(
 // SCHEDULED 5 — VIP vencendo em 1 dia (todo dia às 09:05)
 // ─────────────────────────────────────────────────────────────
 export const sendVipExpiry1day = onSchedule(
-  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const d1 = new Date();
     d1.setDate(d1.getDate() + 1);
@@ -373,7 +368,7 @@ export const sendVipExpiry1day = onSchedule(
 // SCHEDULED 6 — Clientes inativos 30+ dias (toda segunda 09:10)
 // ─────────────────────────────────────────────────────────────
 export const sendInactiveClients = onSchedule(
-  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo" },
   async () => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -409,7 +404,7 @@ export const sendInactiveClients = onSchedule(
 // que costumam cortar naquele dia da semana (horário vago)
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCancelled = onDocumentUpdated(
-  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { document: "appointments/{id}" },
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -455,7 +450,7 @@ export const onAppointmentCancelled = onDocumentUpdated(
 // SCHEDULED 7 — Aniversariantes do dia (todo dia às 09:30)
 // ─────────────────────────────────────────────────────────────
 export const sendBirthdayMessages = onSchedule(
-  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const hoje = new Date();
     const mmdd  = `${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
@@ -484,7 +479,7 @@ export const sendBirthdayMessages = onSchedule(
 // SCHEDULED 8 — Lembrete manutenção 15-20 dias (todo dia 10:30)
 // ─────────────────────────────────────────────────────────────
 export const sendMaintenanceReminders = onSchedule(
-  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo" },
   async () => {
     const snap = await db.collection("clients").get();
     let count = 0;
@@ -525,7 +520,7 @@ export const sendMaintenanceReminders = onSchedule(
 // Detecta dias com poucos agendamentos e avisa clientes inativos há 15-45 dias
 // ─────────────────────────────────────────────────────────────
 export const sendPromoDiaFraco = onSchedule(
-  { schedule: "0 11 * * 2,4", timeZone: "America/Sao_Paulo", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { schedule: "0 11 * * 2,4", timeZone: "America/Sao_Paulo" },
   async () => {
     // Verifica se amanhã tem poucos agendamentos (< 3)
     const tomorrow = new Date();
@@ -585,7 +580,7 @@ export const sendPromoDiaFraco = onSchedule(
 // Envia mensagem de cashback após CONCLUIDO_PAGO
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCashback = onDocumentUpdated(
-  { document: "appointments/{id}", secrets: [PHONE_NUMBER_ID_SECRET, ACCESS_TOKEN_SECRET] },
+  { document: "appointments/{id}" },
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
