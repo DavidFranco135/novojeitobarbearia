@@ -1192,13 +1192,13 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
           </main>
 
           {/* ── Botão Flutuante: Agendar Agora ── */}
-          <div className="fixed bottom-6 right-6 z-[90] flex flex-col items-end gap-3 animate-in slide-in-from-bottom-4 duration-700">
+          <div className="fixed bottom-4 right-4 z-[90] animate-in slide-in-from-bottom-4 duration-700">
             <button
               onClick={() => { setView('BOOKING'); setPasso(1); }}
-              className="flex items-center gap-3 gradiente-ouro text-black px-6 py-4 rounded-full font-black text-sm uppercase tracking-widest shadow-2xl shadow-[#C58A4A]/40 hover:scale-105 active:scale-95 transition-all"
+              className="flex items-center gap-1.5 gradiente-ouro text-black px-3 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#C58A4A]/30 hover:scale-105 active:scale-95 transition-all"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><line x1="12" y1="11" x2="12" y2="21"/><line x1="8" y1="15" x2="16" y2="15"/></svg>
-              Agendar Agora
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Agendar
             </button>
           </div>
 
