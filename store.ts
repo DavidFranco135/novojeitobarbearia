@@ -610,8 +610,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         const env = (config as any).asaasEnv || 'sandbox';
 
         const clientData = clients.find((cl: any) => cl.id === appt.clientId);
-        const cpfCnpj = clientData?.cpfCnpj?.replace(/\D/g,'')
-          || (env === 'sandbox' ? '00000000191' : undefined);
+        const cpfReal = clientData?.cpfCnpj?.replace(/\D/g,'') || '';
+        const cpfCriacao = cpfReal || (env === 'sandbox' ? '00000000191' : undefined);
 
         const custSearch = await asaasRequest(`/customers?externalReference=${extRef}`);
         let customerId = custSearch?.data?.[0]?.id;
@@ -625,7 +625,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           const newCust = await asaasRequest('/customers', 'POST', {
             name: appt.clientName || 'Cliente',
             mobilePhone: phone || undefined,
-            cpfCnpj: cpfCnpj,
+            cpfCnpj: cpfCriacao,
             externalReference: extRef,
             notificationDisabled: true,
           });
@@ -633,13 +633,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           if (!customerId) {
             console.error('Asaas customer creation failed:', JSON.stringify(newCust));
           }
-        } else if (cpfCnpj && cpfCnpj !== '00000000191') {
-          // Só atualiza CPF se for um CPF real (não o fallback de sandbox)
-          await asaasRequest(`/customers/${customerId}`, 'PUT', {
-            cpfCnpj: cpfCnpj,
-            notificationDisabled: true,
-          });
         }
+        // Nunca faz PUT em cliente existente — evita erro CPF invalido
 
         if (customerId) {
           // Cria cobrança com link (cliente escolhe PIX, Cartão ou Boleto)
@@ -778,8 +773,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         // Cria/busca cliente Asaas
         const clientPhone = phone.replace(/\D/g, '');
         const extRef      = `nj_${data.clientId}`;
-        const cpfCnpj     = (client as any)?.cpfCnpj?.replace(/\D/g, '')
-          || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
+        const cpfReal2    = (client as any)?.cpfCnpj?.replace(/\D/g, '') || '';
+        const cpfCriacao2 = cpfReal2 || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
 
         let customerId: string | undefined;
         const byRef = await proxy(`/customers?externalReference=${extRef}`);
@@ -791,11 +786,9 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         if (!customerId) {
           const newCust  = await proxy('/customers', 'POST', {
             name: data.clientName, mobilePhone: clientPhone || undefined,
-            cpfCnpj, externalReference: extRef, notificationDisabled: true,
+            cpfCnpj: cpfCriacao2, externalReference: extRef, notificationDisabled: true,
           });
           customerId = newCust?.id;
-        } else if (cpfCnpj && cpfCnpj !== '00000000191') {
-          await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
         }
 
         if (customerId) {
