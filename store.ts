@@ -144,6 +144,11 @@ function reminderKey(type: string, id: string, date: string): string {
   return `wpp_reminder_${type}_${id}_${date}`;
 }
 
+// ── FIX: Normaliza chave Asaas — remove espaços/quebras de linha acidentais ──
+function sanitizeAsaasKey(key: string): string {
+  return (key || '').trim().replace(/[\r\n\t ]/g, '');
+}
+
 export function BarberProvider({ children }: { children?: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -526,11 +531,20 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   };
 
 
-  // ── ASAAS: gera cobrança PIX ou link de pagamento ─────────
+  // ── ASAAS: proxy via Cloud Function para evitar bloqueio CORS ─
   const asaasRequest = async (endpoint: string, method = 'GET', body?: any) => {
-    const key = (config as any).asaasKey || '';
-    const env = (config as any).asaasEnv || 'sandbox';
-    // Usa Cloud Function como proxy para evitar bloqueio CORS do Asaas
+    // FIX: sanitiza a chave para remover espaços/quebras de linha acidentais
+    const rawKey = (config as any).asaasKey || '';
+    const key    = sanitizeAsaasKey(rawKey);
+    const env    = (config as any).asaasEnv || 'sandbox';
+
+    if (!key) {
+      console.warn('[Asaas] Chave não configurada em Ajustes Master → Integração Asaas');
+      throw new Error('Asaas key not configured');
+    }
+
+    console.log(`[Asaas] ${method} ${endpoint} | env=${env} | key=${key.substring(0, 12)}...`);
+
     const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -561,71 +575,115 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       return { _method: 'DINHEIRO' };
     }
 
-    // ── LINK: gera cobrança no Asaas mas NÃO finaliza ────────
-    // O status só muda para CONCLUIDO_PAGO quando o webhook confirmar o pagamento
-    let result: { pixCode?: string; pixQrCode?: string; paymentLink?: string; _method?: string } = { _method: 'LINK' };
-    const asaasKey = (config as any).asaasKey || '';
+    // ── CARTÃO físico: finaliza na hora, sem Asaas ───────────
+    if (paymentMethod === 'CARTAO') {
+      await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { completedByBarber: true });
+      await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
+      return { _method: 'CARTAO' };
+    }
+
+    // ── PIX / LINK: gera cobrança no Asaas ───────────────────
+    // O status só muda para CONCLUIDO_PAGO quando o webhook confirmar
+    let result: { pixCode?: string; pixQrCode?: string; paymentLink?: string; _method?: string } = { _method: paymentMethod };
+    const rawKey   = (config as any).asaasKey || '';
+    const asaasKey = sanitizeAsaasKey(rawKey);
 
     if (asaasKey) {
       try {
-        const phone = appt.clientPhone.replace(/\D/g,'');
-        const extRef = `nj_${appt.clientId || appt.clientPhone.replace(/\D/g,'')}`;
-        const env = (config as any).asaasEnv || 'sandbox';
+        const phone   = appt.clientPhone.replace(/\D/g,'');
+        const extRef  = `nj_${appt.clientId || appt.clientPhone.replace(/\D/g,'')}`;
+        const env     = (config as any).asaasEnv || 'sandbox';
 
         const clientData = clients.find((cl: any) => cl.id === appt.clientId);
-        const cpfCnpj = clientData?.cpfCnpj?.replace(/\D/g,'')
+        const cpfCnpj    = clientData?.cpfCnpj?.replace(/\D/g,'')
           || (env === 'sandbox' ? '00000000191' : undefined);
 
+        // Busca ou cria cliente no Asaas
         const custSearch = await asaasRequest(`/customers?externalReference=${extRef}`);
-        let customerId = custSearch?.data?.[0]?.id;
+        let customerId   = custSearch?.data?.[0]?.id;
 
         if (!customerId && phone) {
           const byPhone = await asaasRequest(`/customers?mobilePhone=${phone}`);
-          customerId = byPhone?.data?.[0]?.id;
+          customerId    = byPhone?.data?.[0]?.id;
         }
 
         if (!customerId) {
           const newCust = await asaasRequest('/customers', 'POST', {
-            name: appt.clientName || 'Cliente',
-            mobilePhone: phone || undefined,
-            cpfCnpj: cpfCnpj,
-            externalReference: extRef,
+            name:                appt.clientName || 'Cliente',
+            mobilePhone:         phone || undefined,
+            cpfCnpj:             cpfCnpj,
+            externalReference:   extRef,
             notificationDisabled: true,
           });
           customerId = newCust?.id;
           if (!customerId) {
-            console.error('Asaas customer creation failed:', JSON.stringify(newCust));
+            console.error('[Asaas] Customer creation failed:', JSON.stringify(newCust));
           }
         } else if (cpfCnpj) {
           await asaasRequest(`/customers/${customerId}`, 'PUT', {
-            cpfCnpj: cpfCnpj,
+            cpfCnpj,
             notificationDisabled: true,
           });
         }
 
         if (customerId) {
-          // Cria cobrança com link (cliente escolhe PIX, Cartão ou Boleto)
+          // FIX: billingType correto por método de pagamento
+          // PIX → 'PIX', LINK → 'UNDEFINED' (cliente escolhe no link)
+          const billingType = paymentMethod === 'PIX' ? 'PIX' : 'UNDEFINED';
+
           const charge = await asaasRequest('/payments', 'POST', {
-            customer: customerId,
-            billingType: 'UNDEFINED',
-            value: totalPrice,
-            dueDate: new Date().toISOString().split('T')[0],
-            description: `Barbearia Novo Jeito — ${appt.serviceName}`,
+            customer:          customerId,
+            billingType,
+            value:             totalPrice,
+            dueDate:           new Date().toISOString().split('T')[0],
+            description:       `Barbearia Novo Jeito — ${appt.serviceName}`,
             externalReference: `booking_${appt.clientId}_${appt.date}`,
           });
+
           if (charge?.id) {
-            result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '', _method: 'LINK' };
-            // Salva ID da cobrança e mantém awaitingOnlinePayment=true para o webhook finalizar
-            await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
-              asaasPaymentId:       charge.id,
-              asaasPaymentLink:     result.paymentLink,
-              awaitingOnlinePayment: true,
-            });
+            if (paymentMethod === 'PIX') {
+              // FIX: busca QR Code PIX real no endpoint correto
+              try {
+                const pixInfo  = await asaasRequest(`/payments/${charge.id}/pixQrCode`);
+                result = {
+                  pixCode:   pixInfo?.payload      || '',
+                  pixQrCode: pixInfo?.encodedImage  || '',
+                  _method:   'PIX',
+                };
+                await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                  asaasPaymentId:        charge.id,
+                  asaasPixCode:          result.pixCode,
+                  asaasPixQrCode:        result.pixQrCode,
+                  awaitingOnlinePayment: true,
+                });
+              } catch (pixErr) {
+                console.error('[Asaas] Erro ao buscar QR Code PIX:', pixErr);
+                // Fallback: usa invoiceUrl como link
+                result = { paymentLink: charge.invoiceUrl || '', _method: 'PIX' };
+                await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                  asaasPaymentId:        charge.id,
+                  asaasPaymentLink:      result.paymentLink,
+                  awaitingOnlinePayment: true,
+                });
+              }
+            } else {
+              // LINK: envia invoiceUrl para o cliente escolher a forma
+              result = { paymentLink: charge.invoiceUrl || charge.bankSlipUrl || '', _method: 'LINK' };
+              await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+                asaasPaymentId:        charge.id,
+                asaasPaymentLink:      result.paymentLink,
+                awaitingOnlinePayment: true,
+              });
+            }
+          } else {
+            console.error('[Asaas] Charge creation failed:', JSON.stringify(charge));
           }
         }
       } catch (err) {
-        console.error('Asaas error:', err);
+        console.error('[Asaas] finalizeAppointment error:', err);
       }
+    } else {
+      console.warn('[Asaas] Chave não configurada — pagamento online não processado');
     }
 
     // NÃO chama updateAppointmentStatus aqui — o webhook fará isso ao receber PAYMENT_RECEIVED
@@ -705,18 +763,20 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const addSubscription = async (data: Omit<Subscription, 'id'>): Promise<{ id: string; invoiceUrl: string }> => {
     const docRef = await addDoc(collection(db, COLLECTIONS.SUBSCRIPTIONS), data);
     const client = clients.find(c => c.id === data.clientId);
-    // Fallback: tenta buscar pelo nome ou usa clientPhone direto se vier no data
     const phone  = client?.phone || (data as any).clientPhone || '';
 
-    const paymentMethod = (data as any).paymentMethod || '';
+    // FIX: normaliza paymentMethod para comparação case-insensitive
+    const paymentMethod = ((data as any).paymentMethod || '').toLowerCase();
+    const isDinheiro    = ['dinheiro', 'cash'].includes(paymentMethod);
     const isPendente    = (data as any).status === 'PENDENTE_PAGAMENTO';
-    const isDinheiro    = paymentMethod === 'Dinheiro';
 
     let resolvedInvoiceUrl = '';
 
     // ── Asaas: pula se pagamento é dinheiro OU se já tem ID do Asaas ─────
-    const asaasKey = (config as any).asaasKey || '';
+    const rawKey   = (config as any).asaasKey || '';
+    const asaasKey = sanitizeAsaasKey(rawKey);
     const asaasEnv = (config as any).asaasEnv || 'sandbox';
+
     if (asaasKey && !isDinheiro && !(data as any).asaasSubscriptionId) {
       try {
         const proxy = (endpoint: string, method = 'GET', body?: any) =>
@@ -745,13 +805,16 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             cpfCnpj, externalReference: extRef, notificationDisabled: true,
           });
           customerId = newCust?.id;
+          if (!customerId) {
+            console.error('[Asaas] Customer creation failed on subscription:', JSON.stringify(newCust));
+          }
         } else if (cpfCnpj) {
           await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
         }
 
         if (customerId) {
-          const plan = (config as any).vipPlans?.find((p: any) => p.id === data.planId);
-          const cycle = plan?.period === 'ANUAL' ? 'YEARLY'
+          const plan  = (config as any).vipPlans?.find((p: any) => p.id === data.planId);
+          const cycle = plan?.period === 'ANUAL'   ? 'YEARLY'
                       : plan?.period === 'SEMANAL' ? 'WEEKLY'
                       : 'MONTHLY';
 
@@ -774,10 +837,13 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
               asaasSubscriptionId: sub.id,
               asaasInvoiceUrl:     resolvedInvoiceUrl,
             });
+            console.log(`[Asaas] Assinatura criada: ${sub.id} | invoiceUrl: ${resolvedInvoiceUrl}`);
+          } else {
+            console.error('[Asaas] Subscription creation failed:', JSON.stringify(sub));
           }
         }
       } catch (err) {
-        console.error('Asaas subscription error:', err);
+        console.error('[Asaas] addSubscription error:', err);
       }
     }
 
