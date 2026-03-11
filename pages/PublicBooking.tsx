@@ -346,7 +346,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 notificationDisabled: true,
               });
               customerId = newCust?.id;
-            } else if (cpfCnpj) {
+            } else if (cpfCnpj && cpfCnpj !== '00000000191') {
               await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
             }
 
