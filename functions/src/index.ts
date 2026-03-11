@@ -112,7 +112,7 @@ async function send(
 // → Aviso para BARBEIRO
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCreated = onDocumentCreated(
-  { document: "appointments/{id}" },
+  "appointments/{id}",
   async (event) => {
     const a = event.data?.data();
     if (!a || a.status === "CANCELADO") return;
@@ -149,7 +149,7 @@ export const onAppointmentCreated = onDocumentCreated(
 // TRIGGER 2 — Agendamento concluído → pós-atendimento
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCompleted = onDocumentUpdated(
-  { document: "appointments/{id}" },
+  "appointments/{id}",
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -171,8 +171,26 @@ export const onAppointmentCompleted = onDocumentUpdated(
 );
 
 
-// ── onSubscriptionCreated removido: o webhook asaasWebhook cuida de ativar
-// a assinatura e enviar o WhatsApp após confirmação do pagamento Asaas ──
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 3 — Nova assinatura VIP ativada
+// ─────────────────────────────────────────────────────────────
+export const onSubscriptionCreated = onDocumentCreated(
+  "subscriptions/{id}",
+  async (event) => {
+    const sub = event.data?.data();
+    if (!sub || sub.status !== "ATIVA") return;
+
+    const cDoc = await db.collection("clients").doc(sub.clientId).get();
+    const cli  = cDoc.data();
+    if (!cli?.phone) return;
+
+    await send(cli.phone, T.vipAtivado, [
+      { name: "cliente_nome",    value: sub.clientName     || cli.name },
+      { name: "plano",           value: sub.planName       || "VIP"    },
+      { name: "data_vencimento", value: fmt(sub.endDate.split("T")[0]) },
+    ]);
+  }
+);
 
 // ─────────────────────────────────────────────────────────────
 // SCHEDULED 1 — Lembrete 24h antes (todo dia às 10:00)
@@ -250,7 +268,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -404,7 +422,7 @@ export const sendInactiveClients = onSchedule(
 // que costumam cortar naquele dia da semana (horário vago)
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCancelled = onDocumentUpdated(
-  { document: "appointments/{id}" },
+  "appointments/{id}",
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -580,7 +598,7 @@ export const sendPromoDiaFraco = onSchedule(
 // Envia mensagem de cashback após CONCLUIDO_PAGO
 // ─────────────────────────────────────────────────────────────
 export const onAppointmentCashback = onDocumentUpdated(
-  { document: "appointments/{id}" },
+  "appointments/{id}",
   async (event) => {
     const before = event.data?.before.data();
     const after  = event.data?.after.data();
@@ -660,8 +678,6 @@ export const asaasProxy = onRequest(
 export const asaasWebhook = onRequest(
   { cors: true, region: "us-central1" },
   async (req, res) => {
-    // GET = ping de verificação do Asaas (retorna 200 para confirmar que o endpoint existe)
-    if (req.method === "GET") { res.status(200).send("ok"); return; }
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
     // ── Validação do token Asaas ──────────────────────────────
@@ -683,30 +699,17 @@ export const asaasWebhook = onRequest(
 
       console.log(`Asaas webhook: ${status} | ref: ${extRef} | id: ${payment.id}`);
 
-      // ── Cobrança de agendamento (ref: booking_<appointmentId>) ──
+      // ── Cobrança de agendamento (ref: booking_clientId_date) ──
       if (extRef.startsWith("booking_") && (status === "PAYMENT_RECEIVED" || status === "PAYMENT_CONFIRMED")) {
-        // Busca agendamento:
-        //   1. Pelo ID direto (formato novo: booking_<apptId>)
-        //   2. Pelo asaasPaymentId (fallback para cobranças antigas)
-        const apptIdFromRef = extRef.startsWith("booking_") ? extRef.replace("booking_", "") : null;
+        // Busca agendamento pelo asaasPaymentId ou externalReference
+        const snap = await db.collection("appointments")
+          .where("awaitingOnlinePayment", "==", true)
+          .get();
 
-        let match: FirebaseFirestore.QueryDocumentSnapshot | undefined;
-
-        // Tenta busca direta pelo ID do documento (mais eficiente)
-        if (apptIdFromRef) {
-          const directDoc = await db.collection("appointments").doc(apptIdFromRef).get();
-          if (directDoc.exists) {
-            match = directDoc as any;
-          }
-        }
-
-        // Fallback: busca por asaasPaymentId (formato antigo booking_clientId_date)
-        if (!match) {
-          const snap = await db.collection("appointments")
-            .where("awaitingOnlinePayment", "==", true)
-            .get();
-          match = snap.docs.find(d => d.data().asaasPaymentId === payment.id);
-        }
+        const match = snap.docs.find(d =>
+          d.data().asaasPaymentId === payment.id ||
+          `booking_${d.data().clientId}_${d.data().date}` === extRef
+        );
 
         if (match) {
           await match.ref.update({
@@ -715,18 +718,6 @@ export const asaasWebhook = onRequest(
             asaasPaymentId: payment.id,
           });
           console.log(`✅ Agendamento ${match.id} marcado como CONCLUIDO_PAGO via webhook`);
-
-          // ── Lista negra: cliente pagou → limpa requirePrepayment ──
-          const apptData = match.data();
-          if (apptData.clientId) {
-            try {
-              const clientSnap = await db.collection("clients").doc(apptData.clientId).get();
-              if (clientSnap.exists && clientSnap.data()?.requirePrepayment) {
-                await clientSnap.ref.update({ requirePrepayment: false });
-                console.log(`✅ Cliente ${apptData.clientId} removido da lista negra após pagamento`);
-              }
-            } catch(e) { console.warn("Erro ao limpar requirePrepayment:", e); }
-          }
 
           // ── Envia pós-atendimento ao cliente após pagamento online ──
           const appt = match.data();
@@ -803,6 +794,176 @@ export const asaasWebhook = onRequest(
       res.status(200).json({ received: true });
     } catch (err: any) {
       console.error("asaasWebhook error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+// ============================================================
+// WHATSAPP INBOX — Recebe mensagens dos clientes via webhook
+// e salva no Firestore. Também permite o ADM responder.
+// URL: registrar no Meta → Webhook → messages
+// ============================================================
+
+// ─── Helper: envia texto livre (fora de template, dentro de 24h) ─────
+async function sendTextMessage(toPhone: string, text: string): Promise<boolean> {
+  const phoneId = process.env.PHONE_NUMBER_ID || "";
+  const token   = process.env.ACCESS_TOKEN    || "";
+  if (!phoneId || !token) return false;
+  const cleaned = toPhone.replace(/\D/g, "");
+  const number  = cleaned.startsWith("55") ? cleaned : `55${cleaned}`;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: number,
+          type: "text",
+          text: { preview_url: false, body: text },
+        }),
+      }
+    );
+    return res.ok;
+  } catch { return false; }
+}
+
+// ─── whatsappInbox — Webhook de mensagens recebidas ──────────────────
+// GET  = verificação do Meta (challenge)
+// POST = mensagens recebidas dos clientes
+export const whatsappInbox = onRequest(
+  { cors: true },
+  async (req, res) => {
+    // ── GET: verificação do webhook Meta ──
+    if (req.method === "GET") {
+      const VERIFY_TOKEN = "novojeito_inbox_2024";
+      const mode      = req.query["hub.mode"];
+      const token     = req.query["hub.verify_token"];
+      const challenge = req.query["hub.challenge"];
+      if (mode === "subscribe" && token === VERIFY_TOKEN) {
+        res.status(200).send(challenge);
+      } else {
+        res.status(403).send("Forbidden");
+      }
+      return;
+    }
+
+    // ── POST: mensagem recebida ──
+    if (req.method === "POST") {
+      try {
+        const body = req.body;
+        const entry = body?.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
+
+        // Confirma recebimento imediatamente (Meta exige < 20s)
+        res.status(200).json({ received: true });
+
+        if (!value?.messages) return;
+
+        for (const msg of value.messages) {
+          const fromPhone = msg.from; // número com DDI
+          const msgId     = msg.id;
+          const timestamp = msg.timestamp;
+          const type      = msg.type; // text, image, audio, etc.
+
+          let text = "";
+          if (type === "text") text = msg.text?.body || "";
+          else if (type === "image") text = "[📷 Imagem]";
+          else if (type === "audio") text = "[🎤 Áudio]";
+          else if (type === "document") text = "[📄 Documento]";
+          else if (type === "sticker") text = "[🎭 Sticker]";
+          else text = `[${type}]`;
+
+          // Busca cliente pelo número
+          const clientsSnap = await db.collection("clients")
+            .where("phone", "==", fromPhone.replace(/^55/, ""))
+            .limit(1).get();
+          
+          // Também tenta com 55 na frente
+          let clientDoc = clientsSnap.docs[0];
+          if (!clientDoc) {
+            const snap2 = await db.collection("clients").get();
+            clientDoc = snap2.docs.find(d => {
+              const p = (d.data().phone || "").replace(/\D/g, "");
+              const fp = fromPhone.replace(/\D/g, "");
+              return fp.endsWith(p) || p.endsWith(fp);
+            })!;
+          }
+
+          const clientId   = clientDoc?.id   || null;
+          const clientName = clientDoc?.data()?.name || fromPhone;
+
+          // Salva mensagem na coleção inbox
+          const convId = `conv_${fromPhone.replace(/\D/g, "")}`;
+          
+          // Atualiza / cria conversa
+          await db.collection("inbox").doc(convId).set({
+            clientId,
+            clientName,
+            clientPhone: fromPhone,
+            lastMessage: text,
+            lastMessageAt: Number(timestamp) * 1000,
+            unread: true,
+            updatedAt: Date.now(),
+          }, { merge: true });
+
+          // Salva mensagem individual
+          await db.collection("inbox").doc(convId)
+            .collection("messages").doc(msgId).set({
+              from: "client",
+              text,
+              type,
+              timestamp: Number(timestamp) * 1000,
+              createdAt: Date.now(),
+            });
+
+          console.log(`📨 Mensagem de ${clientName} (${fromPhone}): ${text}`);
+        }
+      } catch (err: any) {
+        console.error("whatsappInbox error:", err);
+      }
+      return;
+    }
+
+    res.status(405).send("Method not allowed");
+  }
+);
+
+// ─── whatsappReply — ADM responde pelo app ────────────────────────────
+export const whatsappReply = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
+    try {
+      const { convId, toPhone, text } = req.body;
+      if (!toPhone || !text) { res.status(400).json({ error: "toPhone e text são obrigatórios" }); return; }
+
+      const ok = await sendTextMessage(toPhone, text);
+      if (!ok) { res.status(500).json({ error: "Falha ao enviar mensagem" }); return; }
+
+      // Salva mensagem enviada no histórico
+      const msgRef = await db.collection("inbox").doc(convId)
+        .collection("messages").add({
+          from: "admin",
+          text,
+          type: "text",
+          timestamp: Date.now(),
+          createdAt: Date.now(),
+        });
+
+      // Atualiza conversa
+      await db.collection("inbox").doc(convId).set({
+        lastMessage: text,
+        lastMessageAt: Date.now(),
+        unread: false,
+      }, { merge: true });
+
+      res.status(200).json({ sent: true, msgId: msgRef.id });
+    } catch (err: any) {
+      console.error("whatsappReply error:", err);
       res.status(500).json({ error: err.message });
     }
   }
