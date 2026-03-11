@@ -10,9 +10,10 @@ interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  allowedPages?: string[];
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, allowedPages }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Set mobile browser bar color
@@ -30,7 +31,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
   const [showNotifs, setShowNotifs] = useState(false);
   const { logout, user, notifications, clearNotifications, markNotificationAsRead, theme, toggleTheme } = useBarberStore();
 
-  const menuItems = [
+  const ALL_MENU_ITEMS = [
     { id: 'dashboard',     label: 'Dashboard',        icon: LayoutDashboard },
     { id: 'appointments',  label: 'Agenda Digital',    icon: Calendar },
     { id: 'clients',       label: 'Membros',           icon: Users },
@@ -44,7 +45,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     { id: 'suggestions',   label: 'Sugestões',         icon: MessageSquare },
     { id: 'automacoes',    label: 'Automações',         icon: Zap },
     { id: 'settings',      label: 'Ajustes Master',    icon: Settings },
+    { id: 'staff',         label: 'Colaboradores',     icon: Users },
   ];
+  // Filter by allowedPages if provided (staff mode), else show all except 'staff' which only ADMIN sees
+  const menuItems = allowedPages
+    ? ALL_MENU_ITEMS.filter(i => allowedPages.includes(i.id))
+    : ALL_MENU_ITEMS.filter(i => i.id !== 'staff' ? true : user?.role === 'ADMIN');
 
   return (
     <div className={`flex h-screen overflow-hidden ${theme === 'light' ? 'bg-zinc-50' : 'bg-[#050505]'}`}>
@@ -57,7 +63,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 <div className="w-8 h-8 gradiente-ouro rounded-lg flex items-center justify-center">
                   <Scissors size={18} className="text-black" />
                 </div>
-                <span className={`font-black italic text-xl tracking-tighter ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>ADMIN</span>
+                <div className="flex flex-col">
+                  <span className={`font-black italic text-xl tracking-tighter ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                    {user?.role === 'BARBEIRO' ? 'BARBEIRO' : user?.role === 'RECEPCAO' ? 'RECEPÇÃO' : 'ADMIN'}
+                  </span>
+                  {user?.role !== 'ADMIN' && (
+                    <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">{user?.name}</span>
+                  )}
+                </div>
               </div>
             )}
             <button onClick={() => setIsCollapsed(!isCollapsed)} className={`hidden lg:flex p-2 rounded-xl transition-all ${theme === 'light' ? 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' : 'text-zinc-500 hover:bg-white/5'}`}>
@@ -125,14 +138,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 )}
               </button>
               
-              {/* Botão Agendar — abaixo do sininho */}
-              <button
-                onClick={() => setActiveTab('appointments')}
-                className="gradiente-ouro absolute -bottom-12 right-0 px-4 py-2 rounded-xl text-black font-black text-[10px] uppercase shadow-lg hover:scale-105 transition-all whitespace-nowrap z-30"
-              >
-                Agendar
-              </button>
-
               {showNotifs && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)}></div>
@@ -155,7 +160,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 </>
               )}
             </div>
-
+            
+            <button onClick={() => setActiveTab('appointments')} className="gradiente-ouro px-5 py-3 rounded-2xl text-black font-black text-xs uppercase hidden sm:block shadow-lg hover:scale-105 transition-all">
+               Agendar
+            </button>
           </div>
         </header>
 
