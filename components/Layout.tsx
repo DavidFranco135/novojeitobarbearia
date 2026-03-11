@@ -44,9 +44,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, allo
     { id: 'financial',     label: 'Fluxo de Caixa',    icon: DollarSign },
     { id: 'suggestions',   label: 'Sugestões',         icon: MessageSquare },
     { id: 'automacoes',    label: 'Automações',         icon: Zap },
-    { id: 'settings',      label: 'Ajustes Master',    icon: Settings },
     { id: 'products',      label: 'Produtos',          icon: Package },
     { id: 'staff',         label: 'Colaboradores',     icon: Users },
+    { id: 'settings',      label: 'Ajustes Master',    icon: Settings },
   ];
   // Filter by allowedPages if provided (staff mode), else show all except 'staff' which only ADMIN sees
   const menuItems = allowedPages
