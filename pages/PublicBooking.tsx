@@ -112,6 +112,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const experienciaRef = React.useRef<HTMLDivElement>(null);
   const membroRef = React.useRef<HTMLDivElement>(null);
   const produtosRef = React.useRef<HTMLDivElement>(null);
+  const [selectedProduct, setSelectedProduct] = React.useState<any | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
     if (!ref.current) return;
@@ -753,18 +754,23 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, produtosRef)}
                   >
                     {products.filter((p: any) => p.active !== false).map((p: any) => (
-                      <div key={p.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-black border border-zinc-800 hover:border-[#C58A4A]/30' : 'bg-black border border-white/5 hover:border-[#C58A4A]/30'}`}>
-                        <div className="w-full aspect-[3/4] overflow-hidden">
+                      <div
+                        key={p.id}
+                        onClick={() => setSelectedProduct(p)}
+                        className={`snap-center flex-shrink-0 w-56 md:w-64 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all cursor-pointer hover:scale-[1.02] hover:border-[#C58A4A]/40 ${theme === 'light' ? 'bg-black border-4 border-zinc-800' : 'bg-black border-4 border-white/5'}`}
+                      >
+                        {/* Foto completa sem corte */}
+                        <div className="w-full bg-black flex items-center justify-center p-3">
                           {p.image
-                            ? <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700"/>
-                            : <div className="w-full h-full bg-zinc-900 flex items-center justify-center"><span className="text-5xl">🛒</span></div>
+                            ? <img src={p.image} alt={p.name} className="w-full h-auto object-contain max-h-[320px] group-hover:scale-105 transition-all duration-500"/>
+                            : <div className="w-full h-48 flex items-center justify-center"><span className="text-5xl">🛒</span></div>
                           }
                         </div>
-                        <div className="p-6">
-                          <h3 className={`text-xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{p.name}</h3>
-                          {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">{p.category}</p>}
-                          {p.description && <p className="text-[10px] text-zinc-500 line-clamp-2 leading-snug mt-2">{p.description}</p>}
-                          <p className="text-xl font-black text-[#C58A4A] mt-2">R$ {Number(p.price).toFixed(2)}</p>
+                        {/* Info */}
+                        <div className={`p-4 border-t border-white/5`}>
+                          <h3 className="text-sm font-black text-white leading-tight">{p.name}</h3>
+                          {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-0.5">{p.category}</p>}
+                          <p className="text-base font-black text-[#C58A4A] mt-1">R$ {Number(p.price).toFixed(2)}</p>
                         </div>
                       </div>
                     ))}
@@ -1213,6 +1219,51 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 </div>
              </section>
           </main>
+
+          {/* ── Modal: Detalhes do Produto ── */}
+          {selectedProduct && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95" onClick={() => setSelectedProduct(null)}>
+              <div
+                className={`w-full max-w-sm rounded-[3rem] overflow-hidden shadow-2xl border flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0a0a0a] border-white/10'}`}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Foto completa */}
+                <div className="w-full bg-black flex items-center justify-center p-6 shrink-0">
+                  {selectedProduct.image
+                    ? <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-auto object-contain max-h-[300px]"/>
+                    : <div className="w-full h-48 flex items-center justify-center"><span className="text-6xl">🛒</span></div>
+                  }
+                </div>
+                {/* Info */}
+                <div className="flex-1 overflow-y-auto p-7 space-y-4">
+                  <div>
+                    {selectedProduct.category && (
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">{selectedProduct.category}</p>
+                    )}
+                    <h2 className={`text-2xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{selectedProduct.name}</h2>
+                    <p className="text-3xl font-black text-[#C58A4A] mt-2">R$ {Number(selectedProduct.price).toFixed(2)}</p>
+                  </div>
+                  {selectedProduct.description && (
+                    <p className={`text-sm leading-relaxed font-medium ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{selectedProduct.description}</p>
+                  )}
+                  <a
+                    href={`https://wa.me/5521973708141?text=${encodeURIComponent(`Olá! Tenho interesse no produto: ${selectedProduct.name} (R$ ${Number(selectedProduct.price).toFixed(2)})`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-3 w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl"
+                  >
+                    💬 Tenho Interesse
+                  </a>
+                  <button
+                    onClick={() => setSelectedProduct(null)}
+                    className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all ${theme === 'light' ? 'border-zinc-200 text-zinc-500' : 'border-white/10 text-zinc-500 hover:text-white'}`}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Botão Flutuante: Agendar Agora ── */}
           <div className="fixed bottom-4 right-4 z-[90] animate-in slide-in-from-bottom-4 duration-700">
