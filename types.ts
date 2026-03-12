@@ -49,6 +49,17 @@ export interface Client {
   createdAt: string;
   likedProfessionals?: string[];
   cpfCnpj?: string;
+  // Dados complementares
+  birthdate?: string;       // YYYY-MM-DD
+  gender?: string;          // M / F / Outro
+  address?: string;
+  neighborhood?: string;
+  city?: string;
+  profession?: string;
+  instagram?: string;
+  howFound?: string;        // Como conheceu a barbearia
+  notes?: string;
+  photos?: string[];
 }
 
 export interface Review {
