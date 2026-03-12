@@ -37,7 +37,7 @@ export type StaffMember = {
 };
 
 const Staff: React.FC = () => {
-  const { staff, addStaff, updateStaff, deleteStaff, theme } = useBarberStore() as any;
+  const { staff, addStaff, updateStaff, deleteStaff, professionals, theme } = useBarberStore() as any;
   const isDark = theme !== 'light';
 
   const [showModal,   setShowModal]   = useState(false);
@@ -50,6 +50,7 @@ const Staff: React.FC = () => {
     role: 'BARBEIRO' as const,
     allowedPages: [...PRESET_BARBEIRO],
     defaultPage: 'appointments',
+    professionalId: '',
     active: true,
   };
   const [form, setForm] = useState(empty);
@@ -70,7 +71,7 @@ const Staff: React.FC = () => {
 
   const openEdit = (s: StaffMember) => {
     setEditingId(s.id);
-    setForm({ name: s.name, email: s.email, phone: s.phone, password: s.password, role: s.role, allowedPages: s.allowedPages, defaultPage: s.defaultPage, active: s.active });
+    setForm({ name: s.name, email: s.email, phone: s.phone, password: s.password, role: s.role, allowedPages: s.allowedPages, defaultPage: s.defaultPage, professionalId: s.professionalId || '', active: s.active });
     setShowModal(true);
   };
 
@@ -265,6 +266,24 @@ const Staff: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Vínculo com profissional — só para BARBEIRO */}
+              {form.role === 'BARBEIRO' && (
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Profissional Vinculado</label>
+                  <select
+                    value={form.professionalId}
+                    onChange={e => setForm(f => ({...f, professionalId: e.target.value}))}
+                    className={inputClass}
+                  >
+                    <option value="">— Selecione o profissional —</option>
+                    {(professionals || []).map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <p className={`text-[9px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>O barbeiro verá apenas os agendamentos deste profissional.</p>
+                </div>
+              )}
 
               {/* Modo / Preset */}
               <div className="space-y-3">
