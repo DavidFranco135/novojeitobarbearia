@@ -658,9 +658,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, destaqueRef)}
                   >
                    {sortedServicesForHighlights.map(svc => (
-                     <div key={svc.id} className={`snap-center flex-shrink-0 w-56 md:w-64 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'bg-black border-4 border-zinc-800 hover:border-[#C58A4A]/40' : 'bg-black border-4 border-white/5 hover:border-[#C58A4A]/40'}`}>
-                        <div className="w-full bg-black flex items-center justify-center p-3">
-                          <img src={svc.image} className="w-full h-auto object-contain max-h-[280px] group-hover:scale-105 transition-all duration-500" alt="" />
+                     <div key={svc.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-black border border-zinc-800 hover:border-[#C58A4A]/30' : 'bg-black border border-white/5 hover:border-[#C58A4A]/30'}`}>
+                        <div className="w-full aspect-[4/3] overflow-hidden bg-black flex items-center justify-center">
+                          <img src={svc.image} className="w-full h-full object-contain group-hover:scale-105 transition-all duration-700" alt="" />
                         </div>
                         <div className="p-6">
                            <h3 className={`text-xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{svc.name}</h3>
@@ -757,12 +757,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                       <div
                         key={p.id}
                         onClick={() => setSelectedProduct(p)}
-                        className={`snap-center flex-shrink-0 w-56 md:w-64 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all cursor-pointer hover:scale-[1.02] hover:border-[#C58A4A]/40 ${theme === 'light' ? 'bg-black border-4 border-zinc-800' : 'bg-black border-4 border-white/5'}`}
+                        className={`snap-center flex-shrink-0 w-72 md:w-80 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all cursor-pointer hover:scale-[1.02] hover:border-[#C58A4A]/40 ${theme === 'light' ? 'bg-black border-4 border-zinc-800' : 'bg-black border-4 border-white/5'}`}
                       >
                         {/* Foto completa sem corte */}
                         <div className="w-full bg-black flex items-center justify-center p-3">
                           {p.image
-                            ? <img src={p.image} alt={p.name} className="w-full h-auto object-contain max-h-[320px] group-hover:scale-105 transition-all duration-500"/>
+                            ? <img src={p.image} alt={p.name} className="w-full h-auto object-contain max-h-[420px] group-hover:scale-105 transition-all duration-500"/>
                             : <div className="w-full h-48 flex items-center justify-center"><span className="text-5xl">🛒</span></div>
                           }
                         </div>
