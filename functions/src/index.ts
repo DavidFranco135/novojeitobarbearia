@@ -921,6 +921,19 @@ export const whatsappInbox = onRequest(
             });
 
           console.log(`📨 Mensagem de ${clientName} (${fromPhone}): ${text}`);
+
+          // ── Auto-resposta: redireciona para o WhatsApp comercial ──
+          const AUTO_REPLY = `Olá, ${clientName.split(" ")[0]}! 👋 Você está no sistema automático de agendamentos da *Novo Jeito Barbearia*.
+
+Para falar diretamente com nossa equipe de atendimento, chama a gente no WhatsApp comercial:
+
+✂️ *Novo Jeito Barbearia*
+📲 (21) 97370-8141
+
+Estamos por lá de segunda a sábado! 😊`;
+
+          await sendTextMessage(fromPhone, AUTO_REPLY);
+          console.log(`↩️ Auto-resposta enviada para ${fromPhone}`);
         }
       } catch (err: any) {
         console.error("whatsappInbox error:", err);
