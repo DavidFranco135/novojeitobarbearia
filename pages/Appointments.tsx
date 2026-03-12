@@ -100,6 +100,7 @@ const Appointments: React.FC = () => {
   // Se for BARBEIRO com professionalId vinculado, filtra só os dele
   const myProfessionalId = (user as any)?.professionalId || null;
   const isBarbeiroRestrito = (user as any)?.role === 'BARBEIRO' && !!myProfessionalId;
+  const visibleProfessionals = isBarbeiroRestrito ? professionals.filter((p: any) => p.id === myProfessionalId) : professionals;
 
   // ── Referência ao momento em que o componente montou.
   // Só notificações com timestamp POSTERIOR ao mount são consideradas "novas".
@@ -423,23 +424,23 @@ const Appointments: React.FC = () => {
 
       <div className={`flex-1 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
         {viewMode === 'grid' ? (
-          <div className={`overflow-auto h-full scrollbar-hide ${compactView ? '' : ''}`}>
-            <div className={compactView ? 'min-w-[320px]' : 'min-w-[500px]'} style={{minWidth: compactView ? `${60 + professionals.length * 100}px` : `${80 + professionals.length * 160}px`}}>
+          <div className="overflow-auto h-full scrollbar-hide">
+            <div style={{minWidth: isBarbeiroRestrito ? '100%' : compactView ? `${60 + visibleProfessionals.length * 100}px` : `${80 + visibleProfessionals.length * 160}px`, width: isBarbeiroRestrito ? '100%' : undefined}}>
               {/* CABEÇALHO: Reduzido padding vertical */}
-              <div className={`border-b sticky top-0 z-10 ${theme === 'light' ? 'border-zinc-200 bg-zinc-50' : 'border-white/5 bg-white/[0.02]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${isBarbeiroRestrito ? 1 : professionals.length}, 1fr)` : `80px repeat(${isBarbeiroRestrito ? 1 : professionals.length}, 1fr)`}}>
+              <div className={`border-b sticky top-0 z-10 ${theme === 'light' ? 'border-zinc-200 bg-zinc-50' : 'border-white/5 bg-white/[0.02]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.filter((prof: any) => !isBarbeiroRestrito || prof.id === myProfessionalId).length}, 1fr)` : `80px repeat(${professionals.filter((prof: any) => !isBarbeiroRestrito || prof.id === myProfessionalId).length}, 1fr)`}}>
                 <div className={`flex items-center justify-center text-zinc-500 ${compactView ? 'p-2' : 'p-3'}`}><Clock size={compactView ? 14 : 18} /></div>
-                {professionals.map(prof => (
+                {visibleProfessionals.map(prof => (
                   <div key={prof.id} className={`flex items-center justify-center gap-3 border-r border-white/5 ${compactView ? 'p-2 flex-col' : 'p-3'}`}>
-                    <img src={prof.avatar} className={`rounded-lg object-cover border border-[#C58A4A] ${compactView ? 'w-6 h-6' : 'w-8 h-8'}`} alt="" />
-                    <span className={`font-black uppercase tracking-widest ${compactView ? 'text-[8px]' : 'text-[10px]'}`}>{prof.name.split(' ')[0]}</span>
+                    <img src={prof.avatar} className={`rounded-xl object-cover border-2 border-[#C58A4A] ${isBarbeiroRestrito ? 'w-12 h-12' : compactView ? 'w-6 h-6' : 'w-8 h-8'}`} alt="" />
+                    <span className={`font-black uppercase tracking-widest ${isBarbeiroRestrito ? 'text-sm' : compactView ? 'text-[8px]' : 'text-[10px]'}`}>{prof.name}</span>
                   </div>
                 ))}
               </div>
               {/* LINHAS DE HORÁRIO: Altura reduzida de 100px/50px para 60px/35px */}
               {hours.map(hour => (
-                <div key={hour} className={`border-b ${theme === 'light' ? 'border-zinc-100' : 'border-white/[0.03]'} ${compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${isBarbeiroRestrito ? 1 : professionals.length}, 1fr)` : `80px repeat(${isBarbeiroRestrito ? 1 : professionals.length}, 1fr)`}}>
+                <div key={hour} className={`border-b ${theme === 'light' ? 'border-zinc-100' : 'border-white/[0.03]'} ${isBarbeiroRestrito ? 'min-h-[80px]' : compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.filter((prof: any) => !isBarbeiroRestrito || prof.id === myProfessionalId).length}, 1fr)` : `80px repeat(${professionals.filter((prof: any) => !isBarbeiroRestrito || prof.id === myProfessionalId).length}, 1fr)`}}>
                   <div className={`flex items-center justify-center border-r ${theme === 'light' ? 'border-zinc-200 bg-zinc-50/50' : 'border-white/5 bg-white/[0.01]'}`}><span className={`font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'} ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
-                  {professionals.filter((prof: any) => !isBarbeiroRestrito || prof.id === myProfessionalId).map(prof => {
+                  {visibleProfessionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
                     return (
                       <div 
@@ -449,7 +450,7 @@ const Appointments: React.FC = () => {
                         title={!app ? `Clique para agendar às ${hour}` : ''}
                       >
                         {app ? (
-                          <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : app.awaitingOnlinePayment ? 'border-blue-400/50 bg-blue-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
+                          <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : app.awaitingOnlinePayment ? 'border-blue-400/50 bg-blue-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${isBarbeiroRestrito ? 'p-3' : compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
                             <div className="truncate" onClick={(e) => { e.stopPropagation(); setShowDetailModal(app); }} style={{cursor:'pointer'}}>
                               <div className="flex items-center gap-1">
                                 <h4 className={`font-black uppercase truncate hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}
@@ -480,13 +481,8 @@ const Appointments: React.FC = () => {
                                   </button>
                                 ) : null; })()}
                               </div>
-                              {!compactView && (
-                                <>
-                                  <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName}</p>
-                                  <p className="text-[7px] text-zinc-500 font-bold mt-0.5">{app.startTime}{app.endTime ? ` – ${app.endTime}` : ''}</p>
-                                </>
-                              )}
-                              {compactView && <p className="text-[7px] text-[#C58A4A]/70 truncate">{app.serviceName}</p>}
+                              <p className={`font-black text-[#C58A4A] uppercase mt-0.5 truncate ${isBarbeiroRestrito ? 'text-[10px]' : 'text-[8px]'}`}>{app.serviceName}</p>
+                              <p className={`text-zinc-500 font-bold mt-0.5 ${isBarbeiroRestrito ? 'text-[9px]' : 'text-[7px]'}`}>{app.startTime}{app.endTime ? ` – ${app.endTime}` : ''}</p>
                             </div>
                             <div className={`flex items-center justify-end gap-1 ${compactView ? 'mt-0.5' : 'mt-1'}`}>
                                <button 
