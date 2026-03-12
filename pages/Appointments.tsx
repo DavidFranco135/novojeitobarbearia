@@ -172,7 +172,7 @@ const Appointments: React.FC = () => {
   const profilePhotoRef = useRef<HTMLInputElement>(null);
 
   const openClientProfile = (cl: any) => {
-    openClientProfile(cl);
+    setShowClientProfile(cl);
     setProfileNotes(cl.notes || '');
     setProfilePhotos(cl.photos || []);
   };
