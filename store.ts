@@ -352,7 +352,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     // Check staff members
     const staffMember = staff.find((s: any) => s.email === id && s.password === pass && s.active !== false);
     if (staffMember) {
-      setUser({ id: staffMember.id, name: staffMember.name, email: staffMember.email, role: staffMember.role, allowedPages: staffMember.allowedPages, defaultPage: staffMember.defaultPage } as any);
+      setUser({ id: staffMember.id, name: staffMember.name, email: staffMember.email, role: staffMember.role, allowedPages: staffMember.allowedPages, defaultPage: staffMember.defaultPage, professionalId: staffMember.professionalId || null } as any);
       return;
     }
     const client = clients.find(c => (c.phone === id || c.email === id) && c.password === pass);
