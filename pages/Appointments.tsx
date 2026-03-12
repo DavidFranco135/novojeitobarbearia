@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, Check, X, CreditCard,
   Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, Camera, NotebookPen
@@ -93,7 +94,7 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, theme
+    addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, updateClient, theme
   } = useBarberStore();
   const isDark = theme !== 'light';
 
@@ -150,7 +151,62 @@ const Appointments: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [compactView, setCompactView] = useState(false);
   const [showClientProfile, setShowClientProfile] = useState<any | null>(null);
-  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const [lightboxImg,       setLightboxImg]       = useState<string | null>(null);
+  const [profileNotes,      setProfileNotes]      = useState('');
+  const [profilePhotos,     setProfilePhotos]     = useState<string[]>([]);
+  const [savingProfile,     setSavingProfile]     = useState(false);
+  const [uploadingPhoto,    setUploadingPhoto]    = useState(false);
+  const profilePhotoRef = useRef<HTMLInputElement>(null);
+
+  const openClientProfile = (cl: any) => {
+    openClientProfile(cl);
+    setProfileNotes(cl.notes || '');
+    setProfilePhotos(cl.photos || []);
+  };
+
+  const saveProfileNotes = async () => {
+    if (!showClientProfile) return;
+    setSavingProfile(true);
+    try {
+      if (showClientProfile.id) {
+        await (updateClient as any)(showClientProfile.id, { notes: profileNotes, photos: profilePhotos });
+      }
+      setShowClientProfile((p: any) => p ? { ...p, notes: profileNotes, photos: profilePhotos } : p);
+    } finally { setSavingProfile(false); }
+  };
+
+  const addProfilePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const compressed = await new Promise<Blob>((resolve) => {
+        const img = new Image(); const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const MAX = 1200; const ratio = Math.min(MAX/img.width, MAX/img.height, 1);
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width*ratio; canvas.height = img.height*ratio;
+          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(b => resolve(b!), 'image/jpeg', 0.82); URL.revokeObjectURL(url);
+        }; img.src = url;
+      });
+      const fd = new FormData(); fd.append('image', compressed, 'photo.jpg');
+      const res = await fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_KEY, { method:'POST', body:fd });
+      const data = await res.json();
+      if (!data.success) throw new Error('Upload falhou');
+      const updated = [...profilePhotos, data.data.url as string];
+      setProfilePhotos(updated);
+      await (updateClient as any)(showClientProfile.id, { photos: updated });
+      setShowClientProfile((p: any) => p ? { ...p, photos: updated } : p);
+    } catch { alert('Erro ao enviar foto.'); }
+    finally { setUploadingPhoto(false); if (profilePhotoRef.current) profilePhotoRef.current.value = ''; }
+  };
+
+  const deleteProfilePhoto = async (url: string) => {
+    const updated = profilePhotos.filter(p => p !== url);
+    setProfilePhotos(updated);
+    await (updateClient as any)(showClientProfile.id, { photos: updated });
+    setShowClientProfile((p: any) => p ? { ...p, photos: updated } : p);
+  };
   const [currentDate, setCurrentDate] = useState<string>(getTodayString);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Appointment | null>(null);
@@ -400,7 +456,7 @@ const Appointments: React.FC = () => {
                                 )}
                                 {(() => { const cl = clients.find((c: any) => c.name === app.clientName || c.phone === app.clientPhone); return (cl?.photos?.length > 0 || cl?.notes) ? (
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); setShowClientProfile(cl); }}
+                                    onClick={(e) => { e.stopPropagation(); openClientProfile(cl); }}
                                     title="Ver fotos e observações do cliente"
                                     className="flex-shrink-0 animate-none"
                                   >
@@ -423,6 +479,7 @@ const Appointments: React.FC = () => {
                                  title={app.status === 'CONCLUIDO_PAGO' ? 'Marcar como Pendente' : 'Finalizar e Pagar'}
                                ><DollarSign size={compactView ? 9 : 11}/></button>
                                <button onClick={(e) => { e.stopPropagation(); setShowRescheduleModal(app); }} className={`bg-white/10 text-zinc-500 hover:text-white rounded-lg transition-all ${compactView ? 'p-0.5' : 'p-1'}`} title="Reagendar"><RefreshCw size={compactView ? 9 : 11}/></button>
+                               {(() => { const cl = clients.find((c: any) => c.phone === app.clientPhone || c.name === app.clientName) || { id: null, name: app.clientName, phone: app.clientPhone, notes: '', photos: [] }; return <button onClick={(e) => { e.stopPropagation(); openClientProfile(cl); }} className={`bg-[#C58A4A]/20 text-[#C58A4A] hover:bg-[#C58A4A]/40 rounded-lg transition-all ${compactView ? 'p-0.5' : 'p-1'}`} title="Fotos e obs. do cliente"><Camera size={compactView ? 9 : 11}/></button>; })()}
                                <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Excluir agendamento de ${app.clientName}?`)) deleteAppointment(app.id); }} className={`bg-white/10 text-zinc-500 hover:text-red-500 rounded-lg transition-all ${compactView ? 'p-0.5' : 'p-1'}`} title="Excluir agendamento"><X size={compactView ? 9 : 11}/></button>
                             </div>
                           </div>
@@ -467,6 +524,7 @@ const Appointments: React.FC = () => {
                        title={app.status === 'CONCLUIDO_PAGO' ? 'Marcar como Pendente' : 'Finalizar e Pagar'}
                      ><DollarSign size={16}/></button>
                      <button onClick={() => setShowRescheduleModal(app)} className="p-2 bg-white/5 border border-white/10 text-zinc-500 hover:text-white rounded-xl transition-all" title="Reagendar"><RefreshCw size={16}/></button>
+                     {(() => { const cl = clients.find((c: any) => c.phone === app.clientPhone || c.name === app.clientName); return <button onClick={() => openClientProfile(cl || { id: null, name: app.clientName, phone: app.clientPhone, notes: '', photos: [] })} className="p-2 bg-[#C58A4A]/20 border border-[#C58A4A]/30 text-[#C58A4A] hover:bg-[#C58A4A]/40 rounded-xl transition-all" title="Fotos e observações do cliente"><Camera size={16}/></button>; })()}
                      <button onClick={() => { if (window.confirm(`Excluir agendamento de ${app.clientName}?`)) deleteAppointment(app.id); }} className="p-2 bg-white/5 border border-white/10 text-zinc-500 hover:text-red-500 hover:border-red-500/30 rounded-xl transition-all" title="Excluir agendamento"><X size={16}/></button>
                   </div>
                </div>
@@ -793,12 +851,12 @@ const Appointments: React.FC = () => {
       ══════════════════════════════════════════════════════ */}
       {showClientProfile && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
-          <div className={`w-full max-w-lg rounded-[3rem] shadow-2xl flex flex-col max-h-[88vh] ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/10'}`}>
+          <div className={`w-full max-w-lg rounded-[3rem] shadow-2xl flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/10'}`}>
 
             {/* Header */}
             <div className="p-7 pb-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#C58A4A] text-black flex items-center justify-center text-xl font-black italic">
+                <div className="w-12 h-12 rounded-2xl bg-[#C58A4A] text-black flex items-center justify-center text-xl font-black italic shrink-0">
                   {showClientProfile.name?.charAt(0)}
                 </div>
                 <div>
@@ -813,45 +871,66 @@ const Appointments: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto px-7 pb-7 space-y-6 scrollbar-hide">
 
-              {/* Observações */}
-              {showClientProfile.notes && (
-                <div className="space-y-2">
-                  <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-400 flex items-center gap-2">
-                    <NotebookPen size={12}/> Observações do Barbeiro
-                  </h3>
-                  <div className={`p-4 rounded-2xl border text-sm leading-relaxed font-medium ${theme === 'light' ? 'bg-amber-50 border-amber-200 text-zinc-700' : 'bg-amber-500/5 border-amber-500/20 text-zinc-300'}`}>
-                    {showClientProfile.notes}
-                  </div>
-                </div>
-              )}
+              {/* Observações — editável */}
+              <div className="space-y-3">
+                <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-400 flex items-center gap-2">
+                  <NotebookPen size={12}/> Observações do Barbeiro
+                </h3>
+                <textarea
+                  rows={4}
+                  placeholder="Ex: Gosta de degradê baixo, não gosta de máquina no topo, usa pomada matte..."
+                  value={profileNotes}
+                  onChange={e => setProfileNotes(e.target.value)}
+                  className={`w-full border rounded-2xl p-4 text-sm font-medium leading-relaxed resize-none outline-none transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400' : 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-amber-500/40'}`}
+                />
+                <button
+                  onClick={saveProfileNotes}
+                  disabled={savingProfile}
+                  className="gradiente-ouro text-black px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
+                >
+                  {savingProfile ? '⟳ Salvando...' : '💾 Salvar Observações'}
+                </button>
+              </div>
 
-              {/* Fotos */}
-              {showClientProfile.photos?.length > 0 && (
-                <div className="space-y-3">
+              {/* Fotos do corte */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
                   <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C58A4A] flex items-center gap-2">
-                    <Camera size={12}/> Fotos do Corte ({showClientProfile.photos.length})
+                    <Camera size={12}/> Fotos do Corte ({profilePhotos.length})
                   </h3>
+                  <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest cursor-pointer transition-all border ${uploadingPhoto ? 'opacity-50 cursor-wait' : theme === 'light' ? 'border-zinc-200 text-zinc-500 hover:text-zinc-900' : 'border-white/10 text-zinc-400 hover:text-white hover:border-white/20'}`}>
+                    {uploadingPhoto ? '⟳ Enviando...' : <><Camera size={11}/> Adicionar</>}
+                    <input ref={profilePhotoRef} type="file" accept="image/*" className="hidden" onChange={addProfilePhoto} disabled={uploadingPhoto}/>
+                  </label>
+                </div>
+
+                {profilePhotos.length === 0 ? (
+                  <div
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${theme === 'light' ? 'border-zinc-200 hover:border-[#C58A4A]/40' : 'border-white/10 hover:border-[#C58A4A]/30'}`}
+                    onClick={() => profilePhotoRef.current?.click()}
+                  >
+                    <Camera size={28} className="mx-auto mb-2 text-zinc-600"/>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Clique para adicionar foto</p>
+                  </div>
+                ) : (
                   <div className="grid grid-cols-3 gap-2">
-                    {showClientProfile.photos.map((url: string, i: number) => (
-                      <div
-                        key={i}
-                        className="aspect-square rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-[#C58A4A]/40 transition-all"
-                        onClick={() => setLightboxImg(url)}
-                      >
-                        <img src={url} alt={`Corte ${i+1}`} className="w-full h-full object-cover hover:scale-105 transition-all duration-300"/>
+                    {profilePhotos.map((url, i) => (
+                      <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-white/10">
+                        <img src={url} alt={`Corte ${i+1}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-all" onClick={() => setLightboxImg(url)}/>
+                        <button
+                          onClick={() => deleteProfilePhoto(url)}
+                          className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                        ><X size={10}/></button>
                       </div>
                     ))}
+                    <label className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-[#C58A4A]/40 transition-all">
+                      <Camera size={16} className="text-zinc-600 mb-1"/>
+                      <span className="text-[8px] font-black uppercase text-zinc-600">Mais</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={addProfilePhoto} disabled={uploadingPhoto}/>
+                    </label>
                   </div>
-                </div>
-              )}
-
-              {!showClientProfile.notes && (!showClientProfile.photos || showClientProfile.photos.length === 0) && (
-                <div className="py-12 text-center">
-                  <Camera size={36} className="mx-auto mb-3 text-zinc-700"/>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Nenhuma foto ou observação registrada.</p>
-                  <p className="text-[9px] text-zinc-700 mt-1">Adicione na página Membros.</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
