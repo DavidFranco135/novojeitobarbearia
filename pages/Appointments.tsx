@@ -104,7 +104,20 @@ const Appointments: React.FC = () => {
   const prevNotifCountRef = useRef<number | null>(null);
 
   // ── Pré-carrega áudio ao montar (admin já navegou até aqui, contexto permitido)
-  useEffect(() => { preloadAudio(); }, []);
+  useEffect(() => {
+    // AudioContext só pode ser criado após gesto do usuário (política do Chrome)
+    const handleFirstInteraction = () => {
+      preloadAudio();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+    document.addEventListener('click', handleFirstInteraction, { once: true });
+    document.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    return () => {
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, []);
 
   // ── Data correta no fuso local, atualiza na virada de meia-noite
   useEffect(() => {
