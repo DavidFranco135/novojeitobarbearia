@@ -111,6 +111,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const destaqueRef = React.useRef<HTMLDivElement>(null);
   const experienciaRef = React.useRef<HTMLDivElement>(null);
   const membroRef = React.useRef<HTMLDivElement>(null);
+  const produtosRef = React.useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
     if (!ref.current) return;
@@ -729,23 +730,47 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                   Produtos <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                 </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {products.filter((p: any) => p.active !== false).map((p: any) => (
-                    <div key={p.id} className={`rounded-[2rem] overflow-hidden border transition-all hover:scale-[1.02] hover:border-[#C58A4A]/30 ${theme === 'light' ? 'bg-black border-zinc-800' : 'bg-black border-white/10'}`}>
-                      <div className="w-full aspect-square bg-black flex items-center justify-center overflow-hidden">
-                        {p.image
-                          ? <img src={p.image} alt={p.name} className="w-full h-full object-contain hover:scale-105 transition-all duration-500"/>
-                          : <span className="text-4xl">🛒</span>
-                        }
+                <div className="relative group">
+                  <button
+                    onClick={() => produtosRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
+                    className={`hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
+                  >
+                    <ChevronLeft size={24}/>
+                  </button>
+                  <button
+                    onClick={() => produtosRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
+                    className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
+                  >
+                    <ChevronRight size={24}/>
+                  </button>
+                  <div
+                    ref={produtosRef}
+                    className="flex gap-4 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
+                    style={{ scrollBehavior: 'smooth' }}
+                    onMouseDown={(e) => handleMouseDown(e, produtosRef)}
+                    onMouseLeave={handleMouseLeave}
+                    onMouseUp={handleMouseUp}
+                    onMouseMove={(e) => handleMouseMove(e, produtosRef)}
+                  >
+                    {products.filter((p: any) => p.active !== false).map((p: any) => (
+                      <div key={p.id} className={`snap-center flex-shrink-0 w-[220px] rounded-[2.5rem] overflow-hidden border-4 shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-zinc-200 bg-black' : 'border-white/5 bg-black'}`}>
+                        {/* Foto em pé — aspect-[3/4] como retrato */}
+                        <div className="w-full aspect-[3/4] bg-black flex items-center justify-center overflow-hidden">
+                          {p.image
+                            ? <img src={p.image} alt={p.name} className="w-full h-full object-contain hover:scale-105 transition-all duration-500"/>
+                            : <span className="text-5xl">🛒</span>
+                          }
+                        </div>
+                        {/* Info */}
+                        <div className={`p-4 space-y-1 border-t ${theme === 'light' ? 'border-white/5' : 'border-white/5'}`}>
+                          <p className="font-black text-sm leading-tight text-white">{p.name}</p>
+                          {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{p.category}</p>}
+                          {p.description && <p className="text-[10px] text-zinc-500 line-clamp-2 leading-snug mt-1">{p.description}</p>}
+                          <p className="text-base font-black text-[#C58A4A] pt-1">R$ {Number(p.price).toFixed(2)}</p>
+                        </div>
                       </div>
-                      <div className="p-4 space-y-1">
-                        <p className={`font-black text-sm leading-tight ${theme === 'light' ? 'text-white' : 'text-white'}`}>{p.name}</p>
-                        {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{p.category}</p>}
-                        {p.description && <p className="text-[10px] text-zinc-500 line-clamp-2 leading-snug">{p.description}</p>}
-                        <p className="text-base font-black text-[#C58A4A] pt-1">R$ {Number(p.price).toFixed(2)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
              </section>
              )}
