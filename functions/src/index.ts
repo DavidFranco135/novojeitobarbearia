@@ -1,2054 +1,1000 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Scissors, Calendar, Check, MapPin, ChevronLeft, ChevronRight, ArrowRight, Clock, User, Phone, 
-  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift
-} from 'lucide-react';
-// Crown já importado acima — usado para badge Barbeiro Master
-import { useBarberStore } from '../store';
-import { Service, Review, Professional, Client } from '../types';
-import ClubeBeneficios from '../components/ClubeBeneficios'; // ── NOVO
+// ============================================================
+// functions/src/index.ts — Cloud Functions Firebase v2
+// Barbearia Novo Jeito — Automação WhatsApp Business API
+// ============================================================
 
-interface PublicBookingProps {
-  initialView?: 'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD';
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onRequest } from "firebase-functions/v2/https";
+import { setGlobalOptions } from "firebase-functions/v2";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+const db = admin.firestore();
+
+// Região padrão para todas as funções
+setGlobalOptions({ region: "us-central1" });
+
+const APP_URL = "https://novojeitobarbearia.pages.dev";
+
+// ─────────────────────────────────────────────────────────────
+// TEMPLATES — nomes exatos cadastrados no WhatsApp Manager
+// ─────────────────────────────────────────────────────────────
+const T = {
+  confirmacao:       "confirmacao_agendamento",
+  lembrete24h:       "lembrete_24h",
+  lembrete1h:        "lembrete_1h",
+  posAtendimento:    "pos_atendimento_v2",
+  vip3dias:          "aviso_vencimento_3dia",
+  vip1dia:           "aviso_vencimento_1dia",
+  vipAtivado:        "ativacao_plano_vip_3",
+  clienteInativo:    "aviso_cliente_inativo",
+  novoAgendBarbeiro: "novo_agendamento_barbeiro",
+  agendaDiaria:      "agenda_diaria_barbeiro_v3",
+  // ── Módulos de Automação ──────────────────────────────────
+  horarioVago:       "aviso_horario_vago_2",
+  promoDiaFraco:     "aviso_promocao",
+  aniversario:       "aviso_aniversario_2",
+  manutencaoCorte:   "aviso_manutencao_corte",
+};
+
+// ─────────────────────────────────────────────────────────────
+// HELPER — formata YYYY-MM-DD → DD/MM/YYYY
+// ─────────────────────────────────────────────────────────────
+function fmt(dateStr: string): string {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
 }
 
-const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
-  const { partners } = useBarberStore() as any;
-  const { products } = useBarberStore() as any;
-  
-  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
-  const [passo, setPasso] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [newReview, setNewReview] = useState({ rating: 5, comment: '', userName: '', clientPhone: '' });
-  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
-  const [selecao, setSelecao] = useState({ serviceId: '', professionalId: '', date: '', time: '', clientName: '', clientPhone: '', clientEmail: '' });
-  
-  const [loginIdentifier, setLoginIdentifier] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loggedClient, setLoggedClient] = useState<Client | null>(null);
-  const [bookingError, setBookingError] = useState<string | null>(null);
+// ─────────────────────────────────────────────────────────────
+// HELPER — envia mensagem via Meta WhatsApp Cloud API
+// ─────────────────────────────────────────────────────────────
+async function send(
+  toPhone: string,
+  template: string,
+  params: { name: string; value: string }[]
+): Promise<boolean> {
+  const phoneId = process.env.PHONE_NUMBER_ID || "";
+  const token   = process.env.ACCESS_TOKEN    || "";
 
-  // Estados para verificação de cadastro no agendamento (passo 4)
-  const [lookupInput, setLookupInput] = useState('');
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [lookupClientFound, setLookupClientFound] = useState<Client | null>(null);
-  const [lookupPassword, setLookupPassword] = useState('');
-  const [lookupPasswordError, setLookupPasswordError] = useState<string | null>(null);
-  const [clientVerified, setClientVerified] = useState(false);
+  if (!phoneId || !token) {
+    console.warn("⚠️  PHONE_NUMBER_ID ou ACCESS_TOKEN não configurados no Cloud Run.");
+    return false;
+  }
 
-  // Estados para cadastro no Portal do Cliente
-  const [loginMode, setLoginMode] = useState<'login' | 'register' | 'setpassword' | 'forgot'>('login');
-  const [forgotPhone, setForgotPhone] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
-  const [forgotStep, setForgotStep] = useState<'phone' | 'reset'>('phone');
-  const [bookingPayLink, setBookingPayLink] = useState<string | null>(null);
-  const [wantsPayNow, setWantsPayNow] = useState(false);
-  const [vipModal, setVipModal] = useState<any>(null);
-  const [vipForm, setVipForm] = useState({ name: '', phone: '', cpf: '' });
-  const [vipLoading, setVipLoading] = useState(false);
-  const [vipPayLink, setVipPayLink] = useState<string | null>(null);
-  const [vipError, setVipError] = useState<string | null>(null);
-  const [forgotClient, setForgotClient] = useState<any>(null);
-  const [forgotError, setForgotError] = useState<string | null>(null);
-  const [forgotSuccess, setForgotSuccess] = useState(false);
-  const [registerData, setRegisterData] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '' });
-  const [registerError, setRegisterError] = useState<string | null>(null);
-  // Cliente pré-cadastrado pelo admin (sem senha) — precisa apenas definir senha
-  const [noPasswordClient, setNoPasswordClient] = useState<any>(null);
-  const [setPasswordData, setSetPasswordData] = useState({ password: '', confirmPassword: '' });
+  const cleaned = toPhone.replace(/\D/g, "");
+  const number  = cleaned.startsWith("55") ? cleaned : `55${cleaned}`;
 
-  // States para o portal do membro
-  const [suggestionText, setSuggestionText] = useState('');
-  const [editData, setEditData] = useState({ name: '', phone: '', email: '' });
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v20.0/${phoneId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: number,
+          type: "template",
+          template: {
+            name: template,
+            language: { code: "pt_BR" },
+            components: [{
+              type: "body",
+              parameters: params.map(({ name, value }) => ({ type: "text", parameter_name: name, text: value })),
+            }],
+          },
+        }),
+      }
+    );
 
-  // State para modal de história do barbeiro
-  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
-  const [showProfessionalModal, setShowProfessionalModal] = useState(false);
-  const [showBeneficios, setShowBeneficios] = useState(false); // ── NOVO
+    const result = await res.json() as any;
 
-  // ✅ CORREÇÃO: Estado para modal de criação rápida de cliente
-  const [showQuickClient, setShowQuickClient] = useState(false);
-  const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '' });
-  const [quickClientError, setQuickClientError] = useState<string | null>(null);
+    if (!res.ok) {
+      console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result?.error || result));
+      return false;
+    } else {
+      console.log(`✅ Enviado [${template}] → ${number}`);
+      return true;
+    }
+  } catch (err) {
+    console.error(`❌ Exceção [${template}] → ${number}:`, err);
+    return false;
+  }
+}
 
-  // LOGICA PARA DESTAQUES: Mais agendados primeiro, depois o restante
-  const sortedServicesForHighlights = useMemo(() => {
-    const counts = appointments.reduce((acc: Record<string, number>, curr) => {
-      acc[curr.serviceId] = (acc[curr.serviceId] || 0) + 1;
-      return acc;
-    }, {});
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 1 — Novo agendamento criado
+// → Confirmação para CLIENTE
+// → Aviso para BARBEIRO
+// ─────────────────────────────────────────────────────────────
+export const onAppointmentCreated = onDocumentCreated(
+  "appointments/{id}",
+  async (event) => {
+    const a = event.data?.data();
+    if (!a || a.status === "CANCELADO") return;
 
-    const withAppts = services.filter(s => (counts[s.id] || 0) > 0);
-    const withoutAppts = services.filter(s => (counts[s.id] || 0) === 0);
+    // 1. Confirmação para o cliente
+    if (a.clientPhone) {
+      await send(a.clientPhone, T.confirmacao, [
+        { name: "cliente_nome", value: a.clientName       || "Cliente"  },
+        { name: "servico",      value: a.serviceName      || "Serviço"  },
+        { name: "barbeiro",     value: a.professionalName || "Barbeiro" },
+        { name: "data",         value: fmt(a.date) },
+        { name: "horario",      value: a.startTime        || ""         },
+      ]);
+    }
 
-    withAppts.sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
-
-    return [...withAppts, ...withoutAppts];
-  }, [services, appointments]);
-
-  // Sincroniza o usuário logado do store com o loggedClient deste componente
-  useEffect(() => {
-    if (user && user.role === 'CLIENTE') {
-      const client = clients.find(c => c.id === user.id);
-      if (client) {
-        setLoggedClient(client);
-        setEditData({ name: client.name, phone: client.phone, email: client.email });
-        setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
-        if (initialView === 'CLIENT_DASHBOARD') setView('CLIENT_DASHBOARD');
+    // 2. Aviso para o barbeiro
+    if (a.professionalId) {
+      const profDoc = await db.collection("professionals").doc(a.professionalId).get();
+      const prof    = profDoc.data();
+      if (prof?.phone) {
+        await send(prof.phone, T.novoAgendBarbeiro, [
+          { name: "barbeiro_nome", value: prof.name          || "Barbeiro" },
+          { name: "cliente_nome",  value: a.clientName       || "Cliente"  },
+          { name: "servico",       value: a.serviceName      || "Serviço"  },
+          { name: "horario",       value: a.startTime        || ""         },
+          { name: "data",          value: fmt(a.date) },
+        ]);
       }
     }
-  }, [user, clients, initialView]);
+  }
+);
 
-  // Estados para drag scroll
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const destaqueRef = React.useRef<HTMLDivElement>(null);
-  const experienciaRef = React.useRef<HTMLDivElement>(null);
-  const membroRef = React.useRef<HTMLDivElement>(null);
-  const produtosRef = React.useRef<HTMLDivElement>(null);
-  const [selectedProduct, setSelectedProduct] = React.useState<any | null>(null);
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 2 — Agendamento concluído → pós-atendimento
+// ─────────────────────────────────────────────────────────────
+export const onAppointmentCompleted = onDocumentUpdated(
+  "appointments/{id}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
 
-  const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
-    if (!ref.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - ref.current.offsetLeft);
-    setScrollLeft(ref.current.scrollLeft);
-  };
+    if (!before || !after) return;
+    if (before.status === "CONCLUIDO_PAGO") return;
+    if (after.status  !== "CONCLUIDO_PAGO") return;
+    if (!after.clientPhone) return;
+    // Só envia pós-atendimento quando o barbeiro clica em Concluir (não quando cliente paga online)
+    if (!after.completedByBarber) return;
 
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-  };
+    await send(after.clientPhone, T.posAtendimento, [
+      { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
+      { name: "link_avaliacao", value: APP_URL                              },
+      { name: "servico",        value: after.serviceName      || "Serviço"  },
+      { name: "barbeiro",       value: after.professionalName || "Barbeiro" },
+    ]);
+  }
+);
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
 
-  const handleMouseMove = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
-    if (!isDragging || !ref.current) return;
-    e.preventDefault();
-    const x = e.pageX - ref.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    ref.current.scrollLeft = scrollLeft - walk;
-  };
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 3 — Nova assinatura VIP ativada
+// ─────────────────────────────────────────────────────────────
+export const onSubscriptionCreated = onDocumentCreated(
+  "subscriptions/{id}",
+  async (event) => {
+    const sub = event.data?.data();
+    if (!sub || sub.status !== "ATIVA") return;
 
-  const handleBookingStart = (svc: Service) => {
-    setSelecao(prev => ({ ...prev, serviceId: svc.id }));
-    setView('BOOKING'); setPasso(2);
-  };
+    const cDoc = await db.collection("clients").doc(sub.clientId).get();
+    const cli  = cDoc.data();
+    if (!cli?.phone) return;
 
-  const toggleCategory = (cat: string) => {
-    setExpandedCategories(prev => 
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-    );
-  };
+    await send(cli.phone, T.vipAtivado, [
+      { name: "cliente_nome",    value: sub.clientName     || cli.name },
+      { name: "plano",           value: sub.planName       || "VIP"    },
+      { name: "data_vencimento", value: fmt(sub.endDate.split("T")[0]) },
+    ]);
+  }
+);
 
-  const checkAvailability = (date: string, time: string, profId: string) => {
-    // Horário já agendado
-    const hasAppointment = appointments.some(a => a.date === date && a.startTime === time && a.professionalId === profId && a.status !== 'CANCELADO');
-    // Horário bloqueado pelo admin (almoço, reunião, folga parcial etc.)
-    const isBlocked = isSlotBlocked ? isSlotBlocked(profId, date, time) : false;
-    return hasAppointment || isBlocked;
-  };
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 1 — Lembrete 24h antes (todo dia às 10:00)
+// ─────────────────────────────────────────────────────────────
+export const sendReminders24h = onSchedule(
+  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().split("T")[0];
 
-  const turnos = useMemo(() => {
-    const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
-    return {
-      manha: times.filter(t => parseInt(t.split(':')[0]) < 12),
-      tarde: times.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
-      noite: times.filter(t => parseInt(t.split(':')[0]) >= 18)
-    };
-  }, []);
+    const snap = await db
+      .collection("appointments")
+      .where("date",   "==", dateStr)
+      .where("status", "in", ["PENDENTE", "AGENDADO"])
+      .get();
 
-  const categories = useMemo(() => ['Todos', ...Array.from(new Set(services.map(s => s.category)))], [services]);
-  const filteredServices = useMemo(() => selectedCategory === 'Todos' ? services : services.filter(s => s.category === selectedCategory), [services, selectedCategory]);
+    console.log(`📅 Lembretes 24h: ${snap.size} agendamentos para ${dateStr}`);
 
-  // ✅ CORREÇÃO: Função para criar cliente rápido na aba de agendamento
-  const handleQuickClientCreate = async () => {
-    if (!quickClient.name || !quickClient.phone || !quickClient.email) {
-      setQuickClientError("Preencha todos os campos obrigatórios.");
+    for (const doc of snap.docs) {
+      const a = doc.data();
+      if (!a.clientPhone) continue;
+      await send(a.clientPhone, T.lembrete24h, [
+        { name: "cliente_nome", value: a.clientName       || "Cliente"  },
+        { name: "servico",      value: a.serviceName      || "Serviço"  },
+        { name: "barbeiro",     value: a.professionalName || "Barbeiro" },
+        { name: "horario",      value: a.startTime        || ""         },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 2 — Lembrete 1h antes (toda hora em ponto)
+// Usa flag wppLembrete1hSent no agendamento para não repetir
+// ─────────────────────────────────────────────────────────────
+export const sendReminders1h = onSchedule(
+  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const now      = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    const oneHour  = new Date(now.getTime() + 60 * 60 * 1000);
+    const target   = `${String(oneHour.getHours()).padStart(2, "0")}:00`;
+
+    const snap = await db
+      .collection("appointments")
+      .where("date",               "==", todayStr)
+      .where("startTime",          "==", target)
+      .where("status",             "in", ["PENDENTE", "AGENDADO"])
+      .where("wppLembrete1hSent",  "==", false)
+      .get();
+
+    console.log(`⏰ Lembretes 1h: ${snap.size} agendamentos para ${target}`);
+
+    for (const doc of snap.docs) {
+      const a = doc.data();
+      if (!a.clientPhone) continue;
+
+      const ok = await send(a.clientPhone, T.lembrete1h, [
+        { name: "cliente_nome", value: a.clientName       || "Cliente"  },
+        { name: "servico",      value: a.serviceName      || "Serviço"  },
+        { name: "barbeiro",     value: a.professionalName || "Barbeiro" },
+        { name: "horario",      value: a.startTime        || ""         },
+      ]);
+
+      // Marca como enviado para não repetir
+      if (ok !== false) {
+        await doc.ref.update({ wppLembrete1hSent: true });
+      }
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
+// ─────────────────────────────────────────────────────────────
+export const sendDailyAgenda = onSchedule(
+  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
+  async () => {
+    const todayStr       = new Date().toISOString().split("T")[0];
+    const todayFormatted = fmt(todayStr);
+
+    const profsSnap = await db.collection("professionals").get();
+    const profs     = profsSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
+    const comWhats  = profs.filter((p) => p.phone);
+
+    if (comWhats.length === 0) {
+      console.log("⚠️  Nenhum barbeiro com WhatsApp cadastrado.");
       return;
     }
 
-    setLoading(true);
+    const apptsSnap = await db
+      .collection("appointments")
+      .where("date",   "==", todayStr)
+      .where("status", "in", ["PENDENTE", "AGENDADO"])
+      .get();
+
+    const appts = apptsSnap.docs
+      .map((d) => d.data())
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    console.log(`💈 Agenda diária: ${comWhats.length} barbeiros, ${appts.length} agendamentos`);
+
+    for (const prof of comWhats) {
+      const meus = appts.filter((a) => a.professionalId === prof.id);
+
+      if (meus.length === 0) {
+        console.log(`😴 ${prof.name}: sem agendamentos hoje`);
+        continue;
+      }
+
+      const resumo = meus
+        .map((a) => `🕐 ${a.startTime} ${a.clientName} - ${a.serviceName}`)
+        .join("  |  ");
+
+      await send(prof.phone, T.agendaDiaria, [
+        { name: "barbeiro_nome",      value: prof.name },
+        { name: "data",               value: todayFormatted },
+        { name: "agenda_resumo",      value: resumo },
+        { name: "total_agendamentos", value: String(meus.length) },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 4 — VIP vencendo em 3 dias (todo dia às 09:00)
+// ─────────────────────────────────────────────────────────────
+export const sendVipExpiry3days = onSchedule(
+  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const d3 = new Date();
+    d3.setDate(d3.getDate() + 3);
+    const target = d3.toISOString().split("T")[0];
+
+    const snap = await db
+      .collection("subscriptions")
+      .where("endDate", "==", target)
+      .where("status",  "==", "ATIVA")
+      .get();
+
+    console.log(`👑 VIP 3 dias: ${snap.size} assinaturas vencem em ${target}`);
+
+    for (const doc of snap.docs) {
+      const sub  = doc.data();
+      const cDoc = await db.collection("clients").doc(sub.clientId).get();
+      const cli  = cDoc.data();
+      if (!cli?.phone) continue;
+
+      await send(cli.phone, T.vip3dias, [
+        { name: "cliente_nome",    value: sub.clientName || cli.name },
+        { name: "data_vencimento", value: fmt(sub.endDate) },
+        { name: "link_renovacao",  value: APP_URL },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 5 — VIP vencendo em 1 dia (todo dia às 09:05)
+// ─────────────────────────────────────────────────────────────
+export const sendVipExpiry1day = onSchedule(
+  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const d1 = new Date();
+    d1.setDate(d1.getDate() + 1);
+    const target = d1.toISOString().split("T")[0];
+
+    const snap = await db
+      .collection("subscriptions")
+      .where("endDate", "==", target)
+      .where("status",  "==", "ATIVA")
+      .get();
+
+    console.log(`👑 VIP 1 dia: ${snap.size} assinaturas vencem em ${target}`);
+
+    for (const doc of snap.docs) {
+      const sub  = doc.data();
+      const cDoc = await db.collection("clients").doc(sub.clientId).get();
+      const cli  = cDoc.data();
+      if (!cli?.phone) continue;
+
+      await send(cli.phone, T.vip1dia, [
+        { name: "cliente_nome",    value: sub.clientName || cli.name },
+        { name: "data_vencimento", value: fmt(sub.endDate) },
+        { name: "link_renovacao",  value: APP_URL },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 6 — Clientes inativos 30+ dias (toda segunda 09:10)
+// ─────────────────────────────────────────────────────────────
+export const sendInactiveClients = onSchedule(
+  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().split("T")[0];
+
+    const snap = await db
+      .collection("clients")
+      .where("lastVisit", "<=", cutoffStr)
+      .get();
+
+    console.log(`😴 Inativos: ${snap.size} clientes sem visita desde ${cutoffStr}`);
+
+    for (const doc of snap.docs) {
+      const cli = doc.data();
+      if (!cli.phone) continue;
+
+      const lastDate = new Date(cli.lastVisit || cli.createdAt);
+      const dias     = Math.floor((Date.now() - lastDate.getTime()) / 86_400_000);
+
+      if (dias < 30 || dias > 120) continue;
+
+      await send(cli.phone, T.clienteInativo, [
+        { name: "cliente_nome",     value: cli.name    || "Cliente" },
+        { name: "dias_ausente",     value: String(dias)             },
+        { name: "link_agendamento", value: APP_URL                  },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 4 — Agendamento CANCELADO → notifica clientes
+// que costumam cortar naquele dia da semana (horário vago)
+// ─────────────────────────────────────────────────────────────
+export const onAppointmentCancelled = onDocumentUpdated(
+  "appointments/{id}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === "CANCELADO") return;
+    if (after.status  !== "CANCELADO") return;
+
+    const diaSemana = new Date(after.date).getDay();
+    const horario   = after.startTime;
+
+    // Busca todos os clientes que já agendaram naquele dia da semana
+    const apptSnap = await db
+      .collection("appointments")
+      .where("status", "==", "CONCLUIDO_PAGO")
+      .get();
+
+    const phonesSeen = new Set<string>();
+    const candidatos: { name: string; phone: string }[] = [];
+
+    for (const doc of apptSnap.docs) {
+      const a = doc.data();
+      if (!a.clientPhone || a.clientPhone === after.clientPhone) continue;
+      if (phonesSeen.has(a.clientPhone)) continue;
+      if (new Date(a.date).getDay() !== diaSemana) continue;
+      phonesSeen.add(a.clientPhone);
+      candidatos.push({ name: a.clientName || "Cliente", phone: a.clientPhone });
+    }
+
+    console.log(`📅 Horário vago ${horario} — ${candidatos.length} candidatos`);
+
+    for (const cli of candidatos.slice(0, 10)) { // máx 10 notificações por slot
+      await send(cli.phone, T.horarioVago, [
+        { name: "cliente_nome", value: cli.name  },
+        { name: "horario",      value: horario   },
+        { name: "data",         value: fmt(after.date) },
+        { name: "barbeiro",     value: after.professionalName || "Barbeiro" },
+      ]);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 7 — Aniversariantes do dia (todo dia às 09:30)
+// ─────────────────────────────────────────────────────────────
+export const sendBirthdayMessages = onSchedule(
+  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const hoje = new Date();
+    const mmdd  = `${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+
+    const snap = await db.collection("clients").get();
+    let count = 0;
+
+    for (const doc of snap.docs) {
+      const cli = doc.data();
+      if (!cli.phone || !cli.birthday) continue;
+      const clientMmdd = String(cli.birthday).substring(5, 10); // MM-DD from YYYY-MM-DD
+      if (clientMmdd !== mmdd) continue;
+
+      await send(cli.phone, T.aniversario, [
+        { name: "cliente_nome",  value: cli.name || "Cliente" },
+        { name: "link_ativacao", value: APP_URL               },
+      ]);
+      count++;
+    }
+
+    console.log(`🎉 Aniversariantes: ${count} mensagens enviadas`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 8 — Lembrete manutenção 15-20 dias (todo dia 10:30)
+// ─────────────────────────────────────────────────────────────
+export const sendMaintenanceReminders = onSchedule(
+  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo" },
+  async () => {
+    const snap = await db.collection("clients").get();
+    let count = 0;
+
+    for (const doc of snap.docs) {
+      const cli = doc.data();
+      if (!cli.phone || !cli.lastVisit) continue;
+
+      const dias = Math.floor((Date.now() - new Date(cli.lastVisit).getTime()) / 86_400_000);
+      if (dias < 15 || dias > 22) continue; // janela de manutenção
+
+      // Evita reenvio: verifica flag wppManutencaoSent resetada a cada 30 dias
+      if (cli.wppManutencaoSent) {
+        const sentDate = new Date(cli.wppManutencaoSentAt || 0);
+        if ((Date.now() - sentDate.getTime()) < 30 * 86_400_000) continue;
+      }
+
+      await send(cli.phone, T.manutencaoCorte, [
+        { name: "cliente_nome", value: cli.name  || "Cliente" },
+        { name: "dias",         value: String(dias)           },
+        { name: "link",         value: APP_URL                },
+      ]);
+
+      await doc.ref.update({
+        wppManutencaoSent:   true,
+        wppManutencaoSentAt: new Date().toISOString(),
+      });
+      count++;
+    }
+
+    console.log(`✂️ Manutenção: ${count} lembretes enviados`);
+  }
+);
+
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 9 — Promoção dia fraco (toda terça e quinta 11:00)
+// Detecta dias com poucos agendamentos e avisa clientes inativos há 15-45 dias
+// ─────────────────────────────────────────────────────────────
+export const sendPromoDiaFraco = onSchedule(
+  { schedule: "0 11 * * 2,4", timeZone: "America/Sao_Paulo" },
+  async () => {
+    // Verifica se amanhã tem poucos agendamentos (< 3)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+    const apptSnap = await db.collection("appointments")
+      .where("date", "==", tomorrowStr)
+      .where("status", "in", ["AGENDADO", "CONFIRMADO"])
+      .get();
+
+    // Só dispara se tiver menos de 3 agendamentos amanhã
+    if (apptSnap.size >= 3) {
+      console.log(`📅 Promo dia fraco: amanhã tem ${apptSnap.size} agendamentos, não disparando.`);
+      return;
+    }
+
+    const clientSnap = await db.collection("clients").get();
+    const cfgDoc     = await db.collection("config").doc("main").get();
+    const shopLink   = cfgDoc.data()?.bookingUrl || APP_URL;
+    let count = 0;
+
+    for (const doc of clientSnap.docs) {
+      const cli = doc.data();
+      if (!cli.phone) continue;
+
+      // Clientes inativos há 15-45 dias (fora da janela de manutenção e inatividade)
+      const dias = cli.lastVisit
+        ? Math.floor((Date.now() - new Date(cli.lastVisit).getTime()) / 86_400_000)
+        : 999;
+      if (dias < 15 || dias > 45) continue;
+
+      // Evita reenvio na mesma semana
+      const lastPromo = cli.wppPromoSentAt ? new Date(cli.wppPromoSentAt) : null;
+      if (lastPromo && (Date.now() - lastPromo.getTime()) < 7 * 86_400_000) continue;
+
+      const fmtTomorrow = fmt(tomorrowStr);
+      await send(cli.phone, T.promoDiaFraco, [
+        { name: "cliente_nome",    value: cli.name || "Cliente" },
+        { name: "descricao_promo", value: `Horários disponíveis amanhã (${fmtTomorrow}) com condição especial para você! ✂️` },
+        { name: "validade",        value: `amanhã, ${fmtTomorrow}` },
+        { name: "link",            value: shopLink },
+      ]);
+
+      await doc.ref.update({
+        wppPromoSentAt: new Date().toISOString(),
+      });
+      count++;
+    }
+
+    console.log(`🎯 Promo dia fraco: ${count} mensagens enviadas para amanhã (${tomorrowStr})`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 5 — Agendamento concluído → cashback automático
+// Envia mensagem de cashback após CONCLUIDO_PAGO
+// ─────────────────────────────────────────────────────────────
+export const onAppointmentCashback = onDocumentUpdated(
+  "appointments/{id}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === "CONCLUIDO_PAGO") return;
+    if (after.status  !== "CONCLUIDO_PAGO") return;
+    if (!after.clientPhone || !after.price || after.price <= 0) return;
+
+    // Busca configuração de cashback
+    const cfgDoc = await db.collection("config").doc("main").get();
+    const cfg    = cfgDoc.data();
+    const pct    = cfg?.cashbackPercent || 5;
+    const credito = Math.floor((after.price * pct) / 100);
+    if (credito <= 0) return;
+
+    // Atualiza cartela de fidelidade
+    const cardSnap = await db
+      .collection("loyaltyCards")
+      .where("clientId", "==", after.clientId)
+      .limit(1)
+      .get();
+
+    if (!cardSnap.empty) {
+      const card = cardSnap.docs[0];
+      await card.ref.update({ credits: (card.data().credits || 0) + credito });
+    }
+
+    // Cashback creditado — mensagem já incluída no template pos_atendimento
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// HTTP PROXY — Asaas API (evita bloqueio CORS no browser)
+// ─────────────────────────────────────────────────────────────
+export const asaasProxy = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+
+    const { endpoint, method = "GET", body, key, env } = req.body;
+
+    if (!key) { res.status(400).json({ error: "Asaas key not configured" }); return; }
+
+    const base = env === "producao"
+      ? "https://api.asaas.com/v3"
+      : "https://sandbox.asaas.com/api/v3";
+
     try {
-      const existingClient = clients.find(c => c.email && c.email.toLowerCase() === quickClient.email.toLowerCase());
-      if (existingClient) {
-        setQuickClientError("Este email já está cadastrado no sistema.");
-        setLoading(false);
+      const response = await fetch(`${base}${endpoint}`, {
+        method,
+        headers: {
+          "access_token": key,
+          "Content-Type": "application/json",
+          "User-Agent": "BarbeariaNj/1.0",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.error(`Asaas ${method} ${endpoint} → ${response.status}:`, JSON.stringify(data));
+      }
+      res.status(response.status).json(data);
+    } catch (err: any) {
+      console.error("asaasProxy error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// WEBHOOK — Asaas pagamento confirmado
+// Cadastrar no Asaas: Configurações → Integrações → Webhooks
+// URL: https://us-central1-financeiro-a7116.cloudfunctions.net/asaasWebhook
+// Eventos: PAYMENT_RECEIVED, PAYMENT_CONFIRMED
+// ─────────────────────────────────────────────────────────────
+export const asaasWebhook = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+
+    // ── Validação do token Asaas ──────────────────────────────
+    const WEBHOOK_TOKEN = "whsec_Or3lfJgfub5vn8C-NrXj7JE4rJcTmurvVhP-tOhLMKs";
+    const receivedToken = req.headers["asaas-access-token"] || req.body?.token;
+    if (receivedToken !== WEBHOOK_TOKEN) {
+      console.warn("asaasWebhook: token inválido →", receivedToken);
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    try {
+      const event   = req.body;
+      const payment = event?.payment;
+      if (!payment) { res.status(200).send("ok"); return; }
+
+      const extRef  = payment.externalReference || "";
+      const status  = event.event; // PAYMENT_RECEIVED | PAYMENT_CONFIRMED | PAYMENT_OVERDUE
+
+      console.log(`Asaas webhook: ${status} | ref: ${extRef} | id: ${payment.id}`);
+
+      // ── Cobrança de agendamento (ref: booking_clientId_date) ──
+      if (extRef.startsWith("booking_") && (status === "PAYMENT_RECEIVED" || status === "PAYMENT_CONFIRMED")) {
+        // Busca agendamento pelo asaasPaymentId ou externalReference
+        const snap = await db.collection("appointments")
+          .where("awaitingOnlinePayment", "==", true)
+          .get();
+
+        const match = snap.docs.find(d =>
+          d.data().asaasPaymentId === payment.id ||
+          `booking_${d.data().clientId}_${d.data().date}` === extRef
+        );
+
+        if (match) {
+          await match.ref.update({
+            status: "CONCLUIDO_PAGO",
+            awaitingOnlinePayment: false,
+            asaasPaymentId: payment.id,
+          });
+          console.log(`✅ Agendamento ${match.id} marcado como CONCLUIDO_PAGO via webhook`);
+
+          // ── Envia pós-atendimento ao cliente após pagamento online ──
+          const appt = match.data();
+          if (appt.clientPhone) {
+            await send(appt.clientPhone, T.posAtendimento, [
+              { name: "cliente_nome",   value: appt.clientName       || "Cliente"  },
+              { name: "link_avaliacao", value: APP_URL                             },
+              { name: "servico",        value: appt.serviceName      || "Serviço"  },
+              { name: "barbeiro",       value: appt.professionalName || "Barbeiro" },
+            ]);
+          }
+        }
+      }
+
+      // ── Cobrança de assinatura (ref: sub_subscriptionId) ──
+      if (extRef.startsWith("sub_") && (status === "PAYMENT_RECEIVED" || status === "PAYMENT_CONFIRMED")) {
+        const subId = extRef.replace("sub_", "");
+        const subDoc = await db.collection("subscriptions").doc(subId).get();
+        if (subDoc.exists) {
+          const sub = subDoc.data()!;
+          const wasPending = sub.status === "PENDENTE_PAGAMENTO";
+
+          await subDoc.ref.update({
+            status:             "ATIVA",
+            lastPaymentDate:    new Date().toISOString(),
+            lastAsaasPaymentId: payment.id,
+          });
+          console.log(`✅ Assinatura ${subId} ativada/renovada via webhook`);
+
+          // ── Dispara WhatsApp apenas na 1ª ativação (era PENDENTE_PAGAMENTO) ──
+          if (wasPending) {
+            const clientPhone = (sub.clientPhone || "").replace(/\D/g, "");
+            if (clientPhone) {
+              const endDate = typeof sub.endDate === "string"
+                ? sub.endDate.split("T")[0]
+                : new Date(sub.endDate?.toDate?.() || sub.endDate).toISOString().split("T")[0];
+
+              await send(clientPhone, T.vipAtivado, [
+                { name: "cliente_nome",    value: sub.clientName || "Cliente" },
+                { name: "plano",           value: sub.planName   || "VIP"     },
+                { name: "data_vencimento", value: fmt(endDate)                 },
+              ]);
+            }
+
+            // Avisa a barbearia
+            const cfgDoc    = await db.collection("config").doc("main").get();
+            const shopPhone = (cfgDoc.data()?.whatsapp || "").replace(/\D/g, "");
+            if (shopPhone) {
+              const today = new Date().toISOString().split("T")[0];
+              await send(shopPhone, T.novoAgendBarbeiro, [
+                { name: "barbeiro_nome", value: cfgDoc.data()?.name || "Barbearia" },
+                { name: "cliente_nome",  value: sub.clientName      || "Cliente"    },
+                { name: "servico",       value: sub.planName         || "Plano VIP"  },
+                { name: "horario",       value: ""                                   },
+                { name: "data",          value: fmt(today)                           },
+              ]);
+            }
+          }
+        }
+      }
+
+      // ── Pagamento vencido ──
+      if (status === "PAYMENT_OVERDUE") {
+        if (extRef.startsWith("sub_")) {
+          const subId = extRef.replace("sub_", "");
+          const subDoc = await db.collection("subscriptions").doc(subId).get();
+          if (subDoc.exists) {
+            await subDoc.ref.update({ status: "VENCIDA" });
+            console.log(`⚠️ Assinatura ${subId} marcada como VENCIDA via webhook`);
+          }
+        }
+      }
+
+      res.status(200).json({ received: true });
+    } catch (err: any) {
+      console.error("asaasWebhook error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+// ============================================================
+// WHATSAPP INBOX — Recebe mensagens dos clientes via webhook
+// e salva no Firestore. Também permite o ADM responder.
+// URL: registrar no Meta → Webhook → messages
+// ============================================================
+
+// ─── Helper: envia texto livre (fora de template, dentro de 24h) ─────
+async function sendTextMessage(toPhone: string, text: string): Promise<boolean> {
+  const phoneId = process.env.PHONE_NUMBER_ID || "";
+  const token   = process.env.ACCESS_TOKEN    || "";
+  if (!phoneId || !token) return false;
+  const cleaned = toPhone.replace(/\D/g, "");
+  const number  = cleaned.startsWith("55") ? cleaned : `55${cleaned}`;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: number,
+          type: "text",
+          text: { preview_url: false, body: text },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`❌ Meta API erro ${res.status}: ${errBody}`);
+    }
+    return res.ok;
+  } catch (e) { console.error("sendTextMessage exception:", e); return false; }
+}
+
+// ─── whatsappInbox — Webhook de mensagens recebidas ──────────────────
+// GET  = verificação do Meta (challenge)
+// POST = mensagens recebidas dos clientes
+export const whatsappInbox = onRequest(
+  { cors: true },
+  async (req, res) => {
+    // ── GET: verificação do webhook Meta ──
+    if (req.method === "GET") {
+      const VERIFY_TOKEN = "novojeito_inbox_2024";
+      const mode      = req.query["hub.mode"];
+      const token     = req.query["hub.verify_token"];
+      const challenge = req.query["hub.challenge"];
+      if (mode === "subscribe" && token === VERIFY_TOKEN) {
+        res.status(200).send(challenge);
+      } else {
+        res.status(403).send("Forbidden");
+      }
+      return;
+    }
+
+    // ── POST: mensagem recebida ──
+    if (req.method === "POST") {
+      try {
+        const body = req.body;
+        const entry = body?.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
+
+        // Confirma recebimento imediatamente (Meta exige < 20s)
+        res.status(200).json({ received: true });
+
+        if (!value?.messages) return;
+
+        for (const msg of value.messages) {
+          const fromPhone = msg.from; // número com DDI
+          const msgId     = msg.id;
+          const timestamp = msg.timestamp;
+          const type      = msg.type; // text, image, audio, etc.
+
+          let text = "";
+          if (type === "text") text = msg.text?.body || "";
+          else if (type === "image") text = "[📷 Imagem]";
+          else if (type === "audio") text = "[🎤 Áudio]";
+          else if (type === "document") text = "[📄 Documento]";
+          else if (type === "sticker") text = "[🎭 Sticker]";
+          else text = `[${type}]`;
+
+          // Busca cliente pelo número
+          const clientsSnap = await db.collection("clients")
+            .where("phone", "==", fromPhone.replace(/^55/, ""))
+            .limit(1).get();
+          
+          // Também tenta com 55 na frente
+          let clientDoc = clientsSnap.docs[0];
+          if (!clientDoc) {
+            const snap2 = await db.collection("clients").get();
+            clientDoc = snap2.docs.find(d => {
+              const p = (d.data().phone || "").replace(/\D/g, "");
+              const fp = fromPhone.replace(/\D/g, "");
+              return fp.endsWith(p) || p.endsWith(fp);
+            })!;
+          }
+
+          const clientId   = clientDoc?.id   || null;
+          const clientName = clientDoc?.data()?.name || fromPhone;
+
+          // Salva mensagem na coleção inbox
+          const convId = `conv_${fromPhone.replace(/\D/g, "")}`;
+          
+          // Atualiza / cria conversa
+          await db.collection("inbox").doc(convId).set({
+            clientId,
+            clientName,
+            clientPhone: fromPhone,
+            lastMessage: text,
+            lastMessageAt: Number(timestamp) * 1000,
+            unread: true,
+            updatedAt: Date.now(),
+          }, { merge: true });
+
+          // Salva mensagem individual
+          await db.collection("inbox").doc(convId)
+            .collection("messages").doc(msgId).set({
+              from: "client",
+              text,
+              type,
+              timestamp: Number(timestamp) * 1000,
+              createdAt: Date.now(),
+            });
+
+          console.log(`📨 Mensagem de ${clientName} (${fromPhone}): ${text}`);
+
+          // ── Auto-resposta: redireciona para o WhatsApp comercial ──
+          const AUTO_REPLY = `Olá, ${clientName.split(" ")[0]}! 👋 Você está no sistema automático de agendamentos da *Novo Jeito Barbearia*.
+
+Para falar diretamente com nossa equipe de atendimento, chama a gente no WhatsApp comercial:
+
+✂️ *Novo Jeito Barbearia*
+📲 (21) 97370-8141
+
+Estamos por lá de segunda a sábado! 😊`;
+
+          await sendTextMessage(fromPhone, AUTO_REPLY);
+          console.log(`↩️ Auto-resposta enviada para ${fromPhone}`);
+        }
+      } catch (err: any) {
+        console.error("whatsappInbox error:", err);
+      }
+      return;
+    }
+
+    res.status(405).send("Method not allowed");
+  }
+);
+
+// ─── whatsappReply — ADM responde pelo app ────────────────────────────
+export const whatsappReply = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
+    try {
+      // Garante que body foi parseado
+      const body = req.body || {};
+      console.log(`📤 whatsappReply body raw:`, JSON.stringify(body));
+      const convId  = body.convId  as string | undefined;
+      const toPhone = body.toPhone as string | undefined;
+      const text    = body.text    as string | undefined;
+      console.log(`📤 whatsappReply — convId: ${convId}, toPhone: ${toPhone}, textLen: ${text?.length}`);
+      if (!toPhone || !text) { res.status(400).json({ error: "toPhone e text são obrigatórios" }); return; }
+      if (!convId) { res.status(400).json({ error: "convId é obrigatório" }); return; }
+
+      const ok = await sendTextMessage(toPhone, text);
+
+      // Salva no Firestore independente de o Meta ter entregue ou não
+      const msgRef = await db.collection("inbox").doc(convId)
+        .collection("messages").add({
+          from: "admin",
+          text,
+          type: "text",
+          delivered: ok,
+          timestamp: Date.now(),
+          createdAt: Date.now(),
+        });
+
+      // Atualiza conversa
+      await db.collection("inbox").doc(convId).set({
+        lastMessage: text,
+        lastMessageAt: Date.now(),
+        unread: false,
+      }, { merge: true });
+
+      if (!ok) {
+        console.warn(`⚠️ Mensagem salva no histórico mas não entregue pelo Meta (app não publicado ou fora da janela 24h). Para: ${toPhone}`);
+        res.status(200).json({ sent: false, saved: true, msgId: msgRef.id, warning: "Mensagem salva mas não entregue. App não publicado ou fora da janela de 24h." });
         return;
       }
 
-      await addClient({ name: quickClient.name, phone: quickClient.phone, email: quickClient.email });
-      setSelecao(prev => ({ ...prev, clientName: quickClient.name, clientPhone: quickClient.phone, clientEmail: quickClient.email }));
-      setClientVerified(true);
-      setShowQuickClient(false);
-      setQuickClient({ name: '', phone: '', email: '' });
-      setQuickClientError(null);
-      if (passo === 1 || passo < 2) setPasso(2);
+      res.status(200).json({ sent: true, msgId: msgRef.id });
     } catch (err: any) {
-      setQuickClientError(err.message || "Erro ao criar cliente.");
-    } finally {
-      setLoading(false);
+      console.error("whatsappReply error:", err);
+      res.status(500).json({ error: err.message });
     }
-  };
-
-  const handleLookupClient = () => {
-    if (!lookupInput.trim()) {
-      setLookupError("Informe seu celular ou e-mail.");
-      return;
-    }
-    const normalizePhone = (p: string) => p.replace(/\D/g, '');
-    const found = clients.find(c => {
-      const emailMatch = c.email && c.email.toLowerCase() === lookupInput.toLowerCase().trim();
-      const phoneMatch = normalizePhone(c.phone) === normalizePhone(lookupInput);
-      return emailMatch || phoneMatch;
-    });
-    if (found) {
-      setLookupClientFound(found);
-      setLookupError(null);
-      setLookupPassword('');
-      setLookupPasswordError(null);
-    } else {
-      setLookupError("Nenhum cadastro encontrado com esses dados.");
-    }
-  };
-
-  const handleVerifyPassword = () => {
-    if (!lookupClientFound) return;
-    if (!lookupPassword) {
-      setLookupPasswordError("Digite sua senha.");
-      return;
-    }
-    if (lookupClientFound.password !== lookupPassword) {
-      setLookupPasswordError("Senha incorreta. Tente novamente.");
-      return;
-    }
-    setSelecao(prev => ({ ...prev, clientName: lookupClientFound.name, clientPhone: lookupClientFound.phone, clientEmail: lookupClientFound.email || '' }));
-    setClientVerified(true);
-    setLookupPasswordError(null);
-  };
-
-  const handleRegisterPortal = async () => {
-    if (!registerData.name || !registerData.phone || !registerData.email || !registerData.password) {
-      setRegisterError("Preencha todos os campos obrigatórios."); return;
-    }
-    if (registerData.password !== registerData.confirmPassword) {
-      setRegisterError("As senhas não conferem."); return;
-    }
-    const exists = clients.find((c: any) => {
-      const emailMatch = c.email && c.email.toLowerCase() === registerData.email.toLowerCase();
-      const phoneMatch = c.phone.replace(/\D/g,'') === registerData.phone.replace(/\D/g,'');
-      return emailMatch || phoneMatch;
-    });
-    // Cliente pré-cadastrado pelo admin sem senha — redireciona para definir senha
-    if (exists && !exists.password) {
-      setNoPasswordClient(exists);
-      setSetPasswordData({ password: '', confirmPassword: '' });
-      setLoginMode('setpassword');
-      setRegisterError(null);
-      return;
-    }
-    if (exists) {
-      setRegisterError("Já existe um cadastro com este e-mail ou celular. Tente fazer login."); return;
-    }
-    setLoading(true);
-    try {
-      const client = await addClient({ name: registerData.name, phone: registerData.phone, email: registerData.email, password: registerData.password });
-      setLoggedClient(client);
-      setEditData({ name: client.name, phone: client.phone, email: client.email });
-      setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
-      setRegisterData({ name: '', phone: '', email: '', password: '', confirmPassword: '' });
-      setRegisterError(null);
-      // Se veio de um agendamento em progresso, volta para o agendamento já verificado
-      if (selecao.serviceId && selecao.date && selecao.time && selecao.professionalId) {
-        setSelecao(prev => ({ ...prev, clientName: client.name, clientPhone: client.phone, clientEmail: client.email || '' }));
-        setClientVerified(true);
-        setLookupInput(client.email || client.phone);
-        setLookupError(null);
-        setView('BOOKING');
-      } else {
-        setView('CLIENT_DASHBOARD');
-      }
-    } catch (err: any) {
-      setRegisterError(err.message || "Erro ao criar conta.");
-    } finally { setLoading(false); }
-  };
-
-  const handleConfirmBooking = async () => {
-    if (!clientVerified || !selecao.clientName || !selecao.clientPhone) {
-      alert("Por favor, verifique seu cadastro antes de confirmar.");
-      return;
-    }
-    if (checkAvailability(selecao.date, selecao.time, selecao.professionalId)) {
-      setBookingError("Este horário acabou de ser ocupado. Por favor, escolha outro.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const normalizePhone = (p: string) => p.replace(/\D/g, '');
-      const client = clients.find(c => {
-        const emailMatch = selecao.clientEmail && c.email && c.email.toLowerCase() === selecao.clientEmail.toLowerCase();
-        const phoneMatch = normalizePhone(c.phone) === normalizePhone(selecao.clientPhone);
-        return emailMatch || phoneMatch;
-      });
-      if (!client) { alert("Cliente não encontrado. Verifique seu cadastro."); setLoading(false); return; }
-      const serv = services.find(s => s.id === selecao.serviceId);
-      const prof = professionals.find(p => p.id === selecao.professionalId);
-      const surcharge = (prof?.isMaster && prof?.masterSurcharge) ? prof.masterSurcharge : 0;
-      const finalPrice = (serv?.price || 0) + surcharge;
-      const [h, m] = selecao.time.split(':').map(Number);
-      const endTime = `${Math.floor((h * 60 + m + (serv?.durationMinutes || 30)) / 60).toString().padStart(2, '0')}:${((h * 60 + m + (serv?.durationMinutes || 30)) % 60).toString().padStart(2, '0')}`;
-      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice, ...(wantsPayNow ? { awaitingOnlinePayment: true } : {}) }, true);
-      setSuccess(true);
-      // Gera link de pagamento Asaas apenas se cliente escolheu pagar online
-      if (wantsPayNow) {
-        try {
-          const asaasKey = (config as any).asaasKey || '';
-          const asaasEnv = (config as any).asaasEnv || 'sandbox';
-          if (asaasKey) {
-            const proxy = (endpoint: string, method = 'GET', body?: any) =>
-              fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ endpoint, method, key: asaasKey, env: asaasEnv, body })
-              }).then(r => r.json());
-
-            // 1. Cria ou busca cliente no Asaas
-            const phone = client.phone.replace(/\D/g, '');
-            const extRef = `nj_${client.id}`;
-            const cpfCnpj = (client as any).cpfCnpj?.replace(/\D/g, '')
-              || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
-
-            let customerId: string | undefined;
-            const byRef = await proxy(`/customers?externalReference=${extRef}`);
-            customerId = byRef?.data?.[0]?.id;
-            if (!customerId && phone) {
-              const byPhone = await proxy(`/customers?mobilePhone=${phone}`);
-              customerId = byPhone?.data?.[0]?.id;
-            }
-            if (!customerId) {
-              const newCust = await proxy('/customers', 'POST', {
-                name: client.name || 'Cliente',
-                mobilePhone: phone || undefined,
-                cpfCnpj,
-                externalReference: extRef,
-                notificationDisabled: true,
-              });
-              customerId = newCust?.id;
-            } else if (cpfCnpj) {
-              await proxy(`/customers/${customerId}`, 'PUT', { cpfCnpj, notificationDisabled: true });
-            }
-
-            if (customerId) {
-              // 2. Cria cobrança UNDEFINED (cliente escolhe PIX/cartão/boleto no link)
-              const charge = await proxy('/payments', 'POST', {
-                customer: customerId,
-                billingType: 'UNDEFINED',
-                value: finalPrice,
-                dueDate: selecao.date,
-                description: `${serv?.name || 'Serviço'} — ${prof?.name || 'Barbeiro'}`,
-                externalReference: `booking_${client.id}_${selecao.date}`,
-              });
-              if (charge?.invoiceUrl) setBookingPayLink(charge.invoiceUrl);
-            }
-          }
-        } catch(e) { console.warn('Asaas booking payment failed:', e); }
-      }
-    } catch (err) { alert("Erro ao agendar."); }
-    finally { setLoading(false); }
-  };
-
-
-  // ── ESQUECI SENHA — Portal do Cliente ──────────────────────
-  const handleForgotLookup = () => {
-    setForgotError(null);
-    const found = clients.find((cl: any) => cl.phone === forgotPhone.replace(/\D/g, '') || cl.phone === forgotPhone);
-    if (!found) { setForgotError('Número não encontrado. Verifique e tente novamente.'); return; }
-    setForgotClient(found);
-    setForgotStep('reset');
-  };
-  const handleForgotReset = async () => {
-    setForgotError(null);
-    if (!forgotNewPassword || forgotNewPassword.length < 4) { setForgotError('A senha deve ter pelo menos 4 caracteres.'); return; }
-    if (forgotNewPassword !== forgotConfirmPassword) { setForgotError('As senhas não conferem.'); return; }
-    await updateClient(forgotClient.id, { password: forgotNewPassword });
-    setForgotSuccess(true);
-    setTimeout(() => {
-      setForgotSuccess(false); setForgotStep('phone'); setForgotPhone('');
-      setForgotNewPassword(''); setForgotConfirmPassword(''); setForgotClient(null);
-      setLoginMode('login');
-    }, 2000);
-  };
-
-  // Definir senha para cliente pré-cadastrado pelo admin (sem senha)
-  const handleSetPassword = async () => {
-    if (!setPasswordData.password || !setPasswordData.confirmPassword) {
-      setRegisterError("Preencha os dois campos de senha."); return;
-    }
-    if (setPasswordData.password.length < 4) {
-      setRegisterError("A senha deve ter pelo menos 4 caracteres."); return;
-    }
-    if (setPasswordData.password !== setPasswordData.confirmPassword) {
-      setRegisterError("As senhas não conferem."); return;
-    }
-    setLoading(true);
-    try {
-      await updateClient(noPasswordClient.id, { password: setPasswordData.password });
-      // Loga automaticamente o cliente
-      const updatedClient = { ...noPasswordClient, password: setPasswordData.password };
-      setLoggedClient(updatedClient);
-      setEditData({ name: updatedClient.name, phone: updatedClient.phone, email: updatedClient.email });
-      setNewReview((prev: any) => ({ ...prev, userName: updatedClient.name, clientPhone: updatedClient.phone }));
-      setNoPasswordClient(null);
-      setSetPasswordData({ password: '', confirmPassword: '' });
-      setRegisterError(null);
-      if (selecao.serviceId && selecao.date && selecao.time && selecao.professionalId) {
-        setSelecao((prev: any) => ({ ...prev, clientName: updatedClient.name, clientPhone: updatedClient.phone, clientEmail: updatedClient.email || '' }));
-        setClientVerified(true);
-        setView('BOOKING');
-      } else {
-        setView('CLIENT_DASHBOARD');
-      }
-    } catch (err: any) {
-      setRegisterError(err.message || "Erro ao definir senha.");
-    } finally { setLoading(false); }
-  };
-
-  const handleLoginPortal = () => {
-    if (!loginIdentifier || !loginPassword) {
-      alert("Preencha e-mail/celular e senha.");
-      return;
-    }
-
-    const normalizePhone = (p: string) => p.replace(/\D/g, '');
-
-    // 1º — Busca o cliente APENAS pelo identificador (sem checar senha aqui)
-    const client = clients.find(c => {
-      const emailMatch = c.email && c.email.toLowerCase() === loginIdentifier.toLowerCase().trim();
-      const phoneMatch = normalizePhone(c.phone) === normalizePhone(loginIdentifier);
-      return emailMatch || phoneMatch;
-    });
-
-    // 2º — Cliente não existe na base
-    if (!client) {
-      alert("Cliente não encontrado. Verifique seu e-mail ou celular cadastrado.");
-      return;
-    }
-
-    // 3º — Cliente existe mas não tem senha definida (cadastrado pelo admin sem senha)
-    if (!client.password) {
-      alert("Sua conta ainda não possui senha. Peça ao estabelecimento para definir uma ou crie uma nova conta no portal.");
-      return;
-    }
-
-    // 4º — Senha incorreta
-    if (client.password !== loginPassword) {
-      alert("Senha incorreta. Tente novamente.");
-      return;
-    }
-
-    // 5º — Tudo certo: acesso liberado
-    setLoggedClient(client);
-    setEditData({ name: client.name, phone: client.phone, email: client.email });
-    setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
-    setLoginPassword('');
-    setView('CLIENT_DASHBOARD');
-  };
-
-  const handleLikeProfessional = async (profId: string) => {
-    if (!loggedClient) {
-      alert("Faça login para curtir um barbeiro.");
-      return;
-    }
-    const alreadyLiked = loggedClient.likedProfessionals?.includes(profId);
-    if (alreadyLiked) {
-      alert("Você já curtiu este barbeiro!");
-      return;
-    }
-    await likeProfessional(profId);
-    const updatedLikedProfessionals = [...(loggedClient.likedProfessionals || []), profId];
-    await updateClient(loggedClient.id, { likedProfessionals: updatedLikedProfessionals });
-    setLoggedClient({ ...loggedClient, likedProfessionals: updatedLikedProfessionals });
-    alert("Curtida registrada com sucesso!");
-  };
-
-  const handleUpdateProfilePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && loggedClient) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
-        await updateClient(loggedClient.id, { avatar: base64 });
-        setLoggedClient({ ...loggedClient, avatar: base64 });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSendSuggestion = async () => {
-    if (!suggestionText.trim() || !loggedClient) return;
-    setLoading(true);
-    try {
-      await addSuggestion({
-        clientName: loggedClient.name,
-        clientPhone: loggedClient.phone,
-        text: suggestionText,
-        date: new Date().toISOString()
-      });
-      setSuggestionText('');
-      alert("Sugestão enviada com sucesso!");
-    } catch (err) {
-      alert("Erro ao enviar sugestão.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddReview = () => {
-    if (!newReview.comment) return alert("Escreva um comentário!");
-    if (config.reviews?.some(r => r.clientPhone === loggedClient?.phone)) {
-        return alert("Você já deixou sua avaliação exclusiva!");
-    }
-    addShopReview(newReview);
-    setShowReviewModal(false);
-    setNewReview({ rating: 5, comment: '', userName: loggedClient?.name || '', clientPhone: loggedClient?.phone || '' });
-    alert("Obrigado pela sua avaliação!");
-  };
-
-  const handleLogout = () => {
-    setLoggedClient(null);
-    logout();
-    setView('HOME');
-  };
-
-  if (success) return (
-    <div className={`min-h-screen flex items-center justify-center p-6 animate-in zoom-in ${theme === 'light' ? 'bg-[#F8F9FA]' : 'bg-[#050505]'}`}>
-      <div className={`w-full max-w-lg p-12 rounded-[3rem] text-center space-y-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-        <div className="w-20 h-20 gradiente-ouro rounded-full mx-auto flex items-center justify-center"><Check className="w-10 h-10 text-black" /></div>
-        <h2 className="text-3xl font-black font-display italic text-[#C58A4A]">Reserva Confirmada!</h2>
-        <p className={`text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>Aguardamos você para sua melhor experiência da sua vida.</p>
-        {bookingPayLink && (
-          <a href={bookingPayLink} target="_blank" rel="noreferrer"
-            className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl text-center">
-            ⚡ Pagar Agora
-          </a>
-        )}
-        <button onClick={() => { setSuccess(false); setBookingPayLink(null); window.location.reload(); }}
-          className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest ${theme === 'light' ? 'bg-zinc-100 text-zinc-700' : 'bg-white/5 text-zinc-400'}`}>
-          Voltar ao Início
-        </button>
-      </div>
-    </div>
-  );
-
-  const handleVipSubscribe = async () => {
-    if (!vipModal) return;
-    const name  = loggedClient?.name  || vipForm.name.trim();
-    const phone = loggedClient?.phone || vipForm.phone.trim();
-    const cpf   = (loggedClient as any)?.cpfCnpj || vipForm.cpf.trim();
-    if (!name || !phone) { setVipError('Preencha nome e telefone.'); return; }
-    const asaasKey = (config as any).asaasKey || '';
-    const asaasEnv = (config as any).asaasEnv || 'sandbox';
-    if (!asaasKey) {
-      const w = `Ola! Quero assinar o plano ${vipModal.name} (R$ ${vipModal.price.toFixed(2)}).`;
-      window.open(`https://wa.me/55${(config as any).whatsapp?.replace(/[^0-9]/g,'')}?text=${encodeURIComponent(w)}`, '_blank');
-      return;
-    }
-    setVipLoading(true); setVipError(null);
-    try {
-      const proxy = (endpoint: string, method = 'GET', body?: any) =>
-        fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint, method, key: asaasKey, env: asaasEnv, body })
-        }).then(r => r.json());
-      const phoneClean = phone.replace(/[^0-9]/g, '');
-      const cpfClean = cpf.replace(/[^0-9]/g, '') || (asaasEnv === 'sandbox' ? '00000000191' : undefined);
-      let customerId: string | undefined;
-      if (phoneClean) { const r = await proxy('/customers?mobilePhone=' + phoneClean); customerId = r?.data?.[0]?.id; }
-      if (!customerId) { const r = await proxy('/customers', 'POST', { name, mobilePhone: phoneClean||undefined, cpfCnpj: cpfClean, notificationDisabled: true }); customerId = r?.id; }
-      else if (cpfClean) { await proxy('/customers/' + customerId, 'PUT', { cpfCnpj: cpfClean }); }
-      if (!customerId) throw new Error('Erro ao criar cliente no Asaas.');
-      const periodMap: {[key: string]: string} = { ANUAL: 'YEARLY', SEMANAL: 'WEEKLY', MENSAL: 'MONTHLY' };
-      const cycle = periodMap[vipModal.period] || 'MONTHLY';
-      const sub = await proxy('/subscriptions', 'POST', {
-        customer: customerId, billingType: 'UNDEFINED', value: vipModal.price,
-        nextDueDate: new Date().toISOString().split('T')[0], cycle,
-        description: vipModal.name + ' — Barbearia Novo Jeito',
-      });
-      if (!sub?.id) throw new Error((sub?.errors?.[0]?.description) || 'Erro ao criar assinatura.');
-      const charges = await proxy('/payments?subscription=' + sub.id);
-      const invoiceUrl = charges?.data?.[0]?.invoiceUrl || sub.invoiceUrl || '';
-
-      // ── Salva assinatura no Firestore para aparecer no painel ──
-      try {
-        const planEndDate = new Date();
-        if (vipModal.period === 'ANUAL') planEndDate.setFullYear(planEndDate.getFullYear() + 1);
-        else if (vipModal.period === 'SEMANAL') planEndDate.setDate(planEndDate.getDate() + 7);
-        else planEndDate.setMonth(planEndDate.getMonth() + 1);
-        const clientFound = clients.find((c: any) => c.phone?.replace(/\D/g,'') === phoneClean);
-        await addSubscription({
-          clientId:            clientFound?.id || phoneClean,
-          clientName:          name,
-          clientPhone:         phone,
-          planId:              vipModal.id,
-          planName:            vipModal.name,
-          price:               vipModal.price,
-          status:              'PENDENTE_PAGAMENTO',
-          startDate:           new Date().toISOString(),
-          endDate:             planEndDate.toISOString(),
-          asaasSubscriptionId: sub.id,
-          asaasInvoiceUrl:     invoiceUrl,
-        });
-      } catch(e) { console.warn('Firestore subscription save failed:', e); }
-
-      setVipPayLink(invoiceUrl);
-      if (invoiceUrl) window.open(invoiceUrl, '_blank');
-    } catch(err: any) {
-      setVipError(err.message || 'Erro ao processar.');
-    } finally { setVipLoading(false); }
-  };
-
-  return (
-    <div className={`min-h-screen flex flex-col theme-transition ${theme === 'light' ? 'bg-[#F3F4F6] text-black' : 'bg-[#050505] text-white'}`}>
-      {view === 'HOME' && (
-        <div className="animate-in fade-in flex flex-col min-h-screen">
-          <header className="relative h-[65vh] overflow-hidden flex flex-col items-center justify-center">
-            <img src={config.coverImage} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Capa" />
-            <div className={`absolute inset-0 bg-gradient-to-t ${theme === 'light' ? 'from-[#F8F9FA] via-transparent to-transparent' : 'from-[#050505] via-transparent to-transparent'}`}></div>
-            <div className="absolute top-6 right-6 z-[100]"><button onClick={() => setView('LOGIN')} className="bg-[#C58A4A] text-black px-6 py-3 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl transition-all hover:scale-105 active:scale-95"><History size={16}/> PORTAL DO CLIENTE</button></div>
-            <div className="relative z-20 text-center px-6 mt-10">
-               <div className="w-32 h-32 rounded-3xl gradiente-ouro p-1 mx-auto mb-6"><div className="w-full h-full rounded-[2.2rem] bg-black overflow-hidden"><img src={config.logo} className="w-full h-full object-cover" alt="Logo" /></div></div>
-               <h1 className={`text-5xl md:text-7xl font-black font-display italic tracking-tight ${theme === 'light' ? 'text-white drop-shadow-lg' : 'text-white'}`}>{config.name}</h1>
-               <p className="text-[#C58A4A] text-[10px] font-black uppercase tracking-[0.4em] mt-3">{config.description}</p>
-            </div>
-          </header>
-
-          <main className="max-w-6xl mx-auto w-full px-6 flex-1 -mt-10 relative z-30 pb-40">
-             {/* 1. Destaques da Casa */}
-             <section className="mb-20 pt-10">
-                <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Destaques da Casa <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className="relative group">
-                  <button 
-                    onClick={() => destaqueRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
-                    className={`hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button 
-                    onClick={() => destaqueRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
-                    className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                  
-                  <div 
-                    ref={destaqueRef}
-                    className="flex gap-4 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                    style={{ scrollBehavior: 'smooth' }}
-                    onMouseDown={(e) => handleMouseDown(e, destaqueRef)}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseUp={handleMouseUp}
-                    onMouseMove={(e) => handleMouseMove(e, destaqueRef)}
-                  >
-                   {sortedServicesForHighlights.map(svc => (
-                     <div key={svc.id} className={`snap-center flex-shrink-0 w-56 md:w-64 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'bg-black border-4 border-zinc-800 hover:border-[#C58A4A]/40' : 'bg-black border-4 border-white/5 hover:border-[#C58A4A]/40'}`}>
-                        <div className="w-full bg-black flex items-center justify-center p-3">
-                          <img src={svc.image} className="w-full h-auto object-contain max-h-[280px] group-hover:scale-105 transition-all duration-500" alt="" />
-                        </div>
-                        <div className="p-6">
-                           <h3 className={`text-xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{svc.name}</h3>
-                           <p className={`text-xl font-black mt-2 ${theme === 'light' ? 'text-blue-600' : 'text-[#C58A4A]'}`}>R$ {svc.price.toFixed(2)}</p>
-                           <p className={`text-[9px] font-black uppercase ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>{svc.durationMinutes} min</p>
-                           <button onClick={() => handleBookingStart(svc)} className="w-full mt-6 gradiente-ouro text-black py-3 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-xl">RESERVAR</button>
-                        </div>
-                     </div>
-                   ))}
-                </div>
-              </div>
-             </section>
-
-             {/* 2. Nossos Rituais */}
-             <section className="mb-24" id="catalogo">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-                   <h2 className={`text-2xl font-black font-display italic flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Todos os serviços <div className="h-1 w-10 gradiente-ouro opacity-10"></div></h2>
-                </div>
-                <div className="space-y-4">
-                   {categories.filter(cat => cat !== 'Todos').map(cat => {
-                     const categoryServices = services.filter(s => s.category === cat);
-                     const isExpanded = expandedCategories.includes(cat);
-                     
-                     return (
-                       <div key={cat} className={`rounded-2xl overflow-hidden transition-all ${theme === 'light' ? 'bg-white border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                          <button 
-                            onClick={() => toggleCategory(cat)}
-                            className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-all"
-                          >
-                             <span className={`text-lg font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{cat}</span>
-                             <ChevronRight 
-                               className={`transition-transform ${isExpanded ? 'rotate-90' : ''} ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`} 
-                               size={20}
-                             />
-                          </button>
-                          
-                          {isExpanded && (
-                            <div className={`border-t animate-in slide-in-from-top-2 ${theme === 'light' ? 'border-zinc-200' : 'border-white/10'}`}>
-                               {categoryServices.map(svc => (
-                                 <div key={svc.id} className={`p-6 border-b last:border-b-0 flex items-center justify-between hover:bg-white/5 transition-all ${theme === 'light' ? 'border-zinc-200' : 'border-white/10'}`}>
-                                    <div className="flex-1">
-                                       <h4 className={`text-base font-bold mb-1 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{svc.name}</h4>
-                                       <p className={`text-xs mb-2 ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{svc.description}</p>
-                                       <div className="flex items-center gap-4">
-                                          <span className={`text-xl font-black ${theme === 'light' ? 'text-blue-600' : 'text-[#B8860B]'}`}>R$ {svc.price.toFixed(2)}</span>
-                                          <span className={`text-xs font-black ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>{svc.durationMinutes} min</span>
-                                       </div>
-                                    </div>
-                                    <button 
-                                      onClick={() => handleBookingStart(svc)} 
-                                      className="ml-4 gradiente-ouro text-black px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
-                                    >
-                                       Agendar
-                                    </button>
-                                 </div>
-                               ))}\
-                            </div>
-                          )}
-                       </div>
-                     );
-                   })}
-                </div>
-             </section>
-
-             {/* 2.5 Produtos */}
-             {products && products.filter((p: any) => p.active !== false).length > 0 && (
-             <section className="mb-24">
-                <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                  Produtos <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                </h2>
-                <div className="relative group">
-                  <button
-                    onClick={() => produtosRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-                    className={`hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
-                  >
-                    <ChevronLeft size={24}/>
-                  </button>
-                  <button
-                    onClick={() => produtosRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-                    className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
-                  >
-                    <ChevronRight size={24}/>
-                  </button>
-                  <div
-                    ref={produtosRef}
-                    className="flex gap-4 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                    style={{ scrollBehavior: 'smooth' }}
-                    onMouseDown={(e) => handleMouseDown(e, produtosRef)}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseUp={handleMouseUp}
-                    onMouseMove={(e) => handleMouseMove(e, produtosRef)}
-                  >
-                    {products.filter((p: any) => p.active !== false).map((p: any) => (
-                      <div
-                        key={p.id}
-                        onClick={() => setSelectedProduct(p)}
-                        className={`snap-center flex-shrink-0 w-56 md:w-64 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all cursor-pointer hover:scale-[1.02] hover:border-[#C58A4A]/40 ${theme === 'light' ? 'bg-black border-4 border-zinc-800' : 'bg-black border-4 border-white/5'}`}
-                      >
-                        {/* Foto completa sem corte */}
-                        <div className="w-full bg-black flex items-center justify-center p-3">
-                          {p.image
-                            ? <img src={p.image} alt={p.name} className="w-full h-auto object-contain max-h-[320px] group-hover:scale-105 transition-all duration-500"/>
-                            : <div className="w-full h-48 flex items-center justify-center"><span className="text-5xl">🛒</span></div>
-                          }
-                        </div>
-                        {/* Info */}
-                        <div className={`p-4 border-t border-white/5`}>
-                          <h3 className="text-sm font-black text-white leading-tight">{p.name}</h3>
-                          {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-0.5">{p.category}</p>}
-                          <p className="text-base font-black text-[#C58A4A] mt-1">R$ {Number(p.price).toFixed(2)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-             </section>
-             )}
-
-             {/* 3. A Experiência Signature */}
-             <section className="mb-24">
-                <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Nosso Ambiente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className="relative group">
-                  <button 
-                    onClick={() => experienciaRef.current?.scrollBy({ left: -500, behavior: 'smooth' })}
-                    className={`hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button 
-                    onClick={() => experienciaRef.current?.scrollBy({ left: 500, behavior: 'smooth' })}
-                    className={`hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl ${theme === 'light' ? 'bg-white border-2 border-zinc-300 text-zinc-900 hover:bg-zinc-50' : 'bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70'}`}
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                  
-                  <div 
-                    ref={experienciaRef}
-                    className="flex gap-4 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                    style={{ scrollBehavior: 'smooth' }}
-                    onMouseDown={(e) => handleMouseDown(e, experienciaRef)}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseUp={handleMouseUp}
-                    onMouseMove={(e) => handleMouseMove(e, experienciaRef)}
-                  >
-                   {(Array.isArray(config.gallery) ? config.gallery : []).map((img, i) => (
-                     <div key={i} className={`snap-center flex-shrink-0 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-4 border-zinc-200 bg-black' : 'border-4 border-white/5 bg-black'}`}>
-                        <img src={img} className="max-h-[480px] w-auto max-w-[85vw] md:max-w-[500px] object-contain block" alt="" />
-                     </div>
-                   ))}
-                   {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
-                </div>
-              </div>
-             </section>
-
-             {/* 4. Voz dos Membros */}
-             <section className="mb-24 py-10 -mx-6 px-6 bg-black">
-                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 text-white`}>Avalições do cliente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className="relative group">
-                  <button 
-                    onClick={() => membroRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-                    className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button 
-                    onClick={() => membroRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-                    className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                  
-                  <div 
-                    ref={membroRef}
-                    className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                    style={{ scrollBehavior: 'smooth' }}
-                    onMouseDown={(e) => handleMouseDown(e, membroRef)}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseUp={handleMouseUp}
-                    onMouseMove={(e) => handleMouseMove(e, membroRef)}
-                  >
-                   {config.reviews?.length === 0 && <p className={`italic py-10 text-center w-full text-zinc-500`}>Aguardando seu feedback para brilhar aqui.</p>}
-                   {config.reviews?.map((rev, i) => (
-                      <div key={i} className={`snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative group cartao-vidro border-white/5`}>
-                         <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
-                         <div className="flex gap-1 mb-4">
-                            {[1,2,3,4,5].map(s => (
-                               <Star key={s} size={14} fill={s <= rev.rating ? '#C58A4A' : 'none'} className={s <= rev.rating ? 'text-[#C58A4A]' : 'text-zinc-800'}/>
-                            ))}
-                         </div>
-                         <p className={`text-sm italic leading-relaxed mb-6 text-zinc-300`}>\"{rev.comment}\"</p>
-                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center">
-                               <User size={18} className="text-[#C58A4A]"/>
-                            </div>
-                            <p className={`text-[10px] font-black text-white`}>{rev.userName}</p>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-              </div>
-             </section>
-
-             {/* 5. Nossos Artífices */}
-             <section className="mb-24">
-                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                  Nossos Profissionais <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                </h2>
-
-                {/* ── Barbeiro Master (destaque full-width) ── */}
-                {professionals.filter(p => p.isMaster).length > 0 && (
-                  <div className="mb-8 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Crown size={14} className="text-[#C58A4A]" />
-                      <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${theme === 'light' ? 'text-[#8B5E2A]' : 'text-[#C58A4A]'}`}>Barbeiro Master</span>
-                      <div className="h-px flex-1 bg-gradient-to-r from-[#C58A4A]/40 to-transparent" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      {professionals.filter(p => p.isMaster).map(prof => (
-                        <div
-                          key={prof.id}
-                          className={`relative rounded-[2rem] overflow-hidden border group transition-all hover:scale-[1.02] cursor-pointer
-                            ${theme === 'light'
-                              ? 'bg-gradient-to-br from-amber-50 to-white border-[#C58A4A]/40 hover:border-[#C58A4A] shadow-lg shadow-[#C58A4A]/10'
-                              : 'bg-gradient-to-br from-[#C58A4A]/10 via-[#0A0A0A] to-[#0A0A0A] border-[#C58A4A]/40 hover:border-[#C58A4A] shadow-xl shadow-[#C58A4A]/10'
-                            }`}
-                          onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
-                        >
-                          {/* Faixa dourada no topo */}
-                          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#8B5E2A] via-[#C58A4A] to-[#E8B97A]" />
-
-                          <div className="flex items-center gap-6 p-6 pt-7">
-                            {/* Foto grande */}
-                            <div className="relative shrink-0">
-                              <img
-                                src={prof.avatar}
-                                className="w-28 h-28 rounded-2xl object-cover border-2 border-[#C58A4A] shadow-xl"
-                                alt={prof.name}
-                              />
-                              <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-[#8B5E2A] to-[#E8B97A] p-2 rounded-xl shadow-lg">
-                                <Crown size={14} className="text-black" />
-                              </div>
-                            </div>
-
-                            {/* Info */}
-                            <div className="flex-1 min-w-0 space-y-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className={`font-black text-xl font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{prof.name}</p>
-                                <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#8B5E2A] to-[#C58A4A] text-black text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                                  <Crown size={7} /> Master
-                                </span>
-                              </div>
-                              <p className={`text-[9px] uppercase tracking-widest font-black ${theme === 'light' ? 'text-[#8B5E2A]' : 'text-[#C58A4A]'}`}>
-                                Proprietário · Barbeiro Master
-                              </p>
-                              {prof.description && (
-                                <p className={`text-xs leading-relaxed line-clamp-2 ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{prof.description}</p>
-                              )}
-                              {/* Adicional Master */}
-                              {prof.masterSurcharge && prof.masterSurcharge > 0 ? (
-                                <p className={`text-[9px] font-black inline-flex items-center gap-1 px-2 py-1 rounded-lg ${theme === 'light' ? 'bg-amber-100 text-[#8B5E2A]' : 'bg-[#C58A4A]/15 text-[#C58A4A]'}`}>
-                                  + R$ {prof.masterSurcharge.toFixed(2)} por serviço
-                                </p>
-                              ) : null}
-                              {/* Likes */}
-                              <div className="flex items-center gap-1 mt-1">
-                                <Heart size={11} fill="currentColor" className="text-red-500" />
-                                <span className="text-red-500 text-[10px] font-black">{prof.likes || 0} curtidas</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Equipe regular ── */}
-                {professionals.filter(p => !p.isMaster).length > 0 && (
-                  <div className="space-y-4">
-                    {professionals.filter(p => p.isMaster).length > 0 && (
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Equipe</span>
-                        <div className={`h-px flex-1 ${theme === 'light' ? 'bg-zinc-200' : 'bg-white/5'}`} />
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      {professionals.filter(p => !p.isMaster).map(prof => (
-                        <div
-                          key={prof.id}
-                          className={`rounded-[2rem] p-6 text-center space-y-4 group transition-all hover:scale-105 cursor-pointer ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-[#C58A4A]/40' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}
-                          onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
-                        >
-                          <div className="relative mx-auto w-24 h-24">
-                            <img src={prof.avatar} className="w-full h-full rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg" alt="" />
-                            <div className="absolute -right-10 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
-                              <Heart size={12} fill="currentColor" /> <span>{prof.likes || 0}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <p className={`font-black text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{prof.name}</p>
-                            <p className={`text-[8px] uppercase tracking-widest font-black mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>{prof.specialty}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-             </section>
-
-             {/* 6. Planos VIP */}
-             {config.vipPlans && config.vipPlans.filter(p => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-24">
-                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                   Planos VIP <Crown size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                 </h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan) => (
-                     <div key={plan.id} className={`rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
-                       {!!plan.featured && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
-                       <div className="flex items-center gap-3 mb-6">
-                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
-                           <Crown size={18} className={!!plan.featured ? 'text-black' : 'text-[#C58A4A]'} />
-                         </div>
-                         <div>
-                           <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
-                           {plan.discount && plan.discount > 0 ? <span className="text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full">{plan.discount}% OFF</span> : null}
-                         </div>
-                       </div>
-                       <p className={`text-4xl font-black mb-1 ${!!plan.featured ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                         R$ {plan.price.toFixed(2)}
-                         <span className={`text-sm font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>/{plan.period === 'MENSAL' ? 'mês' : 'ano'}</span>
-                       </p>
-                       <div className="mt-6 space-y-3">
-                         {plan.benefits.map((benefit, bi) => (
-                           <div key={bi} className="flex items-start gap-3">
-                             <CheckCircle2 size={16} className="text-[#C58A4A] shrink-0 mt-0.5" />
-                             <p className={`text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
-                           </div>
-                         ))}
-                       </div>
-                       <button
-                         onClick={() => { setVipModal(plan); setVipForm({ name: loggedClient?.name||'', phone: loggedClient?.phone||'', cpf: (loggedClient as any)?.cpfCnpj||'' }); setVipPayLink(null); setVipError(null); }}
-                         className={`w-full mt-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
-                       >
-                         Quero esse plano
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               </section>
-             )}
-
-             {/* 7. Programa de Fidelidade */}
-             {((config as any).stampsForFreeCut || (config as any).cashbackPercent) && (
-               <section className="mb-24">
-                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                   Programa de Fidelidade <Star size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                 </h2>
-                 <div className={`rounded-[2.5rem] p-8 md:p-12 border overflow-hidden relative ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
-                   <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-                     <div className="space-y-6">
-                       <p className={`text-lg font-bold leading-relaxed ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                         Cada visita te aproxima de uma recompensa. Acumule selos e cashback a cada serviço realizado!
-                       </p>
-                       <div className="space-y-4">
-                         {(config as any).stampsForFreeCut && (
-                           <div className={`flex items-center gap-4 p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                             <div className="w-12 h-12 gradiente-ouro rounded-xl flex items-center justify-center shrink-0">
-                               <Scissors size={20} className="text-black" />
-                             </div>
-                             <div>
-                               <p className={`font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Corte Grátis</p>
-                               <p className={`text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>A cada <strong>{(config as any).stampsForFreeCut} visitas</strong>, ganhe um corte grátis</p>
-                             </div>
-                           </div>
-                         )}
-                         {(config as any).cashbackPercent && (
-                           <div className={`flex items-center gap-4 p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                             <div className="w-12 h-12 bg-emerald-500/20 border border-emerald-500/30 rounded-xl flex items-center justify-center shrink-0">
-                               <span className="text-emerald-500 font-black text-sm">%</span>
-                             </div>
-                             <div>
-                               <p className={`font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Cashback {(config as any).cashbackPercent}%</p>
-                               <p className={`text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{(config as any).cashbackPercent}% de cada serviço volta como crédito para você</p>
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                       <button
-                         onClick={() => setView('LOGIN')}
-                         className="inline-flex items-center gap-3 gradiente-ouro text-black px-8 py-4 rounded-full font-black text-xs uppercase shadow-2xl hover:scale-105 transition-all"
-                       >
-                         <Star size={16} /> Ativar meu cartão fidelidade
-                       </button>
-                     </div>
-                     {/* Cartão de selos visual */}
-                     <div className={`rounded-[2rem] p-6 border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                       <p className={`text-[10px] font-black uppercase tracking-widest mb-4 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Seu Cartão Digital</p>
-                       <p className={`text-lg font-black italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Acumule selos a cada visita</p>
-                       <div className="grid grid-cols-5 gap-2 mb-6">
-                         {Array.from({ length: (config as any).stampsForFreeCut || 10 }).map((_, i) => (
-                           <div key={i} className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-all ${i < 3 ? 'gradiente-ouro border-transparent' : theme === 'light' ? 'bg-zinc-100 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                             {i < 3 ? <Scissors size={14} className="text-black" /> : <span className={`text-[10px] font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{i + 1}</span>}
-                           </div>
-                         ))}
-                       </div>
-                       <div className={`flex items-center justify-between text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                         <span>3/{(config as any).stampsForFreeCut || 10} selos</span>
-                         <span className="text-[#C58A4A] font-black">{(config as any).cashbackPercent || 5}% cashback por visita</span>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-               </section>
-             )}
-
-             {/* Vitrine de Parceiros — sem QR público */}
-             {(partners || []).filter((p: any) => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-24">
-                 <h2 className={`text-2xl font-black font-display italic mb-4 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                   Parceiros & Benefícios <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                 </h2>
-                 <p className={`text-sm mb-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                   Faça login no portal para gerar seu QR Code e usar o desconto em qualquer parceiro.
-                 </p>
-
-                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                   {(partners || [])
-                     .filter((p: any) => p.status === 'ATIVO')
-                     .map((partner: any) => {
-                       const categoryIcons: Record<string, string> = {
-                         'Açaí': '🍧', 'Hamburgueria': '🍔', 'Loja Masculina': '👔',
-                         'Academia': '💪', 'Lava-jato': '🚗', 'Ótica': '👓',
-                         'Restaurante': '🍽️', 'Farmácia': '💊', 'Pet Shop': '🐾', 'Outro': '🏪',
-                       };
-                       const icon = categoryIcons[partner.category || 'Outro'] || '🏪';
-                       return (
-                         <div key={partner.id} className={`rounded-[2.5rem] overflow-hidden border transition-all hover:scale-[1.02] ${theme === 'light' ? 'bg-black border-zinc-800' : 'bg-black border-white/10'}`}>
-
-                           {/* Banner / imagem do parceiro */}
-                           {partner.image ? (
-                             <div className={`w-full aspect-[16/9] overflow-hidden flex items-center justify-center bg-black`}>
-                               <img src={partner.image} alt={partner.businessName} className="w-full h-full object-contain" />
-                             </div>
-                           ) : (
-                             <div className={`h-36 flex items-center justify-center text-5xl ${theme === 'light' ? 'bg-zinc-100' : 'bg-white/5'}`}>
-                               {icon}
-                             </div>
-                           )}
-
-                           <div className="p-6">
-                             {/* Logo + nome */}
-                             <div className="flex items-center gap-3 mb-4">
-                               {partner.logo ? (
-                                 <img src={partner.logo} className="w-10 h-10 rounded-xl object-contain border border-white/10" alt="" />
-                               ) : (
-                                 <div className="w-10 h-10 rounded-xl bg-[#C58A4A]/20 flex items-center justify-center text-xl flex-shrink-0">
-                                   {icon}
-                                 </div>
-                               )}
-                               <div>
-                                 <p className={`font-black text-base leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                                   {partner.businessName || partner.name}
-                                 </p>
-                                 {partner.category && (
-                                   <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                                     {partner.category}
-                                   </p>
-                                 )}
-                               </div>
-                             </div>
-
-                             {/* Descrição */}
-                             {partner.description && (
-                               <p className={`text-xs mb-4 leading-relaxed ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                 {partner.description}
-                               </p>
-                             )}
-
-                             {/* Badges desconto */}
-                             <div className="flex items-center gap-2 mb-5 flex-wrap">
-                               {partner.discount > 0 && (
-                                 <span className="text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
-                                   {partner.discount}% desconto
-                                 </span>
-                               )}
-                               {partner.cashbackPercent > 0 && (
-                                 <span className="text-[9px] font-black text-[#C58A4A] uppercase bg-[#C58A4A]/10 border border-[#C58A4A]/20 px-3 py-1 rounded-full">
-                                   {partner.cashbackPercent}% cashback
-                                 </span>
-                               )}
-                             </div>
-
-                             {/* CTA — leva para o login */}
-                             <button
-                               onClick={() => setView('LOGIN')}
-                               className="w-full gradiente-ouro text-black py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all"
-                             >
-                               🔑 Entrar para usar
-                             </button>
-                           </div>
-                         </div>
-                       );
-                     })
-                   }
-                 </div>
-               </section>
-             )}
-
-             {/* 8. Onde Nos Encontrar */}
-             <section className="mb-24">
-                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Onde Nos Encontrar <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className={`rounded-[2.5rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'border border-zinc-200' : 'border border-white/5'}`}>
-                   <div className="overflow-hidden rounded-[2rem] shadow-2xl cursor-pointer hover:opacity-90 transition-all" onClick={() => config.locationUrl && window.open(config.locationUrl, '_blank')}>
-                      {config.locationImage ? (
-                        <img src={config.locationImage} className="w-full rounded-[2rem] object-contain shadow-2xl" alt="Nossa localização" />
-                      ) : (
-                        <MapPin className="text-[#C58A4A]" size={48}/>
-                      )}
-                   </div>
-                   <div className={`p-8 ${theme === 'light' ? 'bg-white' : 'bg-white/5'}`}>
-                      <p className={`text-sm font-bold mb-2 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{config.address}</p>
-                      <p className={`text-xs ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>{config.phone}</p>
-                   </div>
-                </div>
-             </section>
-
-             {/* 7. Redes Sociais */}
-             <section className="mb-20 text-center">
-                <h2 className={`text-2xl font-black font-display italic mb-10 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Conecte-se Conosco</h2>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                   <a href="https://www.instagram.com/novojeitobarbearia/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-10 py-4 rounded-full font-black text-xs uppercase shadow-2xl hover:scale-105 transition-all">
-                      <Instagram size={20}/> Siga no Instagram
-                   </a>
-                   <a href="https://wa.me/5521973708141" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-green-500 text-white px-10 py-4 rounded-full font-black text-xs uppercase shadow-2xl hover:scale-105 transition-all">
-                      <Phone size={20}/> Fale no WhatsApp
-                   </a>
-                </div>
-             </section>
-
-             {/* 8. Quem Somos */}
-             <section className="mb-24">
-                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{config.aboutTitle || 'Quem Somos'} <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className={`rounded-[2.5rem] p-8 md:p-12 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-                   <div className="grid md:grid-cols-2 gap-8 items-center">
-                      {config.aboutImage && (
-                        <div className="h-64 md:h-80 rounded-2xl overflow-hidden">
-                           <img src={config.aboutImage} className="w-full rounded-[2rem] object-contain shadow-xl" alt="Sobre nós" />
-                        </div>
-                      )}
-                      <p className={`text-base leading-relaxed ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                         {config.aboutText || 'Tradição, estilo e excelência em cada serviço. Nossa barbearia é mais que um lugar para cortar cabelo - é um espaço de encontro, cultura e cuidado pessoal.'}
-                      </p>
-                   </div>
-                </div>
-             </section>
-          </main>
-
-          {/* ── Modal: Detalhes do Produto ── */}
-          {selectedProduct && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95" onClick={() => setSelectedProduct(null)}>
-              <div
-                className={`w-full max-w-sm rounded-[3rem] overflow-hidden shadow-2xl border flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0a0a0a] border-white/10'}`}
-                onClick={e => e.stopPropagation()}
-              >
-                {/* Foto completa */}
-                <div className="w-full bg-black flex items-center justify-center p-6 shrink-0">
-                  {selectedProduct.image
-                    ? <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-auto object-contain max-h-[300px]"/>
-                    : <div className="w-full h-48 flex items-center justify-center"><span className="text-6xl">🛒</span></div>
-                  }
-                </div>
-                {/* Info */}
-                <div className="flex-1 overflow-y-auto p-7 space-y-4">
-                  <div>
-                    {selectedProduct.category && (
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">{selectedProduct.category}</p>
-                    )}
-                    <h2 className={`text-2xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{selectedProduct.name}</h2>
-                    <p className="text-3xl font-black text-[#C58A4A] mt-2">R$ {Number(selectedProduct.price).toFixed(2)}</p>
-                  </div>
-                  {selectedProduct.description && (
-                    <p className={`text-sm leading-relaxed font-medium ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{selectedProduct.description}</p>
-                  )}
-                  <a
-                    href={`https://wa.me/5521973708141?text=${encodeURIComponent(`Olá! Tenho interesse no produto: ${selectedProduct.name} (R$ ${Number(selectedProduct.price).toFixed(2)})`)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-3 w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl"
-                  >
-                    💬 Tenho Interesse
-                  </a>
-                  <button
-                    onClick={() => setSelectedProduct(null)}
-                    className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all ${theme === 'light' ? 'border-zinc-200 text-zinc-500' : 'border-white/10 text-zinc-500 hover:text-white'}`}
-                  >
-                    Fechar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Botão Flutuante: Agendar Agora ── */}
-          <div className="fixed bottom-4 right-4 z-[90] animate-in slide-in-from-bottom-4 duration-700">
-            <button
-              onClick={() => { setView('BOOKING'); setPasso(1); }}
-              className="flex items-center gap-1.5 gradiente-ouro text-black px-3 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#C58A4A]/30 hover:scale-105 active:scale-95 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              Agendar
-            </button>
-          </div>
-
-          <footer className={`py-10 text-center border-t ${theme === 'light' ? 'border-zinc-200 bg-zinc-50 text-zinc-600' : 'border-white/5 bg-white/[0.01] text-zinc-600'}`}>
-             <p className="text-[10px] font-black uppercase tracking-widest">© 2026 {config.name}. PRODUZIDO POR ©NIKLAUS. Todos os direitos reservados.</p>
-          </footer>
-        </div>
-      )}
-
-      {view === 'LOGIN' && (
-        <div className="flex-1 flex items-center justify-center p-6 animate-in fade-in zoom-in">
-           <div className={`w-full max-w-md rounded-[3rem] p-12 space-y-10 shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
-              <div className="text-center space-y-4">
-                 <div className="w-16 h-16 rounded-2xl gradiente-ouro p-1 mx-auto"><div className="w-full h-full rounded-[1.8rem] bg-black overflow-hidden flex items-center justify-center"><Lock className="text-[#C58A4A]" size={24}/></div></div>
-                 <h2 className={`text-3xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Portal do Cliente</h2>
-                 {loginMode !== 'setpassword' && (
-                <div className={`flex rounded-xl overflow-hidden border ${theme === 'light' ? 'border-zinc-200' : 'border-white/10'}`}>
-                    <button onClick={() => { setLoginMode('login'); setRegisterError(null); }} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${loginMode === 'login' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-50 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}>Entrar</button>
-                    <button onClick={() => { setLoginMode('register'); setRegisterError(null); }} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${loginMode === 'register' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-50 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}>Criar Conta</button>
-                 </div>
-              )}
-              </div>
-              
-              {loginMode === 'setpassword' && noPasswordClient ? (
-                // ── Tela: definir senha (cliente pré-cadastrado pelo admin) ──
-                <div className="space-y-5">
-                  <div className={`p-4 rounded-2xl border ${theme === 'light' ? 'bg-blue-50 border-blue-200' : 'bg-blue-500/10 border-blue-500/20'}`}>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${theme === 'light' ? 'text-blue-700' : 'text-blue-400'}`}>
-                      Cadastro encontrado! 👋
-                    </p>
-                    <p className={`text-xs font-bold ${theme === 'light' ? 'text-blue-600' : 'text-blue-300'}`}>
-                      Olá, <strong>{noPasswordClient.name}</strong>! Seu cadastro foi criado pela barbearia. Defina uma senha para acessar seu portal.
-                    </p>
-                  </div>
-                  {registerError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{registerError}</div>}
-                  <input
-                    type="password"
-                    placeholder="Criar senha"
-                    value={setPasswordData.password}
-                    onChange={e => setSetPasswordData(p => ({...p, password: e.target.value}))}
-                    className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirmar senha"
-                    value={setPasswordData.confirmPassword}
-                    onChange={e => setSetPasswordData(p => ({...p, confirmPassword: e.target.value}))}
-                    className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
-                  />
-                  <button
-                    onClick={handleSetPassword}
-                    disabled={loading}
-                    className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all"
-                  >
-                    {loading ? 'Salvando...' : 'DEFINIR SENHA E ENTRAR'}
-                  </button>
-                  <button
-                    onClick={() => { setLoginMode('login'); setNoPasswordClient(null); setRegisterError(null); }}
-                    className={`w-full text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-600 hover:text-zinc-400'}`}
-                  >
-                    ← Voltar ao login
-                  </button>
-                </div>
-              ) : loginMode === 'forgot' ? (
-                <div className="space-y-5">
-                  {forgotSuccess ? (
-                    <div className="p-5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-500 text-center font-black text-sm">✅ Senha alterada com sucesso!</div>
-                  ) : forgotStep === 'phone' ? (
-                    <>
-                      <p className={`text-[10px] font-black uppercase tracking-widest text-center ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Digite seu WhatsApp cadastrado</p>
-                      {forgotError && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black text-center">{forgotError}</div>}
-                      <input type="tel" placeholder="(21) 99999-9999" value={forgotPhone} onChange={e => setForgotPhone(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                      <button onClick={handleForgotLookup} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">CONTINUAR</button>
-                    </>
-                  ) : (
-                    <>
-                      <p className={`text-[10px] font-black uppercase tracking-widest text-center ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Olá, {forgotClient?.name}! Crie sua nova senha</p>
-                      {forgotError && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black text-center">{forgotError}</div>}
-                      <input type="password" placeholder="Nova senha (mín. 4 caracteres)" value={forgotNewPassword} onChange={e => setForgotNewPassword(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                      <input type="password" placeholder="Confirmar nova senha" value={forgotConfirmPassword} onChange={e => setForgotConfirmPassword(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                      <button onClick={handleForgotReset} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">SALVAR NOVA SENHA</button>
-                    </>
-                  )}
-                  <div className="text-center">
-                    <button onClick={() => { setLoginMode('login'); setForgotStep('phone'); setForgotError(null); }} className={`text-[9px] font-black uppercase tracking-widest hover:underline ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>← Voltar ao login</button>
-                  </div>
-                </div>
-              ) : loginMode === 'login' ? (
-                <div className="space-y-6">
-                   <input type="text" placeholder="E-mail ou WhatsApp" value={loginIdentifier} onChange={e => setLoginIdentifier(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <input type="password" placeholder="Senha" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <button onClick={handleLoginPortal} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">ACESSAR PORTAL</button>
-                   <div className="text-center pt-1">
-                     <button onClick={() => { setLoginMode('forgot'); setForgotStep('phone'); setForgotError(null); }} className={`text-[9px] font-black uppercase tracking-widest hover:underline ${theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300'}`}>🔑 Esqueci minha senha</button>
-                   </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                   {registerError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{registerError}</div>}
-                   <input type="text" placeholder="Nome Completo" value={registerData.name} onChange={e => setRegisterData({...registerData, name: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <input type="tel" placeholder="WhatsApp" value={registerData.phone} onChange={e => setRegisterData({...registerData, phone: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <input type="email" placeholder="E-mail" value={registerData.email} onChange={e => setRegisterData({...registerData, email: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <input type="password" placeholder="Senha" value={registerData.password} onChange={e => setRegisterData({...registerData, password: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <input type="password" placeholder="Confirmar Senha" value={registerData.confirmPassword} onChange={e => setRegisterData({...registerData, confirmPassword: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                   <button onClick={handleRegisterPortal} disabled={loading} className="w-full gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">{loading ? 'Criando...' : 'CRIAR MINHA CONTA'}</button>
-                </div>
-              )}
-              
-              <button onClick={() => setView('HOME')} className={`w-full text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'light' ? 'text-zinc-600 hover:text-zinc-900' : 'text-zinc-600 hover:text-[#C58A4A]'}`}>Voltar ao Início</button>
-           </div>
-        </div>
-      )}
-
-      {view === 'CLIENT_DASHBOARD' && loggedClient && (
-        <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full p-6 pb-20 animate-in fade-in">
-           {/* ── NOVO: Clube de Benefícios overlay ── */}
-           {showBeneficios && loggedClient && (
-             <ClubeBeneficios clientId={loggedClient.id} onClose={() => setShowBeneficios(false)} />
-           )}
-
-           <div className="flex items-center justify-between mb-10">
-              <div className="flex items-center gap-4">
-                <h1 className={`text-3xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Meu Portal</h1>
-                <button
-                  onClick={() => setShowBeneficios(true)}
-                  className="flex items-center gap-2 gradiente-ouro text-black px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
-                >
-                  <Gift size={14} /> Benefícios 🎁
-                </button>
-              </div>
-              <button onClick={handleLogout} className={`flex items-center gap-2 px-6 py-3 rounded-xl border transition-all ${theme === 'light' ? 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50' : 'bg-white/5 border-white/10 text-zinc-400 hover:text-white'}`}>
-                 <LogOut size={16}/> Sair
-              </button>
-           </div>
-
-           <div className="grid md:grid-cols-3 gap-6 mb-10">
-              <div className={`md:col-span-1 rounded-[2rem] p-8 text-center space-y-6 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-                 <div className="relative inline-block">
-                    <img src={loggedClient.avatar || 'https://via.placeholder.com/120'} className="w-28 h-28 rounded-3xl object-cover border-4 border-[#C58A4A]" alt="" />
-                    <label className="absolute -bottom-2 -right-2 bg-[#C58A4A] text-black p-2 rounded-xl cursor-pointer hover:scale-110 transition-all shadow-lg">
-                       <Upload size={14}/>
-                       <input type="file" accept="image/*" onChange={handleUpdateProfilePhoto} className="hidden"/>
-                    </label>
-                 </div>
-                 <div>
-                    <p className={`text-xl font-black font-display ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{loggedClient.name}</p>
-                    <p className={`text-[9px] uppercase tracking-widest font-black mt-2 ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>Cliente Exclusivo</p>
-                 </div>
-                 <div className={`space-y-2 text-left ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                    <p className="text-xs flex items-center gap-2"><Phone size={12} className="text-[#C58A4A]"/> {loggedClient.phone}</p>
-                    <p className="text-xs flex items-center gap-2"><Mail size={12} className="text-[#C58A4A]"/> {loggedClient.email}</p>
-                 </div>
-              </div>
-
-              <div className="md:col-span-2 space-y-6">
-                 <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-                    <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Enviar Sugestão</h3>
-                    <textarea rows={4} placeholder="Conte-nos suas ideias..." value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className={`w-full border p-4 rounded-xl outline-none text-sm ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}/>
-                    <button onClick={handleSendSuggestion} disabled={loading} className="mt-4 w-full gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px] shadow-xl">
-                       {loading ? 'Enviando...' : <><Send size={14} className="inline mr-2"/> Enviar Sugestão</>}
-                    </button>
-                 </div>
-
-                 <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-                    <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Minhas Sugestões e Respostas</h3>
-                    <div className="space-y-4 max-h-80 overflow-y-auto scrollbar-hide">
-                       {suggestions.filter(s => s.clientPhone === loggedClient.phone).length === 0 && (
-                          <p className={`text-center py-6 italic text-sm ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Nenhuma sugestão enviada ainda.</p>
-                       )}
-                       {suggestions.filter(s => s.clientPhone === loggedClient.phone).map(sugg => (
-                          <div key={sugg.id} className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                             <div className="flex items-start gap-3 mb-2">
-                                <MessageSquare size={16} className="text-[#C58A4A] flex-shrink-0 mt-1" />
-                                <div className="flex-1">
-                                   <p className={`text-xs font-bold mb-1 ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>Enviado em {sugg.date}</p>
-                                   <p className={`text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{sugg.message}</p>
-                                </div>
-                             </div>
-                             {sugg.response && (
-                                <div className={`mt-3 pt-3 border-t ${theme === 'light' ? 'border-zinc-200' : 'border-white/10'}`}>
-                                   <div className="flex items-start gap-2">
-                                      <div className="w-6 h-6 rounded-full bg-[#C58A4A] flex items-center justify-center flex-shrink-0">
-                                         <Check size={12} className="text-black" />
-                                      </div>
-                                      <div>
-                                         <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>Resposta do Administrador:</p>
-                                         <p className={`text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{sugg.response}</p>
-                                      </div>
-                                   </div>
-                                </div>
-                             )}
-                             {!sugg.response && (
-                                <p className={`text-xs italic mt-2 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Aguardando resposta...</p>
-                             )}
-                          </div>
-                       ))}
-                    </div>
-                 </div>
-
-                 <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-                    <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Avaliar Experiência</h3>
-                    <button onClick={() => setShowReviewModal(true)} className="w-full gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px] shadow-xl">
-                       <Star size={14} className="inline mr-2"/> Deixar Avaliação
-                    </button>
-                 </div>
-              </div>
-           </div>
-
-           <div className={`rounded-[2rem] p-8 mb-10 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-              <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Nossos Barbeiros</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 {professionals.map(prof => {
-                    const isLiked = loggedClient.likedProfessionals?.includes(prof.id);
-                    return (
-                      <div key={prof.id} className={`rounded-2xl p-4 text-center space-y-3 transition-all ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                         <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-                            <img 
-                              src={prof.avatar} 
-                              className="w-full h-full rounded-xl object-cover border-2 border-[#B8860B] cursor-pointer" 
-                              alt="" 
-                              onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
-                            />
-                            <div className="absolute -right-8 top-0.5 text-red-500 text-[8px] font-black flex items-center gap-0.5 whitespace-nowrap">
-                               <Heart size={8} fill="currentColor"/> <span className="text-red-500">{prof.likes || 0}</span>
-                            </div>
-                         </div>
-                         <div>
-                            <p className={`font-bold text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{prof.name}</p>
-                            <p className={`text-[8px] uppercase tracking-widest font-black mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>{prof.specialty}</p>
-                         </div>
-                         <button 
-                           onClick={() => handleLikeProfessional(prof.id)} 
-                           disabled={isLiked}
-                           className={`w-full py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
-                             isLiked 
-                               ? 'bg-emerald-500 text-white cursor-not-allowed' 
-                               : 'gradiente-ouro text-black hover:scale-105'
-                           }`}
-                         >
-                            {isLiked ? (
-                              <><Check size={10} className="inline mr-1"/> Curtido</>
-                            ) : (
-                              <><Heart size={10} className="inline mr-1"/> Curtir</>
-                            )}
-                         </button>
-                      </div>
-                    );
-                 })}
-              </div>
-           </div>
-
-           <div className={`rounded-[2rem] p-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
-              <h3 className={`text-lg font-black font-display italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Meus Agendamentos</h3>
-              <div className="space-y-4">
-                 {appointments.filter(a => a.clientPhone === loggedClient.phone).length === 0 && (
-                    <p className={`text-center py-10 italic ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Nenhum agendamento ainda.</p>
-                 )}
-                 {appointments.filter(a => a.clientPhone === loggedClient.phone).map(app => (
-                    <div key={app.id} className={`flex items-center justify-between p-5 rounded-2xl transition-all ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/5'}`}>
-                       <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${app.status === 'CONCLUIDO_PAGO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-400'}`}>
-                             {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : <Calendar size={20}/>}
-                          </div>
-                          <div>
-                             <p className={`text-lg font-black italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.serviceName}</p>
-                             <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>{new Date(app.date).toLocaleDateString('pt-BR')} • {app.startTime} com {app.professionalName}</p>
-                          </div>
-                       </div>
-                       <div className={`px-4 py-2 rounded-full text-[8px] font-black uppercase ${app.status === 'CONCLUIDO_PAGO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-400'}`}>
-                          {app.status.replace('_', ' ')}
-                       </div>
-                    </div>
-                 ))}
-              </div>
-           </div>
-        </div>
-      )}
-
-      {view === 'BOOKING' && (
-        <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full px-3 sm:px-6 pb-20 pt-4 sm:pt-6 animate-in fade-in">
-           <header className="flex items-center gap-4 mb-10">
-             <button onClick={() => { setView('HOME'); setShowQuickClient(false); setClientVerified(false); setLookupInput(''); setLookupError(null); setLookupClientFound(null); setLookupPassword(''); setLookupPasswordError(null); setLookupClientFound(null); setLookupPassword(''); setLookupPasswordError(null); }} className={`p-3 rounded-xl border transition-all ${theme === 'light' ? 'border-zinc-300 text-zinc-700 hover:bg-zinc-50' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`}><ChevronLeft size={24}/></button>
-             <h2 className={`text-3xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Reservar Serviço</h2>
-           </header>
-           
-           <div className={`rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 md:p-12 shadow-2xl flex flex-col gap-10 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/10'}`}>
-              {passo === 1 && (
-                <div className="space-y-8 animate-in slide-in-from-right-2 text-center">
-                  <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Você Tem Cadastro?</h3>
-                  <div className="flex flex-col sm:flex-row gap-4 max-w-sm mx-auto w-full">
-                    <button onClick={() => setPasso(2)} className="flex-1 gradiente-ouro text-black py-6 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-2xl hover:scale-105 transition-all">SIM, TENHO CADASTRO</button>
-                    <button onClick={() => setShowQuickClient(true)} className={`flex-1 border py-6 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 hover:bg-white' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>NÃO, CRIAR CONTA</button>
-                  </div>
-                </div>
-              )}
-
-              {passo === 2 && (() => {
-                const masterList  = professionals.filter(p => p.isMaster);
-                const regularList = professionals.filter(p => !p.isMaster);
-                const selServ     = services.find(s => s.id === selecao.serviceId);
-
-                const ProfBtn: React.FC<{ p: typeof professionals[0] }> = ({ p }) => {
-                  const finalPrice = selServ
-                    ? (selServ.price + (p.isMaster && p.masterSurcharge ? p.masterSurcharge : 0))
-                    : null;
-                  return (
-                    <button
-                      onClick={() => { setSelecao({ ...selecao, professionalId: p.id }); setPasso(3); }}
-                      className={`p-5 rounded-[2rem] border transition-all flex flex-col items-center gap-3 group relative overflow-hidden ${
-                        p.isMaster
-                          ? theme === 'light'
-                            ? 'bg-gradient-to-br from-amber-50 to-white border-[#C58A4A]/50 hover:border-[#C58A4A] shadow-md shadow-[#C58A4A]/10'
-                            : 'bg-gradient-to-br from-[#C58A4A]/10 to-transparent border-[#C58A4A]/40 hover:border-[#C58A4A] shadow-lg shadow-[#C58A4A]/10'
-                          : theme === 'light'
-                            ? 'bg-zinc-50 border-zinc-200 hover:border-[#C58A4A]/50'
-                            : 'bg-white/5 border-white/5 hover:border-[#C58A4A]'
-                      }`}
-                    >
-                      {/* Faixa dourada topo Master */}
-                      {p.isMaster && (
-                        <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-[#8B5E2A] via-[#C58A4A] to-[#E8B97A]" />
-                      )}
-
-                      <div className="relative mt-1">
-                        <img
-                          src={p.avatar}
-                          className={`w-20 h-20 rounded-2xl object-cover transition-all ${
-                            p.isMaster
-                              ? 'border-2 border-[#C58A4A] group-hover:border-[#E8B97A]'
-                              : 'border-2 border-white/10 group-hover:border-[#C58A4A]'
-                          }`}
-                          alt=""
-                        />
-                        {p.isMaster ? (
-                          <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-[#8B5E2A] to-[#E8B97A] text-black p-1.5 rounded-lg shadow-lg">
-                            <Crown size={10} />
-                          </div>
-                        ) : (
-                          <div className="absolute -bottom-2 -right-2 bg-[#C58A4A] text-black text-[8px] font-black px-2 py-1 rounded-lg flex items-center gap-1">
-                            <Heart size={8} fill="currentColor" /> {p.likes || 0}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="text-center space-y-1">
-                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          <span className={`text-[11px] font-black uppercase group-hover:text-[#C58A4A] transition-colors ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                            {p.name}
-                          </span>
-                          {p.isMaster && (
-                            <span className="inline-flex items-center gap-0.5 bg-gradient-to-r from-[#8B5E2A] to-[#C58A4A] text-black text-[6px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full">
-                              <Crown size={6} /> Master
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Preço final com acréscimo Master */}
-                        {finalPrice !== null && (
-                          <div className="space-y-0.5">
-                            <p className={`text-[10px] font-black ${p.isMaster ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                              R$ {finalPrice.toFixed(2)}
-                            </p>
-                            {p.isMaster && p.masterSurcharge && p.masterSurcharge > 0 && (
-                              <p className={`text-[8px] font-bold ${theme === 'light' ? 'text-[#8B5E2A]' : 'text-[#C58A4A]/70'}`}>
-                                + R$ {p.masterSurcharge.toFixed(2)} Master
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                };
-
-                return (
-                  <div className="space-y-8 animate-in slide-in-from-right-2 text-center">
-                    <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Escolha o Artífice</h3>
-
-                    {/* Masters primeiro */}
-                    {masterList.length > 0 && (
-                      <div className="space-y-3 text-left">
-                        <div className="flex items-center gap-2">
-                          <Crown size={12} className="text-[#C58A4A]" />
-                          <span className={`text-[8px] font-black uppercase tracking-[0.25em] ${theme === 'light' ? 'text-[#8B5E2A]' : 'text-[#C58A4A]'}`}>Barbeiro Master</span>
-                          <div className="h-px flex-1 bg-gradient-to-r from-[#C58A4A]/40 to-transparent" />
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {masterList.map(p => <ProfBtn key={p.id} p={p} />)}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Regulares */}
-                    {regularList.length > 0 && (
-                      <div className="space-y-3 text-left">
-                        {masterList.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[8px] font-black uppercase tracking-[0.25em] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Equipe</span>
-                            <div className={`h-px flex-1 ${theme === 'light' ? 'bg-zinc-200' : 'bg-white/5'}`} />
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {regularList.map(p => <ProfBtn key={p.id} p={p} />)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {passo === 3 && (
-                <div className="space-y-8 animate-in slide-in-from-right-2">
-                  <div className="text-center space-y-2"><h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Data e Horário</h3></div>
-                  {bookingError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{bookingError}</div>}
-                  <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x">
-                     {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => {
-                       const d = new Date();
-                       d.setDate(d.getDate() + i);
-                       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                       const selProf = professionals.find((p: any) => p.id === selecao.professionalId);
-                       const dow = d.getDay();
-                       // Folga semanal (weekSchedule)
-                       const ws = (selProf as any)?.weekSchedule;
-                       const isWeeklyOff = ws ? !ws[dow]?.active : false;
-                       // Folga pontual do mês (offDays)
-                       const offDays: string[] = (selProf as any)?.offDays || [];
-                       const isDayOff = isWeeklyOff || offDays.includes(dateStr);
-                       return (
-                         <button
-                           key={i}
-                           disabled={isDayOff}
-                           onClick={() => { if (!isDayOff) { setSelecao({...selecao, date: dateStr}); setBookingError(null); } }}
-                           title={isDayOff ? (isWeeklyOff ? 'Folga semanal' : 'Folga especial') : undefined}
-                           className={`snap-center flex-shrink-0 w-24 h-28 rounded-2xl border transition-all flex flex-col items-center justify-center gap-1 relative
-                             ${isDayOff
-                               ? 'opacity-40 cursor-not-allowed border-dashed ' + (theme === 'light' ? 'bg-zinc-100 border-zinc-300 text-zinc-400' : 'bg-white/[0.02] border-white/10 text-zinc-600')
-                               : selecao.date === dateStr
-                                 ? 'bg-[#C58A4A] text-black border-transparent scale-105 shadow-xl'
-                                 : theme === 'light' ? 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-400' : 'bg-white/5 border-white/5 text-zinc-500 hover:border-white/20'
-                             }`}
-                         >
-                            <span className="text-[8px] font-black uppercase opacity-60">{d.toLocaleDateString('pt-BR', { weekday: 'short' })}</span>
-                            <span className="text-2xl font-black font-display">{d.getDate()}</span>
-                            {isDayOff && (
-                              <span className="text-[7px] font-black uppercase tracking-widest text-red-400 mt-0.5">Folga</span>
-                            )}
-                         </button>
-                       );
-                     })}
-                  </div>
-                  {selecao.date && (
-                    <div className="space-y-6">
-                      {(Object.entries(turnos) as [string, string[]][]).map(([turno, horarios]) => (
-                        <div key={turno} className="space-y-4">
-                          <h4 className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-4 ${theme === 'light' ? 'text-blue-600' : 'text-[#C58A4A]'}`}>{turno === 'manha' ? 'Manhã' : turno === 'tarde' ? 'Tarde' : 'Noite'} <div className={`h-px flex-1 ${theme === 'light' ? 'bg-zinc-200' : 'bg-white/5'}`}></div></h4>
-                          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                            {horarios.map(t => {
-                               const isOccupied = checkAvailability(selecao.date, t, selecao.professionalId);
-                               return (
-                                 <button key={t} disabled={isOccupied} onClick={() => { setSelecao({...selecao, time: t}); setPasso(4); }} className={`py-3 rounded-xl border text-[10px] font-black transition-all ${isOccupied ? 'border-red-500/20 text-red-500/30 cursor-not-allowed bg-red-500/5' : selecao.time === t ? 'bg-[#C58A4A] text-black border-transparent shadow-lg' : theme === 'light' ? 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-blue-400' : 'bg-white/5 border-white/5 text-zinc-400 hover:border-[#C58A4A]/50'}`}>
-                                    {t}
-                                 </button>
-                               );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {passo === 4 && (
-                <div className="space-y-6 animate-in slide-in-from-right-2 text-center">
-                  <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Sua Identificação</h3>
-                  
-                  {!clientVerified ? (
-                    <div className="space-y-4 w-full max-w-sm mx-auto">
-
-                      {/* STEP 1: buscar por email/celular */}
-                      {!lookupClientFound ? (
-                        <>
-                          <p className={`text-xs font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                            Informe seu celular ou e-mail cadastrado
-                          </p>
-                          <div className="relative">
-                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C58A4A]" size={18}/>
-                            <input 
-                              type="text" 
-                              placeholder="Celular ou E-mail" 
-                              value={lookupInput} 
-                              onChange={e => { setLookupInput(e.target.value); setLookupError(null); }}
-                              onKeyDown={e => e.key === 'Enter' && handleLookupClient()}
-                              className={`w-full border p-4 pl-12 rounded-2xl text-xs font-bold outline-none transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} 
-                            />
-                          </div>
-                          {lookupError && (
-                            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl space-y-3">
-                              <p className="text-red-500 text-xs font-black">{lookupError}</p>
-                              <button 
-                                onClick={() => { setView('LOGIN'); setLoginMode('register'); }} 
-                                className="w-full gradiente-ouro text-black py-3 rounded-xl font-black text-[10px] uppercase tracking-widest"
-                              >
-                                Criar Conta no Portal
-                              </button>
-                            </div>
-                          )}
-                          <button 
-                            onClick={handleLookupClient} 
-                            className="w-full gradiente-ouro text-black py-4 sm:py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all"
-                          >
-                            Continuar
-                          </button>
-                          {!lookupError && (
-                            <button 
-                              onClick={() => { setView('LOGIN'); setLoginMode('register'); }} 
-                              className={`w-full text-[10px] font-black uppercase tracking-widest underline transition-all py-2 ${theme === 'light' ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-600 hover:text-[#C58A4A]'}`}
-                            >
-                              Não tenho cadastro — Criar Conta
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        /* STEP 2: confirmar com senha */
-                        <>
-                          <div className={`p-4 rounded-2xl border flex items-center gap-3 text-left ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                            <div className="w-10 h-10 rounded-xl bg-[#C58A4A]/20 flex items-center justify-center flex-shrink-0">
-                              <User size={18} className="text-[#C58A4A]"/>
-                            </div>
-                            <div className="text-left min-w-0">
-                              <p className={`font-black text-sm truncate ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{lookupClientFound.name}</p>
-                              <p className="text-zinc-500 text-[10px]">{lookupClientFound.phone}</p>
-                            </div>
-                          </div>
-                          <p className={`text-xs font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                            Digite sua senha para confirmar
-                          </p>
-                          <div className="relative">
-                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C58A4A]" size={18}/>
-                            <input 
-                              type="password" 
-                              placeholder="Senha" 
-                              value={lookupPassword} 
-                              onChange={e => { setLookupPassword(e.target.value); setLookupPasswordError(null); }}
-                              onKeyDown={e => e.key === 'Enter' && handleVerifyPassword()}
-                              autoFocus
-                              className={`w-full border p-4 pl-12 rounded-2xl text-xs font-bold outline-none transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} 
-                            />
-                          </div>
-                          {lookupPasswordError && (
-                            <p className="text-red-500 text-xs font-black text-center">{lookupPasswordError}</p>
-                          )}
-                          <button 
-                            onClick={handleVerifyPassword} 
-                            className="w-full gradiente-ouro text-black py-4 sm:py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all"
-                          >
-                            Confirmar Identidade
-                          </button>
-                          <button 
-                            onClick={() => { setLookupClientFound(null); setLookupPassword(''); setLookupPasswordError(null); }}
-                            className={`w-full text-[10px] font-black uppercase tracking-widest underline transition-all py-2 ${theme === 'light' ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-600 hover:text-[#C58A4A]'}`}
-                          >
-                            Voltar
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-5 w-full max-w-sm mx-auto">
-                      <div className={`p-5 sm:p-6 rounded-2xl border ${theme === 'light' ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
-                        <CheckCircle2 className="text-emerald-500 mx-auto mb-3" size={40}/>
-                        <p className={`font-black text-xl font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{selecao.clientName}</p>
-                        <p className="text-zinc-500 text-xs mt-1">{selecao.clientPhone}</p>
-                        {selecao.clientEmail && <p className="text-zinc-500 text-xs">{selecao.clientEmail}</p>}
-                      </div>
-                      {bookingError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{bookingError}</div>}
-                      
-                      {/* Opção de pagamento antecipado */}
-                      {(config as any).asaasKey && (
-                        <div className={`p-4 rounded-2xl border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                          <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>💳 Deseja pagar agora?</p>
-                          <div className="flex gap-2">
-                            <button onClick={() => setWantsPayNow(false)}
-                              className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${!wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
-                              Pagar na barbearia
-                            </button>
-                            <button onClick={() => setWantsPayNow(true)}
-                              className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${wantsPayNow ? 'gradiente-ouro text-black border-transparent' : theme === 'light' ? 'bg-white border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
-                              ⚡ Pagar online
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      <button 
-                        onClick={handleConfirmBooking} 
-                        disabled={loading} 
-                        className="w-full gradiente-ouro text-black py-4 sm:py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all disabled:opacity-60"
-                      >
-                        {loading ? 'Processando...' : wantsPayNow ? '⚡ Confirmar e Pagar' : 'Confirmar Serviço'}
-                      </button>
-                      <button 
-                        onClick={() => { setClientVerified(false); setLookupInput(''); setLookupError(null); setLookupClientFound(null); setLookupPassword(''); setLookupPasswordError(null); }} 
-                        className={`w-full text-[10px] font-black uppercase tracking-widest underline transition-all py-2 ${theme === 'light' ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-600 hover:text-[#C58A4A]'}`}
-                      >
-                        Trocar identificação
-                      </button>
-                    </div>
-                  )}
-               </div>
-              )}
-           </div>
-        </div>
-      )}
-
-      {showQuickClient && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
-           <div className={`w-full max-w-md rounded-[3rem] p-12 space-y-8 shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-              <div className="flex items-center justify-between">
-                <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>RÁPIDO: NOVO CLIENTE</h2>
-                <button onClick={() => setShowQuickClient(false)} className={`p-2 rounded-lg transition-all ${theme === 'light' ? 'hover:bg-zinc-100' : 'hover:bg-white/10'}`}><X size={20} className={theme === 'light' ? 'text-zinc-900' : 'text-white'}/></button>
-              </div>
-              
-              {quickClientError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{quickClientError}</div>}
-              
-              <div className="space-y-4">
-                 <input type="text" placeholder="Nome Completo" value={quickClient.name} onChange={e => setQuickClient({...quickClient, name: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                 <input type="tel" placeholder="WhatsApp" value={quickClient.phone} onChange={e => setQuickClient({...quickClient, phone: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-                 <input type="email" placeholder="E-mail" value={quickClient.email} onChange={e => setQuickClient({...quickClient, email: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
-              </div>
-              
-              <div className="flex gap-4">
-                 <button onClick={() => setShowQuickClient(false)} className={`flex-1 py-5 rounded-xl text-[10px] font-black uppercase transition-all ${theme === 'light' ? 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200' : 'bg-white/5 text-zinc-500 hover:bg-white/10'}`}>Cancelar</button>
-                 <button onClick={handleQuickClientCreate} disabled={loading} className="flex-1 gradiente-ouro text-black py-5 rounded-xl text-[10px] font-black uppercase shadow-xl hover:scale-105 transition-all">{loading ? 'Criando...' : 'Criar e Continuar'}</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {showReviewModal && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
-           <div className={`w-full max-w-md rounded-[3rem] p-12 space-y-8 shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-              <div className="text-center space-y-4">
-                 <MessageSquare className="w-12 h-12 text-[#C58A4A] mx-auto"/>
-                 <h2 className={`text-3xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Sua Experiência</h2>
-              </div>
-              <div className="space-y-8 text-center">
-                 <div className="flex justify-center gap-3">
-                    {[1,2,3,4,5].map(star => (
-                       <button key={star} onClick={() => setNewReview({...newReview, rating: star})} className={`transition-all ${newReview.rating >= star ? 'text-[#C58A4A] scale-125' : theme === 'light' ? 'text-zinc-300' : 'text-zinc-800'}`}>
-                          <Star size={32} fill={newReview.rating >= star ? 'currentColor' : 'none'}/>
-                       </button>
-                    ))}
-                 </div>
-                 <textarea rows={4} placeholder="Conte-nos como foi..." value={newReview.comment} onChange={e => setNewReview({...newReview, comment: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-medium transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}/>
-              </div>
-              <div className="flex gap-4">
-                 <button onClick={() => setShowReviewModal(false)} className={`flex-1 py-5 rounded-xl text-[10px] font-black uppercase ${theme === 'light' ? 'bg-zinc-100 text-zinc-700' : 'bg-white/5 text-zinc-500'}`}>Voltar</button>
-                 <button onClick={handleAddReview} className="flex-1 gradiente-ouro text-black py-5 rounded-xl text-[10px] font-black uppercase shadow-xl">Enviar</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {showProfessionalModal && selectedProfessional && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
-           <div className={`w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-              <div className="relative h-96">
-                 <img src={selectedProfessional.avatar} className="w-full rounded-[2rem] object-contain shadow-xl" alt={selectedProfessional.name} />
-                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                 <button 
-                   onClick={() => setShowProfessionalModal(false)} 
-                   className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all"
-                 >
-                   <X size={20} />
-                 </button>
-                 <div className="absolute bottom-6 left-6 right-6">
-                    <h2 className="text-4xl font-black font-display italic text-white mb-2">{selectedProfessional.name}</h2>
-                    <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-2 text-[#C58A4A]">
-                          <Heart size={14} fill="currentColor" />
-                          <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
-                       </div>
-                       <div className="text-white text-xs font-black uppercase tracking-widest">
-                          {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
-                       </div>
-                    </div>
-                 </div>
-              </div>
-              
-              <div className="p-10">
-                 {selectedProfessional.description ? (
-                   <>
-                     <h3 className={`text-xl font-black font-display italic mb-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>História</h3>
-                     <p className={`text-sm leading-relaxed whitespace-pre-line ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                       {selectedProfessional.description}
-                     </p>
-                   </>
-                 ) : (
-                   <p className={`text-sm italic text-center py-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>
-                     Este profissional ainda não compartilhou sua história.
-                   </p>
-                 )}
-                 
-                 <button 
-                   onClick={() => setShowProfessionalModal(false)} 
-                   className="w-full mt-8 gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
-                 >
-                   Fechar
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {vipModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in zoom-in-95">
-          <div className={`w-full max-w-md rounded-[2.5rem] border shadow-2xl flex flex-col max-h-[90vh] ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#111] border-[#C58A4A]/30'}`}>
-            <div className="flex items-center justify-between px-8 pt-8 pb-4 flex-shrink-0">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A]">Assinar Plano</p>
-                <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{vipModal.name}</h2>
-                <p className="text-[#C58A4A] font-black text-lg">R$ {vipModal.price.toFixed(2)}<span className="text-zinc-500 text-sm font-bold">/{vipModal.period === 'MENSAL' ? 'mês' : vipModal.period === 'ANUAL' ? 'ano' : 'semana'}</span></p>
-              </div>
-              <button onClick={() => setVipModal(null)} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white"><X size={20}/></button>
-            </div>
-            <div className="overflow-y-auto scrollbar-hide px-8 flex-1 space-y-4 pb-4">
-              {vipPayLink !== null ? (
-                <div className="space-y-4 text-center py-4">
-                  <div className="text-4xl">✅</div>
-                  <p className={`font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Assinatura criada!</p>
-                  {vipPayLink ? (
-                    <a href={vipPayLink} target="_blank" rel="noreferrer" className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center">💳 Ir para pagamento</a>
-                  ) : (
-                    <p className="text-zinc-500 text-sm">Verifique o Asaas para o link de pagamento.</p>
-                  )}
-                  <button onClick={() => setVipModal(null)} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${theme === 'light' ? 'border-zinc-200 text-zinc-500' : 'border-white/10 text-zinc-400'}`}>Fechar</button>
-                </div>
-              ) : (
-                <div className="space-y-4 pt-2">
-                  {!loggedClient && (
-                    <>
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Seus dados</p>
-                      <input type="text" placeholder="Nome completo" value={vipForm.name} onChange={e => setVipForm({...vipForm, name: e.target.value})} className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-white/5 border-white/10 text-white'}`} />
-                      <input type="tel" placeholder="WhatsApp (com DDD)" value={vipForm.phone} onChange={e => setVipForm({...vipForm, phone: e.target.value})} className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-white/5 border-white/10 text-white'}`} />
-                      <input type="text" placeholder="CPF (opcional)" value={vipForm.cpf} onChange={e => setVipForm({...vipForm, cpf: e.target.value})} className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-white/5 border-white/10 text-white'}`} />
-                    </>
-                  )}
-                  {loggedClient && (
-                    <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">Assinando como</p>
-                      <p className={`font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{loggedClient.name}</p>
-                      <p className="text-zinc-500 text-xs">{loggedClient.phone}</p>
-                    </div>
-                  )}
-                  {vipError && <p className="text-red-400 text-[10px] font-black text-center">{vipError}</p>}
-                  <div className={`p-3 rounded-xl text-center ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
-                    <p className={`text-[9px] font-black uppercase ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>💳 Você escolhe PIX, Cartão ou Boleto na próxima página</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            {vipPayLink === null && (
-              <div className="px-8 py-6 flex-shrink-0">
-                <button type="button" onClick={handleVipSubscribe} disabled={vipLoading}
-                  style={{ touchAction: 'manipulation' }}
-                  className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl disabled:opacity-50">
-                  {vipLoading ? '⏳ Processando...' : `⚡ Assinar ${vipModal.period === 'MENSAL' ? 'Mensal' : vipModal.period === 'ANUAL' ? 'Anual' : 'Semanal'}`}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default PublicBooking;
+  }
+);
