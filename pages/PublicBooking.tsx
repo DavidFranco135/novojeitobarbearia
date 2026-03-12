@@ -753,20 +753,18 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     onMouseMove={(e) => handleMouseMove(e, produtosRef)}
                   >
                     {products.filter((p: any) => p.active !== false).map((p: any) => (
-                      <div key={p.id} className={`snap-center flex-shrink-0 w-[220px] rounded-[2.5rem] overflow-hidden border-4 shadow-2xl transition-all hover:scale-[1.02] ${theme === 'light' ? 'border-zinc-200 bg-black' : 'border-white/5 bg-black'}`}>
-                        {/* Foto em pé — aspect-[3/4] como retrato */}
-                        <div className="w-full aspect-[3/4] bg-black flex items-center justify-center overflow-hidden">
+                      <div key={p.id} className={`snap-center flex-shrink-0 w-64 md:w-72 rounded-[2.5rem] overflow-hidden group shadow-2xl transition-all ${theme === 'light' ? 'bg-black border border-zinc-800 hover:border-[#C58A4A]/30' : 'bg-black border border-white/5 hover:border-[#C58A4A]/30'}`}>
+                        <div className="w-full aspect-[3/4] overflow-hidden">
                           {p.image
-                            ? <img src={p.image} alt={p.name} className="w-full h-full object-contain hover:scale-105 transition-all duration-500"/>
-                            : <span className="text-5xl">🛒</span>
+                            ? <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700"/>
+                            : <div className="w-full h-full bg-zinc-900 flex items-center justify-center"><span className="text-5xl">🛒</span></div>
                           }
                         </div>
-                        {/* Info */}
-                        <div className={`p-4 space-y-1 border-t ${theme === 'light' ? 'border-white/5' : 'border-white/5'}`}>
-                          <p className="font-black text-sm leading-tight text-white">{p.name}</p>
-                          {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{p.category}</p>}
-                          {p.description && <p className="text-[10px] text-zinc-500 line-clamp-2 leading-snug mt-1">{p.description}</p>}
-                          <p className="text-base font-black text-[#C58A4A] pt-1">R$ {Number(p.price).toFixed(2)}</p>
+                        <div className="p-6">
+                          <h3 className={`text-xl font-black font-display italic leading-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{p.name}</h3>
+                          {p.category && <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">{p.category}</p>}
+                          {p.description && <p className="text-[10px] text-zinc-500 line-clamp-2 leading-snug mt-2">{p.description}</p>}
+                          <p className="text-xl font-black text-[#C58A4A] mt-2">R$ {Number(p.price).toFixed(2)}</p>
                         </div>
                       </div>
                     ))}
