@@ -826,8 +826,12 @@ async function sendTextMessage(toPhone: string, text: string): Promise<boolean> 
         }),
       }
     );
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`❌ Meta API erro ${res.status}: ${errBody}`);
+    }
     return res.ok;
-  } catch { return false; }
+  } catch (e) { console.error("sendTextMessage exception:", e); return false; }
 }
 
 // ─── whatsappInbox — Webhook de mensagens recebidas ──────────────────
@@ -951,18 +955,25 @@ export const whatsappReply = onRequest(
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
     try {
-      const { convId, toPhone, text } = req.body;
+      // Garante que body foi parseado
+      const body = req.body || {};
+      console.log(`📤 whatsappReply body raw:`, JSON.stringify(body));
+      const convId  = body.convId  as string | undefined;
+      const toPhone = body.toPhone as string | undefined;
+      const text    = body.text    as string | undefined;
+      console.log(`📤 whatsappReply — convId: ${convId}, toPhone: ${toPhone}, textLen: ${text?.length}`);
       if (!toPhone || !text) { res.status(400).json({ error: "toPhone e text são obrigatórios" }); return; }
+      if (!convId) { res.status(400).json({ error: "convId é obrigatório" }); return; }
 
       const ok = await sendTextMessage(toPhone, text);
-      if (!ok) { res.status(500).json({ error: "Falha ao enviar mensagem" }); return; }
 
-      // Salva mensagem enviada no histórico
+      // Salva no Firestore independente de o Meta ter entregue ou não
       const msgRef = await db.collection("inbox").doc(convId)
         .collection("messages").add({
           from: "admin",
           text,
           type: "text",
+          delivered: ok,
           timestamp: Date.now(),
           createdAt: Date.now(),
         });
@@ -973,6 +984,12 @@ export const whatsappReply = onRequest(
         lastMessageAt: Date.now(),
         unread: false,
       }, { merge: true });
+
+      if (!ok) {
+        console.warn(`⚠️ Mensagem salva no histórico mas não entregue pelo Meta (app não publicado ou fora da janela 24h). Para: ${toPhone}`);
+        res.status(200).json({ sent: false, saved: true, msgId: msgRef.id, warning: "Mensagem salva mas não entregue. App não publicado ou fora da janela de 24h." });
+        return;
+      }
 
       res.status(200).json({ sent: true, msgId: msgRef.id });
     } catch (err: any) {
