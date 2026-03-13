@@ -21,6 +21,7 @@ type Message = {
   from: 'client' | 'admin';
   text: string;
   type: string;
+  mediaUrl?: string;
   timestamp: number;
 };
 
@@ -35,6 +36,7 @@ const Inbox: React.FC = () => {
   const [sending,       setSending]       = useState(false);
   const [searchTerm,    setSearchTerm]    = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [lightbox,       setLightbox]       = useState<string | null>(null);
   const [mobileView,    setMobileView]    = useState<'list' | 'chat'>('list');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -231,9 +233,29 @@ const Inbox: React.FC = () => {
             )}
             {messages.map(msg => (
               <div key={msg.id} className={`flex ${msg.from === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 ${msg.from === 'admin' ? 'bg-[#C58A4A] text-black rounded-br-sm' : isDark ? 'bg-white/10 text-white rounded-bl-sm' : 'bg-zinc-100 text-zinc-900 rounded-bl-sm'}`}>
-                  <p className="text-sm font-medium leading-snug whitespace-pre-wrap">{msg.text}</p>
-                  <p className={`text-[9px] mt-1 text-right ${msg.from === 'admin' ? 'text-black/50' : sub}`}>
+                <div className={`max-w-[82%] rounded-2xl overflow-hidden ${msg.from === 'admin' ? 'bg-[#C58A4A] text-black rounded-br-sm' : isDark ? 'bg-white/10 text-white rounded-bl-sm' : 'bg-zinc-100 text-zinc-900 rounded-bl-sm'}`}>
+                  {/* Imagem */}
+                  {msg.mediaUrl && (msg.type === 'image' || msg.type === 'sticker') && (
+                    <img
+                      src={msg.mediaUrl}
+                      alt="imagem"
+                      onClick={() => setLightbox(msg.mediaUrl!)}
+                      className="w-full max-w-[260px] cursor-pointer hover:opacity-90 transition-opacity block"
+                    />
+                  )}
+                  {/* Texto */}
+                  {(msg.text && msg.text !== '[📷 Imagem]' && msg.text !== '[🎭 Sticker]') && (
+                    <p className="text-sm font-medium leading-snug whitespace-pre-wrap px-4 pt-2.5">{msg.text}</p>
+                  )}
+                  {/* Sem URL mas é imagem */}
+                  {!msg.mediaUrl && (msg.type === 'image' || msg.type === 'sticker') && (
+                    <p className="text-sm font-medium px-4 pt-2.5">{msg.type === 'sticker' ? '🎭 Sticker' : '📷 Imagem'}</p>
+                  )}
+                  {/* Outros tipos sem media */}
+                  {!msg.mediaUrl && msg.type !== 'image' && msg.type !== 'sticker' && msg.type !== 'text' && (
+                    <p className="text-sm font-medium px-4 pt-2.5">{msg.text}</p>
+                  )}
+                  <p className={`text-[9px] pb-2 px-4 pt-1 text-right ${msg.from === 'admin' ? 'text-black/50' : sub}`}>
                     {formatTime(msg.timestamp)}
                     {msg.from === 'admin' && <CheckCheck size={10} className="inline ml-1" />}
                   </p>
@@ -294,7 +316,17 @@ const Inbox: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal apagar */}
+      {/* Lightbox imagem */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4" onClick={() => setLightbox(null)}>
+          <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
+            <X size={20}/>
+          </button>
+          <img src={lightbox} alt="imagem" className="max-w-full max-h-[90vh] rounded-2xl object-contain shadow-2xl" onClick={e => e.stopPropagation()}/>
+        </div>
+      )}
+
+      {/* Modal apagar */}}
       {confirmDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
           <div className={`w-full max-w-xs rounded-[2rem] p-7 space-y-5 ${isDark ? 'cartao-vidro border-white/10' : 'bg-white border border-zinc-200'}`} onClick={e => e.stopPropagation()}>
