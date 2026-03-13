@@ -943,7 +943,7 @@ export const whatsappInbox = onRequest(
 
 💬 "${text}"
 
-_Responda pelo sistema: https://novojeitobarbearia.pages.dev_`;
+_Responda pelo sistema: https://novojeitobarbearia.pages.dev/#inbox_`;
           await sendTextMessage(ADMIN_PERSONAL_PHONE, adminMsg);
 
           // ── Auto-resposta: redireciona para o WhatsApp comercial ──
