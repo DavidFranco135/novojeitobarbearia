@@ -840,6 +840,9 @@ async function sendTextMessage(toPhone: string, text: string): Promise<boolean> 
   } catch (e) { console.error("sendTextMessage exception:", e); return false; }
 }
 
+// Número pessoal do ADM para receber notificações de mensagens recebidas
+const ADMIN_PERSONAL_PHONE = "5521997155702"; // WhatsApp pessoal da barbearia
+
 // ─── whatsappInbox — Webhook de mensagens recebidas ──────────────────
 // GET  = verificação do Meta (challenge)
 // POST = mensagens recebidas dos clientes
@@ -931,6 +934,17 @@ export const whatsappInbox = onRequest(
             });
 
           console.log(`📨 Mensagem de ${clientName} (${fromPhone}): ${text}`);
+
+          // ── Notifica ADM no WhatsApp pessoal ──
+          const adminMsg = `📨 *Nova mensagem no sistema*
+
+👤 *${clientName}*
+📱 ${fromPhone}
+
+💬 "${text}"
+
+_Responda pelo sistema: https://novojeitobarbearia.pages.dev_`;
+          await sendTextMessage(ADMIN_PERSONAL_PHONE, adminMsg);
 
           // ── Auto-resposta: redireciona para o WhatsApp comercial ──
           const AUTO_REPLY = `Olá, ${clientName.split(" ")[0]}! 👋 Você está no sistema automático de agendamentos da *Novo Jeito Barbearia*.
