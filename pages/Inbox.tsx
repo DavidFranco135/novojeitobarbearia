@@ -312,9 +312,6 @@ const Inbox: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
-  );
-};
 
       {/* Modal confirmar apagar */}
       {confirmDelete && (
@@ -334,7 +331,6 @@ const Inbox: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
