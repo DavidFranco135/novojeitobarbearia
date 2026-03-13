@@ -883,12 +883,62 @@ export const whatsappInbox = onRequest(
           const type      = msg.type; // text, image, audio, etc.
 
           let text = "";
-          if (type === "text") text = msg.text?.body || "";
-          else if (type === "image") text = "[📷 Imagem]";
-          else if (type === "audio") text = "[🎤 Áudio]";
-          else if (type === "document") text = "[📄 Documento]";
-          else if (type === "sticker") text = "[🎭 Sticker]";
-          else text = `[${type}]`;
+          let mediaUrl = "";
+          let mediaCaption = "";
+
+          if (type === "text") {
+            text = msg.text?.body || "";
+          } else if (type === "image" || type === "sticker") {
+            const mediaId = msg.image?.id || msg.sticker?.id;
+            mediaCaption  = msg.image?.caption || "";
+            text = mediaCaption || (type === "sticker" ? "[🎭 Sticker]" : "[📷 Imagem]");
+            // Busca URL real da mídia na Meta API
+            if (mediaId) {
+              try {
+                const metaToken = SECRET_TOKEN.value();
+                const metaRes = await fetch(
+                  `https://graph.facebook.com/v18.0/${mediaId}`,
+                  { headers: { Authorization: `Bearer ${metaToken}` } }
+                );
+                if (metaRes.ok) {
+                  const metaData = await metaRes.json();
+                  mediaUrl = metaData.url || "";
+                  // Busca a imagem em si (a URL da Meta expira, mas serve para salvar)
+                  if (mediaUrl) {
+                    const imgRes = await fetch(mediaUrl, {
+                      headers: { Authorization: `Bearer ${metaToken}` }
+                    });
+                    if (imgRes.ok) {
+                      // Salva no imgBB para URL permanente
+                      const imgBuf = await imgRes.arrayBuffer();
+                      const b64 = Buffer.from(imgBuf).toString("base64");
+                      const formData = new URLSearchParams();
+                      formData.append("key", "da736db48f154b9108b23a36d4393848");
+                      formData.append("image", b64);
+                      const imgbbRes = await fetch("https://api.imgbb.com/1/upload", {
+                        method: "POST",
+                        body: formData,
+                      });
+                      if (imgbbRes.ok) {
+                        const imgbbData = await imgbbRes.json();
+                        mediaUrl = imgbbData?.data?.url || mediaUrl;
+                      }
+                    }
+                  }
+                }
+              } catch (mediaErr) {
+                console.error("Erro ao buscar mídia:", mediaErr);
+              }
+            }
+          } else if (type === "audio" || type === "voice") {
+            text = "[🎤 Áudio]";
+          } else if (type === "document") {
+            text = `[📄 ${msg.document?.filename || "Documento"}]`;
+          } else if (type === "video") {
+            text = "[🎬 Vídeo]";
+          } else {
+            text = `[${type}]`;
+          }
 
           // Busca cliente pelo número
           const clientsSnap = await db.collection("clients")
@@ -929,6 +979,7 @@ export const whatsappInbox = onRequest(
               from: "client",
               text,
               type,
+              mediaUrl: mediaUrl || null,
               timestamp: Number(timestamp) * 1000,
               createdAt: Date.now(),
             });
