@@ -6,11 +6,17 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// ── Secrets (Firebase Secret Manager) ────────────────────────
+const SECRET_PHONE_ID    = defineSecret("PHONE_NUMBER_ID");
+const SECRET_TOKEN       = defineSecret("ACCESS_TOKEN");
+const SECRET_VERIFY      = defineSecret("WHATSAPP_VERIFY_TOKEN");
 
 // Região padrão para todas as funções
 setGlobalOptions({ region: "us-central1" });
@@ -55,8 +61,8 @@ async function send(
   template: string,
   params: { name: string; value: string }[]
 ): Promise<boolean> {
-  const phoneId = process.env.PHONE_NUMBER_ID || "";
-  const token   = process.env.ACCESS_TOKEN    || "";
+  const phoneId = SECRET_PHONE_ID.value();
+  const token   = SECRET_TOKEN.value();
 
   if (!phoneId || !token) {
     console.warn("⚠️  PHONE_NUMBER_ID ou ACCESS_TOKEN não configurados no Cloud Run.");
@@ -196,7 +202,7 @@ export const onSubscriptionCreated = onDocumentCreated(
 // SCHEDULED 1 — Lembrete 24h antes (todo dia às 10:00)
 // ─────────────────────────────────────────────────────────────
 export const sendReminders24h = onSchedule(
-  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 10 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -228,7 +234,7 @@ export const sendReminders24h = onSchedule(
 // Usa flag wppLembrete1hSent no agendamento para não repetir
 // ─────────────────────────────────────────────────────────────
 export const sendReminders1h = onSchedule(
-  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 * * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const now      = new Date();
     const todayStr = now.toISOString().split("T")[0];
@@ -268,7 +274,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo" }, // ← mude para "0 7 * * *" em produção
+  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -320,7 +326,7 @@ export const sendDailyAgenda = onSchedule(
 // SCHEDULED 4 — VIP vencendo em 3 dias (todo dia às 09:00)
 // ─────────────────────────────────────────────────────────────
 export const sendVipExpiry3days = onSchedule(
-  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 9 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const d3 = new Date();
     d3.setDate(d3.getDate() + 3);
@@ -353,7 +359,7 @@ export const sendVipExpiry3days = onSchedule(
 // SCHEDULED 5 — VIP vencendo em 1 dia (todo dia às 09:05)
 // ─────────────────────────────────────────────────────────────
 export const sendVipExpiry1day = onSchedule(
-  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "5 9 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const d1 = new Date();
     d1.setDate(d1.getDate() + 1);
@@ -386,7 +392,7 @@ export const sendVipExpiry1day = onSchedule(
 // SCHEDULED 6 — Clientes inativos 30+ dias (toda segunda 09:10)
 // ─────────────────────────────────────────────────────────────
 export const sendInactiveClients = onSchedule(
-  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo" },
+  { schedule: "10 9 * * 1", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -468,7 +474,7 @@ export const onAppointmentCancelled = onDocumentUpdated(
 // SCHEDULED 7 — Aniversariantes do dia (todo dia às 09:30)
 // ─────────────────────────────────────────────────────────────
 export const sendBirthdayMessages = onSchedule(
-  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "30 9 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const hoje = new Date();
     const mmdd  = `${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
@@ -497,7 +503,7 @@ export const sendBirthdayMessages = onSchedule(
 // SCHEDULED 8 — Lembrete manutenção 15-20 dias (todo dia 10:30)
 // ─────────────────────────────────────────────────────────────
 export const sendMaintenanceReminders = onSchedule(
-  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo" },
+  { schedule: "30 10 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const snap = await db.collection("clients").get();
     let count = 0;
@@ -538,7 +544,7 @@ export const sendMaintenanceReminders = onSchedule(
 // Detecta dias com poucos agendamentos e avisa clientes inativos há 15-45 dias
 // ─────────────────────────────────────────────────────────────
 export const sendPromoDiaFraco = onSchedule(
-  { schedule: "0 11 * * 2,4", timeZone: "America/Sao_Paulo" },
+  { schedule: "0 11 * * 2,4", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     // Verifica se amanhã tem poucos agendamentos (< 3)
     const tomorrow = new Date();
@@ -806,8 +812,8 @@ export const asaasWebhook = onRequest(
 
 // ─── Helper: envia texto livre (fora de template, dentro de 24h) ─────
 async function sendTextMessage(toPhone: string, text: string): Promise<boolean> {
-  const phoneId = process.env.PHONE_NUMBER_ID || "";
-  const token   = process.env.ACCESS_TOKEN    || "";
+  const phoneId = SECRET_PHONE_ID.value();
+  const token   = SECRET_TOKEN.value();
   if (!phoneId || !token) return false;
   const cleaned = toPhone.replace(/\D/g, "");
   const number  = cleaned.startsWith("55") ? cleaned : `55${cleaned}`;
@@ -838,11 +844,11 @@ async function sendTextMessage(toPhone: string, text: string): Promise<boolean> 
 // GET  = verificação do Meta (challenge)
 // POST = mensagens recebidas dos clientes
 export const whatsappInbox = onRequest(
-  { cors: true },
+  { cors: true, secrets: [SECRET_PHONE_ID, SECRET_TOKEN, SECRET_VERIFY] },
   async (req, res) => {
     // ── GET: verificação do webhook Meta ──
     if (req.method === "GET") {
-      const VERIFY_TOKEN = "novojeito_inbox_2024";
+      const VERIFY_TOKEN = SECRET_VERIFY.value();
       const mode      = req.query["hub.mode"];
       const token     = req.query["hub.verify_token"];
       const challenge = req.query["hub.challenge"];
@@ -951,7 +957,7 @@ Estamos por lá de segunda a sábado! 😊`;
 
 // ─── whatsappReply — ADM responde pelo app ────────────────────────────
 export const whatsappReply = onRequest(
-  { cors: true },
+  { cors: true, secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
     try {
