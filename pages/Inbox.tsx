@@ -162,7 +162,7 @@ const Inbox: React.FC = () => {
         )}
         {filteredConvs.map(conv => (
           <div key={conv.id} className={`relative border-b group/conv ${divider} ${selectedConv?.id === conv.id ? (isDark ? 'bg-[#C58A4A]/10 border-l-4 border-l-[#C58A4A]' : 'bg-amber-50 border-l-4 border-l-[#C58A4A]') : ''}`}>
-            <button onClick={() => openConv(conv)} className={`w-full text-left px-4 py-4 flex items-center gap-3 transition-all ${isDark ? 'hover:bg-white/5' : 'hover:bg-zinc-50'}`}>
+            <button onClick={() => openConv(conv)} onTouchEnd={e => { e.preventDefault(); openConv(conv); }} className={`w-full text-left px-4 py-4 flex items-center gap-3 transition-all ${isDark ? 'hover:bg-white/5' : 'hover:bg-zinc-50'}`}>
               <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-black shrink-0 relative ${isDark ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-amber-100 text-amber-700'}`}>
                 {resolveClientName(conv)?.charAt(0)?.toUpperCase() || '?'}
                 {isRegistered(conv) && (
@@ -205,7 +205,7 @@ const Inbox: React.FC = () => {
         <>
           <div className={`px-4 py-3 flex items-center justify-between border-b shrink-0 ${divider}`}>
             <div className="flex items-center gap-2">
-              <button onClick={() => setMobileView('list')} className={`md:hidden p-2 rounded-xl ${isDark ? 'bg-white/5 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}>
+              <button onClick={() => setMobileView('list')} onTouchEnd={e => { e.preventDefault(); setMobileView('list'); }} className={`md:hidden p-2 rounded-xl ${isDark ? 'bg-white/5 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}>
                 <ArrowLeft size={18} />
               </button>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-base shrink-0 ${isDark ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-amber-100 text-amber-700'}`}>
@@ -252,7 +252,7 @@ const Inbox: React.FC = () => {
                 placeholder="Digite sua resposta..."
                 className={`flex-1 resize-none rounded-2xl p-3 text-sm font-medium outline-none border transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-[#C58A4A]/50' : 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-[#C58A4A]'}`}
               />
-              <button onClick={handleSend} disabled={!replyText.trim() || sending}
+              <button onClick={handleSend} onTouchEnd={e => { e.preventDefault(); handleSend(); }} disabled={!replyText.trim() || sending}
                 className="w-11 h-11 rounded-2xl gradiente-ouro text-black flex items-center justify-center shadow-lg disabled:opacity-40 hover:scale-105 active:scale-95 transition-all shrink-0">
                 {sending ? <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Send size={16} />}
               </button>
