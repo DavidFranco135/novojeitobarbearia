@@ -841,7 +841,7 @@ async function sendTextMessage(toPhone: string, text: string): Promise<boolean> 
 }
 
 // Número pessoal do ADM para receber notificações de mensagens recebidas
-const ADMIN_PERSONAL_PHONE = "5521997155702"; // WhatsApp pessoal da barbearia
+const ADMIN_PERSONAL_PHONE = "5521973708141"; // WhatsApp pessoal da barbearia
 
 // ─── whatsappInbox — Webhook de mensagens recebidas ──────────────────
 // GET  = verificação do Meta (challenge)
