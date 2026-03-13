@@ -326,7 +326,7 @@ const Inbox: React.FC = () => {
         </div>
       )}
 
-      {/* Modal apagar */}}
+      {/* Modal apagar */}
       {confirmDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
           <div className={`w-full max-w-xs rounded-[2rem] p-7 space-y-5 ${isDark ? 'cartao-vidro border-white/10' : 'bg-white border border-zinc-200'}`} onClick={e => e.stopPropagation()}>
