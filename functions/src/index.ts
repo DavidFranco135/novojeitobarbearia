@@ -995,7 +995,9 @@ export const whatsappInbox = onRequest(
 💬 "${text}"
 
 _Responda pelo sistema: https://novojeitobarbearia.pages.dev_`;
-          await sendTextMessage(ADMIN_PERSONAL_PHONE, adminMsg);
+          console.log(`🔔 Notificando admin ${ADMIN_PERSONAL_PHONE}...`);
+          const adminOk = await sendTextMessage(ADMIN_PERSONAL_PHONE, adminMsg);
+          console.log(`🔔 Admin notificado: ${adminOk ? "✅ entregue" : "❌ falhou"}`);
 
           // ── Auto-resposta: redireciona para o WhatsApp comercial ──
           const AUTO_REPLY = `Olá, ${clientName.split(" ")[0]}! 👋 Você está no sistema automático de agendamentos da *Novo Jeito Barbearia*.
