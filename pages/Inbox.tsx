@@ -334,3 +334,9 @@ const Inbox: React.FC = () => {
           </div>
         </div>
       )}
+
+    </div>
+  );
+};
+
+export default Inbox;
