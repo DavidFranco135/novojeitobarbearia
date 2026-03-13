@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, Phone, Search, Circle, Check, CheckCheck } from 'lucide-react';
+import { MessageCircle, Send, X, Phone, Search, Circle, Check, CheckCheck, Trash2, User } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, orderBy, query, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, orderBy, query, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { useBarberStore } from '../store';
 
 const REPLY_URL = 'https://us-central1-financeiro-a7116.cloudfunctions.net/whatsappReply';
@@ -25,7 +25,7 @@ type Message = {
 };
 
 const Inbox: React.FC = () => {
-  const { theme } = useBarberStore();
+  const { theme, clients } = useBarberStore() as any;
   const isDark = theme !== 'light';
 
   const [conversations, setConversations]   = useState<Conversation[]>([]);
@@ -34,6 +34,7 @@ const Inbox: React.FC = () => {
   const [replyText,     setReplyText]       = useState('');
   const [sending,       setSending]         = useState(false);
   const [searchTerm,    setSearchTerm]      = useState('');
+  const [confirmDelete, setConfirmDelete]   = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const cardClass = isDark ? 'cartao-vidro border-white/5' : 'bg-white border border-zinc-200 shadow-sm';
@@ -87,13 +88,40 @@ const Inbox: React.FC = () => {
           text: textToSend,
         }),
       });
-      if (!res.ok) throw new Error('Falha ao enviar');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao enviar');
+      if (data.sent === false && data.saved) {
+        // Mensagem salva no histórico mas não entregue pelo Meta
+        console.warn('Mensagem salva mas não entregue:', data.warning);
+      }
     } catch (err) {
       alert('Erro ao enviar mensagem. Verifique a conexão.');
       setReplyText(textToSend);
     } finally {
       setSending(false);
     }
+  };
+
+  const deleteConversation = async (convId: string) => {
+    try {
+      // Deleta todas as mensagens da subcolecao
+      const msgsSnap = await getDocs(collection(db, 'inbox', convId, 'messages'));
+      await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
+      // Deleta o documento da conversa
+      await deleteDoc(doc(db, 'inbox', convId));
+      if (selectedConv?.id === convId) setSelectedConv(null);
+      setConfirmDelete(null);
+    } catch (err) {
+      alert('Erro ao apagar conversa.');
+    }
+  };
+
+  // Resolve nome do cliente pelo telefone
+  const resolveClientName = (conv: Conversation) => {
+    if (!clients) return conv.clientName;
+    const phone = conv.clientPhone?.replace(/\D/g, '');
+    const found = clients.find((cl: any) => cl.phone?.replace(/\D/g, '') === phone);
+    return found?.name || conv.clientName;
   };
 
   const totalUnread = conversations.filter(c => c.unread).length;
@@ -163,26 +191,42 @@ const Inbox: React.FC = () => {
               </div>
             )}
             {filteredConvs.map(conv => (
-              <button
+              <div
                 key={conv.id}
-                onClick={() => setSelectedConv(conv)}
-                className={`w-full text-left px-4 py-4 border-b transition-all flex items-center gap-3 ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-zinc-100 hover:bg-zinc-50'} ${selectedConv?.id === conv.id ? (isDark ? 'bg-[#C58A4A]/10 border-l-2 border-l-[#C58A4A]' : 'bg-amber-50 border-l-2 border-l-[#C58A4A]') : ''}`}
+                className={`relative border-b group/conv ${isDark ? 'border-white/5' : 'border-zinc-100'} ${selectedConv?.id === conv.id ? (isDark ? 'bg-[#C58A4A]/10 border-l-2 border-l-[#C58A4A]' : 'bg-amber-50 border-l-2 border-l-[#C58A4A]') : ''}`}
               >
-                {/* Avatar */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-black shrink-0 ${isDark ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-amber-100 text-amber-700'}`}>
-                  {conv.clientName?.charAt(0) || '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>{conv.clientName}</p>
-                    <span className={`text-[9px] shrink-0 ml-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{formatTime(conv.lastMessageAt)}</span>
+                <button
+                  onClick={() => setSelectedConv(conv)}
+                  className={`w-full text-left px-4 py-4 transition-all flex items-center gap-3 ${isDark ? 'hover:bg-white/5' : 'hover:bg-zinc-50'}`}
+                >
+                  {/* Avatar */}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-black shrink-0 relative ${isDark ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-amber-100 text-amber-700'}`}>
+                    {resolveClientName(conv)?.charAt(0) || '?'}
+                    {clients?.find((cl: any) => cl.phone?.replace(/\D/g,'') === conv.clientPhone?.replace(/\D/g,'')) && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-black flex items-center justify-center">
+                        <User size={7} className="text-white"/>
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <p className={`text-[11px] truncate ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{conv.lastMessage}</p>
-                    {conv.unread && <span className="w-2.5 h-2.5 rounded-full bg-[#C58A4A] shrink-0 ml-2"/>}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>{resolveClientName(conv)}</p>
+                      <span className={`text-[9px] shrink-0 ml-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{formatTime(conv.lastMessageAt)}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className={`text-[11px] truncate ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{conv.lastMessage}</p>
+                      {conv.unread && <span className="w-2.5 h-2.5 rounded-full bg-[#C58A4A] shrink-0 ml-2"/>}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                {/* Botão apagar — aparece no hover */}
+                <button
+                  onClick={e => { e.stopPropagation(); setConfirmDelete(conv.id); }}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover/conv:opacity-100 transition-all ${isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/40' : 'bg-red-50 text-red-400 hover:bg-red-100'}`}
+                >
+                  <Trash2 size={13}/>
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -205,7 +249,7 @@ const Inbox: React.FC = () => {
                     {selectedConv.clientName?.charAt(0)}
                   </div>
                   <div>
-                    <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>{selectedConv.clientName}</p>
+                    <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>{resolveClientName(selectedConv)}</p>
                     <a href={`https://wa.me/${selectedConv.clientPhone}`} target="_blank" rel="noreferrer" className="text-[10px] text-zinc-500 hover:text-[#C58A4A] flex items-center gap-1 transition-all">
                       <Phone size={10}/> {selectedConv.clientPhone}
                     </a>
@@ -272,4 +316,21 @@ const Inbox: React.FC = () => {
   );
 };
 
-export default Inbox;
+      {/* Modal confirmar apagar */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
+          <div className={`w-full max-w-xs rounded-[2rem] p-7 space-y-5 ${isDark ? 'cartao-vidro border-white/10' : 'bg-white border border-zinc-200'}`} onClick={e => e.stopPropagation()}>
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center mx-auto">
+                <Trash2 size={24} className="text-red-400"/>
+              </div>
+              <h3 className={`font-black text-lg ${isDark ? 'text-white' : 'text-zinc-900'}`}>Apagar conversa?</h3>
+              <p className={`text-[11px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Todas as mensagens serão apagadas permanentemente.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase ${isDark ? 'bg-white/5 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}>Cancelar</button>
+              <button onClick={() => deleteConversation(confirmDelete)} className="flex-1 py-3 rounded-xl font-black text-[10px] uppercase bg-red-500 text-white">Apagar</button>
+            </div>
+          </div>
+        </div>
+      )}
