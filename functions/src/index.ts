@@ -841,7 +841,7 @@ async function sendTextMessage(toPhone: string, text: string): Promise<boolean> 
 }
 
 // Número pessoal do ADM para receber notificações de mensagens recebidas
-const ADMIN_PERSONAL_PHONE = "5521973708141"; // WhatsApp pessoal da barbearia
+const ADMIN_PERSONAL_PHONE = "5521973708141"; // WhatsApp pessoal do dono // WhatsApp pessoal da barbearia
 
 // ─── whatsappInbox — Webhook de mensagens recebidas ──────────────────
 // GET  = verificação do Meta (challenge)
@@ -943,7 +943,7 @@ export const whatsappInbox = onRequest(
 
 💬 "${text}"
 
-_Responda pelo sistema: https://novojeitobarbearia.pages.dev/#inbox_`;
+_Responda pelo sistema: https://novojeitobarbearia.pages.dev_`;
           await sendTextMessage(ADMIN_PERSONAL_PHONE, adminMsg);
 
           // ── Auto-resposta: redireciona para o WhatsApp comercial ──
