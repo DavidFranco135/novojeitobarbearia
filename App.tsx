@@ -34,7 +34,12 @@ const App: React.FC = () => {
   React.useEffect(() => {
     window.location.hash = activeTab;
   }, [activeTab]);
-  const [isPublicView, setIsPublicView] = useState(true);
+  const [isPublicView, setIsPublicView] = useState(() => {
+    // Se a URL tem hash de página admin, começa na view de login/admin
+    const hash = window.location.hash.replace('#', '');
+    const adminPages = ['dashboard','agenda','clientes','servicos','financeiro','produtos','assinaturas','barbeiros','configuracoes','automacoes','inbox'];
+    return adminPages.includes(hash) ? false : true;
+  });
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   // ── Esqueci senha ADM ──────────────────────────────────────
