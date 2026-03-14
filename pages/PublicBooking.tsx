@@ -64,6 +64,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
   // States para o portal do membro
   const [suggestionText, setSuggestionText] = useState('');
+  const [likedSuggs, setLikedSuggs] = React.useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('nj_liked_suggs');
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
   const [editData, setEditData] = useState({ name: '', phone: '', email: '' });
 
   // State para modal de história do barbeiro
@@ -893,17 +899,26 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    onMouseMove={(e) => handleMouseMove(e, comentRef)}
                  >
                    {suggestions.slice().reverse().map((sugg: any) => {
-                     const myPhone = loggedClient?.phone?.replace(/\D/g,'') || '';
-                     const alreadyLiked = myPhone && (sugg.likedBy || []).includes(myPhone);
+                     // Like público — conta no Firestore (todos os dispositivos veem), trava no navegador via state+localStorage
+                     const alreadyLiked = likedSuggs.has(sugg.id);
                      const likeCount = sugg.likes || 0;
                      const handleLike = () => {
-                       if (!myPhone) return alert('Faça login para curtir.');
                        if (alreadyLiked) return;
+                       const next = new Set(likedSuggs).add(sugg.id);
+                       setLikedSuggs(next);
+                       try { localStorage.setItem('nj_liked_suggs', JSON.stringify([...next])); } catch {}
                        updateSuggestion(sugg.id, {
                          likes: likeCount + 1,
-                         likedBy: [...(sugg.likedBy || []), myPhone],
+                         likedBy: [...(sugg.likedBy || []), 'anon_' + Date.now()],
                        });
                      };
+                     // Data segura
+                     const dateStr = (() => {
+                       if (!sugg.date) return '';
+                       const d = new Date(sugg.date);
+                       if (isNaN(d.getTime())) return sugg.date;
+                       return d.toLocaleDateString('pt-BR');
+                     })();
                      return (
                        <div key={sugg.id} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5 flex flex-col">
                          <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg">
@@ -926,10 +941,10 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                              </div>
                              <div>
                                <p className="text-[10px] font-black text-white">{sugg.clientName}</p>
-                               <p className="text-[9px] text-zinc-600">{new Date(sugg.date).toLocaleDateString('pt-BR')}</p>
+                               {dateStr && <p className="text-[9px] text-zinc-600">{dateStr}</p>}
                              </div>
                            </div>
-                           {/* Like */}
+                           {/* Like — público, sem precisar de login */}
                            <button
                              onClick={handleLike}
                              onTouchEnd={e => { e.preventDefault(); handleLike(); }}
