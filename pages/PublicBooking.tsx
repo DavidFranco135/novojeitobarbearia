@@ -13,7 +13,7 @@ interface PublicBookingProps {
 }
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
@@ -2037,32 +2037,36 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       )}
 
       {showProfessionalModal && selectedProfessional && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
-           <div className={`w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-              <div className="relative">
-                 <img src={selectedProfessional.avatar} className="w-full h-auto rounded-t-[3rem] object-contain block" alt={selectedProfessional.name} />
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`} onClick={() => setShowProfessionalModal(false)}>
+           <div className={`w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[92vh] ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`} onClick={e => e.stopPropagation()}>
+              {/* Foto — shrink-0 para não comprimir */}
+              <div className="relative shrink-0">
+                 <img src={selectedProfessional.avatar} className="w-full h-auto object-contain block" alt={selectedProfessional.name} />
                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                 <button 
-                   onClick={() => setShowProfessionalModal(false)} 
+                 <button
+                   onClick={() => setShowProfessionalModal(false)}
                    className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all"
                  >
                    <X size={20} />
                  </button>
                  <div className="absolute bottom-6 left-6 right-6">
-                    <h2 className="text-4xl font-black font-display italic text-white mb-2">{selectedProfessional.name}</h2>
+                    <h2 className="text-3xl font-black font-display italic text-white mb-2">{selectedProfessional.name}</h2>
                     <div className="flex items-center gap-4">
                        <div className="flex items-center gap-2 text-[#C58A4A]">
                           <Heart size={14} fill="currentColor" />
                           <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
                        </div>
-                       <div className="text-white text-xs font-black uppercase tracking-widest">
-                          {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
-                       </div>
+                       {selectedProfessional.workingHours && (
+                         <div className="text-white text-xs font-black uppercase tracking-widest">
+                           {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
+                         </div>
+                       )}
                     </div>
                  </div>
               </div>
-              
-              <div className="p-10">
+
+              {/* Conteúdo scrollável */}
+              <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
                  {selectedProfessional.description ? (
                    <>
                      <h3 className={`text-xl font-black font-display italic mb-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>História</h3>
@@ -2075,10 +2079,13 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      Este profissional ainda não compartilhou sua história.
                    </p>
                  )}
-                 
-                 <button 
-                   onClick={() => setShowProfessionalModal(false)} 
-                   className="w-full mt-8 gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
+              </div>
+
+              {/* Footer fixo */}
+              <div className="px-8 pb-8 shrink-0">
+                 <button
+                   onClick={() => setShowProfessionalModal(false)}
+                   className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
                  >
                    Fechar
                  </button>
