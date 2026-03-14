@@ -995,7 +995,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                             <div className="relative shrink-0">
                               <img
                                 src={prof.avatar}
-                                className="w-28 h-28 rounded-2xl object-cover border-2 border-[#C58A4A] shadow-xl"
+                                className="w-28 h-auto rounded-2xl object-contain border-2 border-[#C58A4A] shadow-xl block"
                                 alt={prof.name}
                               />
                               <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-[#8B5E2A] to-[#E8B97A] p-2 rounded-xl shadow-lg">
@@ -1052,9 +1052,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           className={`rounded-[2rem] p-6 text-center space-y-4 group transition-all hover:scale-105 cursor-pointer ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-[#C58A4A]/40' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}
                           onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
                         >
-                          <div className="relative mx-auto w-24 h-24">
-                            <img src={prof.avatar} className="w-full h-full rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg" alt="" />
-                            <div className="absolute -right-10 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
+                          <div className="relative mx-auto w-28">
+                            <img src={prof.avatar} className="w-full h-auto rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg block" alt="" />
+                            <div className="absolute -right-8 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
                               <Heart size={12} fill="currentColor" /> <span>{prof.likes || 0}</span>
                             </div>
                           </div>
@@ -2039,8 +2039,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       {showProfessionalModal && selectedProfessional && (
         <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
            <div className={`w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-              <div className="relative h-96">
-                 <img src={selectedProfessional.avatar} className="w-full rounded-[2rem] object-contain shadow-xl" alt={selectedProfessional.name} />
+              <div className="relative">
+                 <img src={selectedProfessional.avatar} className="w-full h-auto rounded-t-[3rem] object-contain block" alt={selectedProfessional.name} />
                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                  <button 
                    onClick={() => setShowProfessionalModal(false)} 
