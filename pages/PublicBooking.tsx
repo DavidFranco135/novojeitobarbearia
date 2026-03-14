@@ -822,146 +822,96 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
              </section>
 
-             {/* 4. Voz dos Membros */}
-             <section className="mb-24 py-10 -mx-6 px-6 bg-black">
-                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 text-white`}>Avalições do cliente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className="relative group">
-                  <button 
-                    onClick={() => membroRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-                    className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button 
-                    onClick={() => membroRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-                    className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                  
-                  <div 
-                    ref={membroRef}
-                    className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                    style={{ scrollBehavior: 'smooth' }}
-                    onMouseDown={(e) => handleMouseDown(e, membroRef)}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseUp={handleMouseUp}
-                    onMouseMove={(e) => handleMouseMove(e, membroRef)}
-                  >
-                   {config.reviews?.length === 0 && <p className={`italic py-10 text-center w-full text-zinc-500`}>Aguardando seu feedback para brilhar aqui.</p>}
-                   {config.reviews?.map((rev, i) => (
-                      <div key={i} className={`snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative group cartao-vidro border-white/5`}>
-                         <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
-                         <div className="flex gap-1 mb-4">
-                            {[1,2,3,4,5].map(s => (
-                               <Star key={s} size={14} fill={s <= rev.rating ? '#C58A4A' : 'none'} className={s <= rev.rating ? 'text-[#C58A4A]' : 'text-zinc-800'}/>
-                            ))}
-                         </div>
-                         <p className={`text-sm italic leading-relaxed mb-6 text-zinc-300`}>\"{rev.comment}\"</p>
-                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center">
-                               <User size={18} className="text-[#C58A4A]"/>
-                            </div>
-                            <p className={`text-[10px] font-black text-white`}>{rev.userName}</p>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-              </div>
-             </section>
-
-             {/* 4b. Comentários dos Clientes */}
-             {suggestions && suggestions.length > 0 && (
-             <section className="mb-24 py-10 -mx-6 px-6 bg-black">
-               <h2 className="text-2xl font-black font-display italic mb-10 flex items-center gap-6 text-white">
-                 Comentários dos Clientes <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-               </h2>
-               <div className="relative group">
-                 <button
-                   onClick={() => comentRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-                   className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                 >
-                   <ChevronLeft size={24}/>
-                 </button>
-                 <button
-                   onClick={() => comentRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-                   className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                 >
-                   <ChevronRight size={24}/>
-                 </button>
-                 <div
-                   ref={comentRef}
-                   className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                   style={{ scrollBehavior: 'smooth' }}
-                   onMouseDown={(e) => handleMouseDown(e, comentRef)}
-                   onMouseLeave={handleMouseLeave}
-                   onMouseUp={handleMouseUp}
-                   onMouseMove={(e) => handleMouseMove(e, comentRef)}
-                 >
-                   {suggestions.slice().reverse().map((sugg: any) => {
-                     // Like público — conta no Firestore (todos os dispositivos veem), trava no navegador via state+localStorage
-                     const alreadyLiked = likedSuggs.has(sugg.id);
-                     const likeCount = sugg.likes || 0;
-                     const handleLike = () => {
-                       if (alreadyLiked) return;
-                       const next = new Set(likedSuggs).add(sugg.id);
-                       setLikedSuggs(next);
-                       try { localStorage.setItem('nj_liked_suggs', JSON.stringify([...next])); } catch {}
-                       updateSuggestion(sugg.id, {
-                         likes: likeCount + 1,
-                         likedBy: [...(sugg.likedBy || []), 'anon_' + Date.now()],
-                       });
-                     };
-                     // Data segura
-                     const dateStr = (() => {
-                       if (!sugg.date) return '';
-                       const d = new Date(sugg.date);
-                       if (isNaN(d.getTime())) return sugg.date;
-                       return d.toLocaleDateString('pt-BR');
-                     })();
-                     return (
-                       <div key={sugg.id} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5 flex flex-col">
-                         <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg">
-                           <Quote size={18} fill="currentColor"/>
-                         </div>
-                         {/* Texto */}
-                         <p className="text-sm italic leading-relaxed text-zinc-300 flex-1 mb-6">"{sugg.text}"</p>
-                         {/* Resposta */}
-                         {sugg.response && (
-                           <div className="mb-4 pl-4 border-l-2 border-[#C58A4A]/40">
-                             <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Barbearia respondeu</p>
-                             <p className="text-xs text-zinc-400 leading-relaxed">{sugg.response}</p>
-                           </div>
-                         )}
-                         {/* Footer */}
-                         <div className="flex items-center justify-between">
-                           <div className="flex items-center gap-3">
-                             <div className="w-9 h-9 rounded-full bg-[#C58A4A]/20 flex items-center justify-center">
-                               <User size={16} className="text-[#C58A4A]"/>
-                             </div>
-                             <div>
-                               <p className="text-[10px] font-black text-white">{sugg.clientName}</p>
-                               {dateStr && <p className="text-[9px] text-zinc-600">{dateStr}</p>}
-                             </div>
-                           </div>
-                           {/* Like — público, sem precisar de login */}
-                           <button
-                             onClick={handleLike}
-                             onTouchEnd={e => { e.preventDefault(); handleLike(); }}
-                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${alreadyLiked ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-white/5 text-zinc-500 hover:text-[#C58A4A] hover:bg-[#C58A4A]/10'}`}
-                           >
-                             <Heart size={13} fill={alreadyLiked ? 'currentColor' : 'none'}/>
-                             {likeCount > 0 && <span>{likeCount}</span>}
-                           </button>
-                         </div>
-                       </div>
-                     );
-                   })}
+             {/* 4. Avaliações & Comentários — unificado */}
+             {((config.reviews && config.reviews.length > 0) || (suggestions && suggestions.length > 0)) && (() => {
+               const [activeReviewTab, setActiveReviewTab] = React.useState<'reviews'|'comments'>('reviews');
+               const hasReviews  = config.reviews && config.reviews.length > 0;
+               const hasComments = suggestions && suggestions.length > 0;
+               return (
+               <section className="mb-24 py-10 -mx-6 px-6 bg-black">
+                 <h2 className="text-2xl font-black font-display italic mb-6 flex items-center gap-6 text-white">
+                   Avaliações & Comentários <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                 </h2>
+                 {/* Tabs */}
+                 <div className="flex gap-2 mb-8">
+                   <button onClick={() => setActiveReviewTab('reviews')} onTouchEnd={e=>{e.preventDefault();setActiveReviewTab('reviews');}} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeReviewTab==='reviews' ? 'gradiente-ouro text-black' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
+                     ⭐ Avaliações{hasReviews ? ` (${config.reviews.length})` : ''}
+                   </button>
+                   <button onClick={() => setActiveReviewTab('comments')} onTouchEnd={e=>{e.preventDefault();setActiveReviewTab('comments');}} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeReviewTab==='comments' ? 'gradiente-ouro text-black' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
+                     💬 Comentários{hasComments ? ` (${suggestions.length})` : ''}
+                   </button>
                  </div>
-               </div>
-             </section>
-             )}
-
+                 {/* Avaliações */}
+                 {activeReviewTab === 'reviews' && (
+                   <div className="relative group">
+                     <button onClick={() => membroRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronLeft size={24}/></button>
+                     <button onClick={() => membroRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronRight size={24}/></button>
+                     <div ref={membroRef} className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide" style={{scrollBehavior:'smooth'}} onMouseDown={e=>handleMouseDown(e,membroRef)} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={e=>handleMouseMove(e,membroRef)}>
+                       {!hasReviews && <p className="italic py-10 text-center w-full text-zinc-500">Aguardando seu feedback para brilhar aqui.</p>}
+                       {config.reviews?.map((rev: any, i: number) => (
+                         <div key={i} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5">
+                           <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
+                           <div className="flex gap-1 mb-4">{[1,2,3,4,5].map(s => <Star key={s} size={14} fill={s<=rev.rating?'#C58A4A':'none'} className={s<=rev.rating?'text-[#C58A4A]':'text-zinc-800'}/>)}</div>
+                           <p className="text-sm italic leading-relaxed mb-6 text-zinc-300">"{rev.comment}"</p>
+                           <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center"><User size={18} className="text-[#C58A4A]"/></div>
+                             <p className="text-[10px] font-black text-white">{rev.userName}</p>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 )}
+                 {/* Comentários */}
+                 {activeReviewTab === 'comments' && (
+                   <div className="relative group">
+                     <button onClick={() => comentRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronLeft size={24}/></button>
+                     <button onClick={() => comentRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronRight size={24}/></button>
+                     <div ref={comentRef} className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide" style={{scrollBehavior:'smooth'}} onMouseDown={e=>handleMouseDown(e,comentRef)} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={e=>handleMouseMove(e,comentRef)}>
+                       {!hasComments && <p className="italic py-10 text-center w-full text-zinc-500">Nenhum comentário ainda.</p>}
+                       {suggestions?.slice().reverse().map((sugg: any) => {
+                         const alreadyLiked = likedSuggs.has(sugg.id);
+                         const likeCount = sugg.likes || 0;
+                         const handleLike = () => {
+                           if (alreadyLiked) return;
+                           const next = new Set(likedSuggs).add(sugg.id);
+                           setLikedSuggs(next);
+                           try { localStorage.setItem('nj_liked_suggs', JSON.stringify([...next])); } catch {}
+                           updateSuggestion(sugg.id, { likes: likeCount + 1, likedBy: [...(sugg.likedBy||[]), 'anon_'+Date.now()] });
+                         };
+                         const dateStr = (() => { if (!sugg.date) return ''; const d = new Date(sugg.date); return isNaN(d.getTime()) ? sugg.date : d.toLocaleDateString('pt-BR'); })();
+                         return (
+                           <div key={sugg.id} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5 flex flex-col">
+                             <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
+                             <p className="text-sm italic leading-relaxed text-zinc-300 flex-1 mb-6">"{sugg.text}"</p>
+                             {sugg.response && (
+                               <div className="mb-4 pl-4 border-l-2 border-[#C58A4A]/40">
+                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Barbearia respondeu</p>
+                                 <p className="text-xs text-zinc-400 leading-relaxed">{sugg.response}</p>
+                               </div>
+                             )}
+                             <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-3">
+                                 <div className="w-9 h-9 rounded-full bg-[#C58A4A]/20 flex items-center justify-center"><User size={16} className="text-[#C58A4A]"/></div>
+                                 <div>
+                                   <p className="text-[10px] font-black text-white">{sugg.clientName}</p>
+                                   {dateStr && <p className="text-[9px] text-zinc-600">{dateStr}</p>}
+                                 </div>
+                               </div>
+                               <button onClick={handleLike} onTouchEnd={e=>{e.preventDefault();handleLike();}} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${alreadyLiked?'bg-[#C58A4A]/20 text-[#C58A4A]':'bg-white/5 text-zinc-500 hover:text-[#C58A4A] hover:bg-[#C58A4A]/10'}`}>
+                                 <Heart size={13} fill={alreadyLiked?'currentColor':'none'}/>
+                                 {likeCount > 0 && <span>{likeCount}</span>}
+                               </button>
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 )}
+               </section>
+               );
+             })()}
              {/* 5. Nossos Artífices */}
              <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
