@@ -79,6 +79,8 @@ export interface Suggestion {
   date: string;
   response?: string;
   responseDate?: string;
+  likes?: number;
+  likedBy?: string[]; // lista de phones que já deram like
 }
 
 export interface Appointment {
