@@ -2038,57 +2038,58 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
       {showProfessionalModal && selectedProfessional && (
         <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`} onClick={() => setShowProfessionalModal(false)}>
-           <div className={`w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[92vh] ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`} onClick={e => e.stopPropagation()}>
-              {/* Foto — shrink-0 para não comprimir */}
-              <div className="relative shrink-0">
+           <div className="w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl max-h-[92vh]" onClick={e => e.stopPropagation()}>
+              {/* Foto com overlay — descrição na metade inferior */}
+              <div className="relative">
                  <img src={selectedProfessional.avatar} className="w-full h-auto object-contain block" alt={selectedProfessional.name} />
-                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                 {/* Botão fechar */}
                  <button
                    onClick={() => setShowProfessionalModal(false)}
-                   className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all"
+                   className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all z-10"
                  >
                    <X size={20} />
                  </button>
-                 <div className="absolute bottom-6 left-6 right-6">
-                    <h2 className="text-3xl font-black font-display italic text-white mb-2">{selectedProfessional.name}</h2>
-                    <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-2 text-[#C58A4A]">
-                          <Heart size={14} fill="currentColor" />
-                          <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
-                       </div>
-                       {selectedProfessional.workingHours && (
-                         <div className="text-white text-xs font-black uppercase tracking-widest">
-                           {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
-                         </div>
-                       )}
-                    </div>
+
+                 {/* Overlay gradiente cobrindo a metade inferior */}
+                 <div className="absolute bottom-0 inset-x-0 h-3/5 bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-none" />
+
+                 {/* Conteúdo sobre a foto — metade inferior */}
+                 <div className="absolute bottom-0 inset-x-0 p-6 z-10">
+                   {/* Nome + stats */}
+                   <h2 className="text-3xl font-black font-display italic text-white mb-1">{selectedProfessional.name}</h2>
+                   <div className="flex items-center gap-4 mb-4">
+                     <div className="flex items-center gap-1.5 text-[#C58A4A]">
+                       <Heart size={13} fill="currentColor" />
+                       <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
+                     </div>
+                     {selectedProfessional.workingHours && (
+                       <span className="text-white/70 text-[10px] font-black uppercase tracking-widest">
+                         {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
+                       </span>
+                     )}
+                   </div>
+
+                   {/* Descrição scrollável dentro da foto */}
+                   {selectedProfessional.description ? (
+                     <div className="max-h-36 overflow-y-auto scrollbar-hide pr-1">
+                       <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
+                         {selectedProfessional.description}
+                       </p>
+                     </div>
+                   ) : (
+                     <p className="text-sm italic text-white/50">Este profissional ainda não compartilhou sua história.</p>
+                   )}
+
+                   {/* Botão fechar */}
+                   <button
+                     onClick={() => setShowProfessionalModal(false)}
+                     onTouchEnd={e => { e.preventDefault(); setShowProfessionalModal(false); }}
+                     className="w-full mt-4 gradiente-ouro text-black py-3.5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
+                   >
+                     Fechar
+                   </button>
                  </div>
-              </div>
-
-              {/* Conteúdo scrollável */}
-              <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
-                 {selectedProfessional.description ? (
-                   <>
-                     <h3 className={`text-xl font-black font-display italic mb-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>História</h3>
-                     <p className={`text-sm leading-relaxed whitespace-pre-line ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                       {selectedProfessional.description}
-                     </p>
-                   </>
-                 ) : (
-                   <p className={`text-sm italic text-center py-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>
-                     Este profissional ainda não compartilhou sua história.
-                   </p>
-                 )}
-              </div>
-
-              {/* Footer fixo */}
-              <div className="px-8 pb-8 shrink-0">
-                 <button
-                   onClick={() => setShowProfessionalModal(false)}
-                   className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
-                 >
-                   Fechar
-                 </button>
               </div>
            </div>
         </div>
