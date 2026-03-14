@@ -112,6 +112,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const experienciaRef = React.useRef<HTMLDivElement>(null);
   const membroRef = React.useRef<HTMLDivElement>(null);
   const produtosRef = React.useRef<HTMLDivElement>(null);
+  const comentRef    = React.useRef<HTMLDivElement>(null);
   const [selectedProduct, setSelectedProduct] = React.useState<any | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
@@ -863,36 +864,85 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
              </section>
 
-             {/* 4b. Sugestões dos Clientes */}
+             {/* 4b. Comentários dos Clientes */}
              {suggestions && suggestions.length > 0 && (
              <section className="mb-24 py-10 -mx-6 px-6 bg-black">
-               <h2 className="text-2xl font-black font-display italic mb-2 flex items-center gap-6 text-white">
-                 Sugestões <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+               <h2 className="text-2xl font-black font-display italic mb-10 flex items-center gap-6 text-white">
+                 Comentários dos Clientes <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                </h2>
-               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-8">O que nossos clientes estão pedindo</p>
-               <div className="space-y-4">
-                 {suggestions.slice().reverse().map((sugg: any) => (
-                   <div key={sugg.id} className="cartao-vidro border-white/5 rounded-[1.5rem] p-6">
-                     <div className="flex items-start gap-4">
-                       <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center shrink-0">
-                         <User size={16} className="text-[#C58A4A]"/>
-                       </div>
-                       <div className="flex-1 min-w-0">
-                         <div className="flex items-center justify-between gap-2 mb-2">
-                           <p className="text-[10px] font-black uppercase tracking-widest text-[#C58A4A]">{sugg.clientName}</p>
-                           <p className="text-[9px] text-zinc-600 shrink-0">{new Date(sugg.date).toLocaleDateString('pt-BR')}</p>
+               <div className="relative group">
+                 <button
+                   onClick={() => comentRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
+                   className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
+                 >
+                   <ChevronLeft size={24}/>
+                 </button>
+                 <button
+                   onClick={() => comentRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
+                   className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
+                 >
+                   <ChevronRight size={24}/>
+                 </button>
+                 <div
+                   ref={comentRef}
+                   className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
+                   style={{ scrollBehavior: 'smooth' }}
+                   onMouseDown={(e) => handleMouseDown(e, comentRef)}
+                   onMouseLeave={handleMouseLeave}
+                   onMouseUp={handleMouseUp}
+                   onMouseMove={(e) => handleMouseMove(e, comentRef)}
+                 >
+                   {suggestions.slice().reverse().map((sugg: any) => {
+                     const myPhone = loggedClient?.phone?.replace(/\D/g,'') || '';
+                     const alreadyLiked = myPhone && (sugg.likedBy || []).includes(myPhone);
+                     const likeCount = sugg.likes || 0;
+                     const handleLike = () => {
+                       if (!myPhone) return alert('Faça login para curtir.');
+                       if (alreadyLiked) return;
+                       updateSuggestion(sugg.id, {
+                         likes: likeCount + 1,
+                         likedBy: [...(sugg.likedBy || []), myPhone],
+                       });
+                     };
+                     return (
+                       <div key={sugg.id} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5 flex flex-col">
+                         <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg">
+                           <Quote size={18} fill="currentColor"/>
                          </div>
-                         <p className="text-sm text-zinc-300 leading-relaxed italic">"{sugg.text}"</p>
+                         {/* Texto */}
+                         <p className="text-sm italic leading-relaxed text-zinc-300 flex-1 mb-6">"{sugg.text}"</p>
+                         {/* Resposta */}
                          {sugg.response && (
-                           <div className="mt-4 pl-4 border-l-2 border-[#C58A4A]/40">
-                             <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Resposta da Barbearia</p>
-                             <p className="text-sm text-zinc-400 leading-relaxed">{sugg.response}</p>
+                           <div className="mb-4 pl-4 border-l-2 border-[#C58A4A]/40">
+                             <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Barbearia respondeu</p>
+                             <p className="text-xs text-zinc-400 leading-relaxed">{sugg.response}</p>
                            </div>
                          )}
+                         {/* Footer */}
+                         <div className="flex items-center justify-between">
+                           <div className="flex items-center gap-3">
+                             <div className="w-9 h-9 rounded-full bg-[#C58A4A]/20 flex items-center justify-center">
+                               <User size={16} className="text-[#C58A4A]"/>
+                             </div>
+                             <div>
+                               <p className="text-[10px] font-black text-white">{sugg.clientName}</p>
+                               <p className="text-[9px] text-zinc-600">{new Date(sugg.date).toLocaleDateString('pt-BR')}</p>
+                             </div>
+                           </div>
+                           {/* Like */}
+                           <button
+                             onClick={handleLike}
+                             onTouchEnd={e => { e.preventDefault(); handleLike(); }}
+                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${alreadyLiked ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-white/5 text-zinc-500 hover:text-[#C58A4A] hover:bg-[#C58A4A]/10'}`}
+                           >
+                             <Heart size={13} fill={alreadyLiked ? 'currentColor' : 'none'}/>
+                             {likeCount > 0 && <span>{likeCount}</span>}
+                           </button>
+                         </div>
                        </div>
-                     </div>
-                   </div>
-                 ))}
+                     );
+                   })}
+                 </div>
                </div>
              </section>
              )}
