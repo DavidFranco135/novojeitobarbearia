@@ -863,6 +863,40 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
              </section>
 
+             {/* 4b. Sugestões dos Clientes */}
+             {suggestions && suggestions.length > 0 && (
+             <section className="mb-24 py-10 -mx-6 px-6 bg-black">
+               <h2 className="text-2xl font-black font-display italic mb-2 flex items-center gap-6 text-white">
+                 Sugestões <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+               </h2>
+               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-8">O que nossos clientes estão pedindo</p>
+               <div className="space-y-4">
+                 {suggestions.slice().reverse().map((sugg: any) => (
+                   <div key={sugg.id} className="cartao-vidro border-white/5 rounded-[1.5rem] p-6">
+                     <div className="flex items-start gap-4">
+                       <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center shrink-0">
+                         <User size={16} className="text-[#C58A4A]"/>
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center justify-between gap-2 mb-2">
+                           <p className="text-[10px] font-black uppercase tracking-widest text-[#C58A4A]">{sugg.clientName}</p>
+                           <p className="text-[9px] text-zinc-600 shrink-0">{new Date(sugg.date).toLocaleDateString('pt-BR')}</p>
+                         </div>
+                         <p className="text-sm text-zinc-300 leading-relaxed italic">"{sugg.text}"</p>
+                         {sugg.response && (
+                           <div className="mt-4 pl-4 border-l-2 border-[#C58A4A]/40">
+                             <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Resposta da Barbearia</p>
+                             <p className="text-sm text-zinc-400 leading-relaxed">{sugg.response}</p>
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </section>
+             )}
+
              {/* 5. Nossos Artífices */}
              <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
