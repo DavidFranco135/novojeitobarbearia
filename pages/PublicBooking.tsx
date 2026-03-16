@@ -27,6 +27,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [referralSaving, setReferralSaving] = useState(false);
   const [referralDone, setReferralDone] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
+  // ── Indicação via URL ?ref=ID ──
+  const [urlReferrerId, setUrlReferrerId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('ref');
+  });
+  const [urlReferrerName, setUrlReferrerName] = useState<string>('');
   const [passo, setPasso] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -106,6 +112,18 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
     return [...withAppts, ...withoutAppts];
   }, [services, appointments]);
+
+  // ── Detecta ?ref=ID na URL → abre cadastro com banner de indicação ──
+  useEffect(() => {
+    if (!urlReferrerId || !clients || clients.length === 0) return;
+    const referrer = clients.find((cl: any) => cl.id === urlReferrerId);
+    if (referrer) setUrlReferrerName(referrer.name);
+    if (!loggedClient) {
+      setView('LOGIN');
+      setLoginMode('register');
+    }
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [urlReferrerId, clients]);
 
   // Sincroniza o usuário logado do store com o loggedClient deste componente
   useEffect(() => {
@@ -282,6 +300,30 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
       setRegisterData({ name: '', phone: '', email: '', password: '', confirmPassword: '' });
       setRegisterError(null);
+
+      // ── Se veio de link de indicação (?ref=ID), cria a indicação ──
+      if (urlReferrerId && urlReferrerId !== client.id) {
+        try {
+          const referrer = clients.find((cl: any) => cl.id === urlReferrerId);
+          if (referrer) {
+            const rewardAmount = (config as any).referralRewardAmount ?? 5;
+            await createReferral({
+              referrerId: urlReferrerId,
+              referrerName: referrer.name,
+              referredName: client.name,
+              referredPhone: client.phone,
+              referredEmail: client.email || '',
+              referredClientId: client.id,
+              status: 'PENDENTE',
+              rewardAmount,
+              rewardCredited: false,
+            });
+          }
+        } catch (_) {}
+        setUrlReferrerId(null);
+        setUrlReferrerName('');
+      }
+
       // Se veio de um agendamento em progresso, volta para o agendamento já verificado
       if (selecao.serviceId && selecao.date && selecao.time && selecao.professionalId) {
         setSelecao(prev => ({ ...prev, clientName: client.name, clientPhone: client.phone, clientEmail: client.email || '' }));
@@ -1340,21 +1382,71 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                {clientRanking.length > 0 && (
                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                    {clientRanking.slice(0, 3).map((cl: any, idx: number) => {
+                     // 1º = PREMIUM BLACK (centro, maior), 2º = OURO (esquerda), 3º = PRATA (direita)
                      const tiers = [
-                       { label: 'PREMIUM BLACK', icon: '👑', textColor: '#E8B97A', borderColor: '#C58A4A', bg: 'linear-gradient(135deg, #000000 0%, #1a1a1a 40%, #0d0800 100%)', glow: '0 0 30px rgba(197,138,74,0.35), 0 0 60px rgba(197,138,74,0.15)', badgeBg: 'linear-gradient(135deg, #8B5E2A, #E8B97A)', order: 'sm:order-2' },
-                       { label: 'OURO', icon: '🥇', textColor: '#000', borderColor: '#E8B97A', bg: 'linear-gradient(135deg, #8B5E2A, #C58A4A)', glow: '0 0 20px rgba(197,138,74,0.4)', badgeBg: 'rgba(0,0,0,0.3)', order: 'sm:order-1' },
-                       { label: 'PRATA', icon: '🥈', textColor: '#000', borderColor: '#d1d5db', bg: 'linear-gradient(135deg, #9ca3af, #d1d5db)', glow: '0 0 15px rgba(200,200,200,0.25)', badgeBg: 'rgba(0,0,0,0.2)', order: 'sm:order-3' },
+                       {
+                         // 1º lugar — PREMIUM BLACK
+                         label: 'PREMIUM BLACK',
+                         medal: '1',           // número da posição
+                         icon: '👑',
+                         nameColor: '#E8B97A',  // dourado — legível no fundo preto
+                         statColor: 'rgba(232,185,122,0.7)',
+                         labelColor: '#C58A4A',
+                         borderColor: '#C58A4A',
+                         bg: 'linear-gradient(160deg, #0a0a0a 0%, #1c1000 60%, #0a0a0a 100%)',
+                         glow: '0 0 32px rgba(197,138,74,0.4), 0 0 64px rgba(197,138,74,0.15)',
+                         badgeBg: 'linear-gradient(135deg, #8B5E2A, #C58A4A)',
+                         badgeTextColor: '#000',
+                         order: 'sm:order-2',
+                         scale: 'sm:scale-105',
+                       },
+                       {
+                         // 2º lugar — OURO
+                         label: '2º OURO',
+                         medal: '2',
+                         icon: '🥈',            // 🥈 = prata = 2º lugar (medalha correta)
+                         nameColor: '#1a0800',
+                         statColor: 'rgba(0,0,0,0.6)',
+                         labelColor: '#000',
+                         borderColor: '#E8B97A',
+                         bg: 'linear-gradient(135deg, #C58A4A 0%, #E8B97A 100%)',
+                         glow: '0 0 20px rgba(197,138,74,0.5)',
+                         badgeBg: 'rgba(0,0,0,0.25)',
+                         badgeTextColor: '#1a0800',
+                         order: 'sm:order-1',
+                         scale: '',
+                       },
+                       {
+                         // 3º lugar — PRATA
+                         label: '3º PRATA',
+                         medal: '3',
+                         icon: '🥉',            // 🥉 = bronze = 3º lugar (medalha correta)
+                         nameColor: '#1a1a1a',
+                         statColor: 'rgba(0,0,0,0.5)',
+                         labelColor: '#333',
+                         borderColor: '#cbd5e1',
+                         bg: 'linear-gradient(135deg, #94a3b8 0%, #e2e8f0 100%)',
+                         glow: '0 0 16px rgba(148,163,184,0.3)',
+                         badgeBg: 'rgba(0,0,0,0.15)',
+                         badgeTextColor: '#1a1a1a',
+                         order: 'sm:order-3',
+                         scale: '',
+                       },
                      ][idx];
                      return (
-                       <div key={cl.id} className={`relative rounded-[1.5rem] border-2 p-5 flex flex-col items-center text-center ${tiers.order} ${idx === 0 ? 'sm:mt-0' : 'sm:mt-4'}`}
+                       <div key={cl.id} className={`relative rounded-[1.5rem] border-2 p-5 flex flex-col items-center text-center transition-all ${tiers.order} ${tiers.scale} ${idx === 0 ? 'sm:mt-0' : 'sm:mt-6'}`}
                          style={{background: tiers.bg, borderColor: tiers.borderColor, boxShadow: tiers.glow}}>
-                         {/* Badge posição */}
-                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest" style={{background: tiers.badgeBg, color: idx === 0 ? '#C58A4A' : '#fff', border: `1px solid ${tiers.borderColor}`}}>
+                         {/* Badge label no topo */}
+                         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest whitespace-nowrap"
+                           style={{background: tiers.badgeBg, color: tiers.badgeTextColor, border: `1.5px solid ${tiers.borderColor}`}}>
                            {tiers.label}
                          </div>
-                         <span className="text-3xl mt-2 mb-2">{tiers.icon}</span>
-                         <p className="font-black text-sm leading-tight mb-1 truncate w-full" style={{color: tiers.textColor}}>{cl.name}</p>
-                         <div className="flex gap-3 text-[9px] font-black mt-1" style={{color: tiers.textColor, opacity: 0.8}}>
+                         {/* Ícone medalha */}
+                         <span className="text-4xl mt-3 mb-2 drop-shadow-lg">{tiers.icon}</span>
+                         {/* Nome — sempre legível */}
+                         <p className="font-black text-sm leading-tight mb-1 truncate w-full" style={{color: tiers.nameColor}}>{cl.name}</p>
+                         {/* Stats */}
+                         <div className="flex gap-3 text-[9px] font-black mt-1" style={{color: tiers.statColor}}>
                            <span>✂️ {cl.totalCuts}</span>
                            <span>👥 {cl.totalReferrals}</span>
                          </div>
@@ -1584,6 +1676,21 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               ) : (
                 <div className="space-y-4">
                    {registerError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{registerError}</div>}
+                  {/* Banner de indicação quando vem via link */}
+                  {urlReferrerId && (
+                    <div className="rounded-2xl p-4 border mb-2" style={{background:'linear-gradient(135deg,#0d0800,#1a0e00)', borderColor:'#C58A4A'}}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl shrink-0">🎁</span>
+                        <div>
+                          <p className="text-[#E8B97A] font-black text-[10px] uppercase tracking-widest">Você foi indicado!</p>
+                          <p className={`text-sm font-bold mt-0.5 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                            {urlReferrerName ? <><strong className="text-[#C58A4A]">{urlReferrerName}</strong> te convidou para a barbearia!</> : 'Você foi convidado por um amigo!'}
+                          </p>
+                          <p className="text-zinc-400 text-[10px] mt-1">Cadastre-se e faça seu primeiro corte — seu amigo ganha uma recompensa 💰</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                    <input type="text" placeholder="Nome Completo" value={registerData.name} onChange={e => setRegisterData({...registerData, name: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
                    <input type="tel" placeholder="WhatsApp" value={registerData.phone} onChange={e => setRegisterData({...registerData, phone: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
                    <input type="email" placeholder="E-mail" value={registerData.email} onChange={e => setRegisterData({...registerData, email: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
@@ -1832,9 +1939,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 <div className="space-y-2">
                   {clientRanking.map((cl: any, idx: number) => {
                     const isMe = cl.id === loggedClient.id;
-                    const tier = idx === 0 ? { badge: '⚫', label: 'PREMIUM BLACK' }
-                      : idx === 1 ? { badge: '🥇', label: 'OURO' }
-                      : idx === 2 ? { badge: '🥈', label: 'PRATA' }
+                    const tier = idx === 0 ? { badge: '👑', label: 'PREMIUM BLACK' }
+                      : idx === 1 ? { badge: '🥈', label: '2º OURO' }
+                      : idx === 2 ? { badge: '🥉', label: '3º PRATA' }
                       : { badge: `${idx+1}`, label: '' };
                     return (
                       <div key={cl.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isMe ? 'border-[#C58A4A]/50 bg-[#C58A4A]/10' : (theme === 'light' ? 'border-zinc-100 bg-zinc-50' : 'border-white/5 bg-white/5')}`}>
