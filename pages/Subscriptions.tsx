@@ -113,28 +113,26 @@ const Subscriptions: React.FC = () => {
       });
       setEditingSub(null);
     } else {
-      // FIX: paymentMethod passado no nível raiz para o store.ts detectar corretamente
-      await addSubscription({
-        clientId:      formData.clientId,
-        clientName:    client.name,
-        planId:        formData.planId,
-        planName:      plan.name,
-        price:         plan.price,
-        startDate:     startDate.toISOString().split('T')[0],
-        endDate:       endDate.toISOString().split('T')[0],
-        status:        'ATIVA',
-        usageCount:    0,
-        usageLimit:    formData.usageLimit || undefined,
-        paymentMethod: formData.paymentMethod,   // FIX: campo no nível raiz
-        paymentHistory: [{
-          id:     `pay_${Date.now()}`,
-          date:   new Date().toLocaleDateString('pt-BR'),
-          amount: plan.price,
-          method: formData.paymentMethod,
-          status: 'PAGO',
-        }],
-        createdAt: new Date().toISOString(),
-      });
+    await addSubscription({
+      clientId:    formData.clientId,
+      clientName:  client.name,
+      planId:      formData.planId,
+      planName:    plan.name,
+      price:       plan.price,
+      startDate:   startDate.toISOString().split('T')[0],
+      endDate:     endDate.toISOString().split('T')[0],
+      status:      'ATIVA',
+      usageCount:  0,
+      usageLimit:  formData.usageLimit || undefined,
+      paymentHistory: [{
+        id:     `pay_${Date.now()}`,
+        date:   new Date().toLocaleDateString('pt-BR'),
+        amount: plan.price,
+        method: formData.paymentMethod,
+        status: 'PAGO',
+      }],
+      createdAt: new Date().toISOString(),
+    });
     }
     setShowModal(false); setEditingSub(null);
     setFormData({ clientId: '', planId: '', usageLimit: 0, paymentMethod: 'PIX' });
@@ -392,6 +390,25 @@ const Subscriptions: React.FC = () => {
                   <div className="text-center">
                     <p className="text-[8px] font-black uppercase text-zinc-500 mb-1">Valor</p>
                     <p className="font-black text-xl text-[#C58A4A]">R$ {sub.price.toFixed(2)}</p>
+                {(() => {
+                  const plan = (config as any).vipPlans?.find((p: any) => p.id === sub.planId);
+                  if (!plan?.maxCuts) return null;
+                  const used = sub.cutsThisPeriod || 0;
+                  const max = plan.maxCuts;
+                  const pct = Math.min((used / max) * 100, 100);
+                  return (
+                    <div className="mt-2">
+                      <div className="flex justify-between text-[9px] font-black uppercase mb-1">
+                        <span className={isDark ? 'text-zinc-500' : 'text-zinc-400'}>Cortes usados</span>
+                        <span className={used >= max ? 'text-red-400' : 'text-[#C58A4A]'}>{used}/{max}</span>
+                      </div>
+                      <div className={`w-full h-1.5 rounded-full ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`}>
+                        <div className={`h-full rounded-full transition-all ${used >= max ? 'bg-red-500' : 'bg-[#C58A4A]'}`} style={{width: `${pct}%`}}/>
+                      </div>
+                      {used >= max && <p className="text-[9px] text-red-400 font-black mt-1">⛔ Limite atingido — renovar plano</p>}
+                    </div>
+                  );
+                })()}
                   </div>
 
                   <div className="flex gap-2 flex-wrap">
