@@ -377,6 +377,14 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, id));
   };
 
+  // ── Reduz estoque de um produto ao ser consumido ─────────
+  const decreaseProductStock = async (productId: string, qty = 1) => {
+    const product = products.find((p: any) => p.id === productId);
+    if (!product || product.stock === null || product.stock === undefined) return;
+    const newStock = Math.max(0, (product.stock ?? 0) - qty);
+    await updateDoc(doc(db, COLLECTIONS.PRODUCTS, productId), { stock: newStock });
+  };
+
   const addStaff = async (data: any) => {
     const ref = await addDoc(collection(db, 'staff'), { ...data, createdAt: new Date().toISOString() });
     return ref.id;
@@ -1132,7 +1140,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns,
       clientBenefits,  // ── NOVO ──
       toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
-      products, addProduct, updateProduct, deleteProduct,
+      products, addProduct, updateProduct, deleteProduct, decreaseProductStock,
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
