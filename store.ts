@@ -386,7 +386,36 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   };
   // ── REFERRAL (Indique e Ganhe) ──────────────────────────
   const createReferral = async (data: Omit<any,'id'>) => {
-    await addDoc(collection(db, COLLECTIONS.REFERRALS), { ...data, createdAt: new Date().toISOString() });
+    // Se o indicado tem dados suficientes, cria/atualiza cadastro dele
+    let referredClientId = data.referredClientId || null;
+    if (data.referredPhone || data.referredEmail) {
+      const phone = (data.referredPhone || '').replace(/\D/g,'');
+      const existing = clients.find((cl: any) =>
+        (phone && cl.phone && cl.phone.replace(/\D/g,'') === phone) ||
+        (data.referredEmail && cl.email === data.referredEmail)
+      );
+      if (existing) {
+        referredClientId = existing.id;
+      } else if (data.referredName && (data.referredPhone || data.referredEmail)) {
+        // Cria pré-cadastro do indicado
+        const ref = await addDoc(collection(db, COLLECTIONS.CLIENTS), {
+          name: data.referredName,
+          phone: data.referredPhone || '',
+          email: data.referredEmail || '',
+          cpfCnpj: data.referredCpf || '',
+          birthdate: data.referredBirthdate || '',
+          howFound: 'Indicação de amigo',
+          referredBy: data.referrerId,
+          createdAt: new Date().toISOString(),
+        });
+        referredClientId = ref.id;
+      }
+    }
+    await addDoc(collection(db, COLLECTIONS.REFERRALS), {
+      ...data,
+      referredClientId,
+      createdAt: new Date().toISOString()
+    });
   };
 
   const validateReferral = async (referralId: string) => {
@@ -775,16 +804,26 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             console.log(`⛔ Cliente ${appointment.clientName} atingiu o limite de ${plan.maxCuts} cortes do plano ${plan.name}`);
           }
         }
-      // ── Auto-valida indicação se for o primeiro atendimento com referralCode ──
-      if (appointment.referralCode && !existingEntry) {
+      // ── Auto-valida indicação pelo telefone/ID do indicado ────────────────
+      // Verifica se este é o primeiro corte concluído do cliente
+      const clientPrevCuts = appointments.filter(
+        (a: any) => (a.clientId === appointment.clientId || a.clientPhone === appointment.clientPhone) &&
+                    a.status === 'CONCLUIDO_PAGO' &&
+                    a.id !== id
+      ).length;
+
+      if (clientPrevCuts === 0) {
+        // É o primeiro corte — procura indicação pendente pelo telefone ou ID
         const pendingRef = referrals.find(
-          (r: any) => r.referrerId === appointment.referralCode &&
-                      (r.referredPhone === appointment.clientPhone || r.referredClientId === appointment.clientId) &&
-                      r.status === 'PENDENTE'
+          (r: any) =>
+            r.status === 'PENDENTE' && (
+              (r.referredPhone && r.referredPhone.replace(/\D/g,'') === (appointment.clientPhone || '').replace(/\D/g,'')) ||
+              (r.referredClientId && r.referredClientId === appointment.clientId)
+            )
         );
         if (pendingRef) {
-          // Valida automaticamente ao concluir o primeiro corte
           await validateReferral(pendingRef.id);
+          console.log(`✅ Indicação auto-validada: ${pendingRef.referrerName} indicou ${appointment.clientName}`);
         }
       }
       }
