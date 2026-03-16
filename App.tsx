@@ -22,7 +22,7 @@ import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { user, config, theme, login, toggleTheme, addClient, clients, logout } = useBarberStore();
+  const { user, config, theme, login, toggleTheme, addClient, clients, logout, changePassword } = useBarberStore() as any;
   const [activeTab, setActiveTab] = useState(() => {
     // Lê a aba da URL hash ao carregar (ex: #agenda, #clientes)
     const hash = window.location.hash.replace('#', '');
@@ -323,12 +323,10 @@ const App: React.FC = () => {
       <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
         {renderContent()}
       </Layout>
-jsx
-<button onClick={handleGoToClientView} className="fixed bottom-4 right-4 z-[100] gradiente-ouro text-black px-2 py-1 sm:px-4 sm:py-2 rounded-2xl sm:rounded-[2rem] font-black text-[9px] sm:text-xs uppercase tracking-widest shadow-2xl hover:scale-110 active:scale-95 transition-all">
-  <span className="sm:hidden">👁 CLIENTE</span>
-  <span className="hidden sm:inline">VISÃO DO CLIENTE</span>
-</button>
-
+      <button onClick={handleGoToClientView} className="fixed bottom-4 right-4 z-[100] gradiente-ouro text-black px-2 py-1 sm:px-4 sm:py-2 rounded-2xl sm:rounded-[2rem] font-black text-[9px] sm:text-xs uppercase tracking-widest shadow-2xl hover:scale-110 active:scale-95 transition-all">
+        <span className="sm:hidden">👁 CLIENTE</span>
+        <span className="hidden sm:inline">VISÃO DO CLIENTE</span>
+      </button>
     </div>
   );
 };
