@@ -346,7 +346,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   const login = async (id: string, pass: string) => {
-    if (id === 'novojeitoadm@gmail.com' && pass === '654326') {
+    const adminPass = (config as any).adminPassword || '654326';
+    if (id === 'novojeitoadm@gmail.com' && pass === adminPass) {
       const adminName = config.adminName || 'Novo Jeito';
       const adminAvatar = config.logo || 'https://i.pravatar.cc/150';
       setUser({ id: 'admin', name: adminName, email: id, role: 'ADMIN', avatar: adminAvatar });
@@ -367,6 +368,13 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   };
 
   const logout = () => setUser(null);
+
+  // ── Alterar senha do admin (salva no Firestore config) ────
+  const changePassword = async (newPassword: string) => {
+    // Salva a nova senha no Firestore para persistência
+    await updateConfig({ adminPassword: newPassword } as any);
+    // Atualiza o login check: se adminPassword existe no config, usa ele
+  };
 
   // ── Staff CRUD ──────────────────────────────────────────────────────
   // ── Products CRUD ─────────────────────────────────────────────
@@ -1216,7 +1224,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     value: {
       user, clients, professionals, services, appointments, financialEntries,
       notifications, suggestions, config, loading, theme,
-      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral,
+      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral, changePassword,
       clientBenefits,  // ── NOVO ──
       toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
       products, addProduct, updateProduct, deleteProduct, decreaseProductStock,
