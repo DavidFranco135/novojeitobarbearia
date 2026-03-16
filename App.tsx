@@ -30,16 +30,20 @@ const App: React.FC = () => {
     return valid.includes(hash) ? hash : 'dashboard';
   });
 
-  // Atualiza a URL hash quando muda de aba
+  // Atualiza a URL hash apenas quando admin/staff estiver logado
   React.useEffect(() => {
-    window.location.hash = activeTab;
-  }, [activeTab]);
-  const [isPublicView, setIsPublicView] = useState(() => {
-    // Se a URL tem hash de página admin, começa na view de login/admin
-    const hash = window.location.hash.replace('#', '');
-    const adminPages = ['dashboard','agenda','clientes','servicos','financeiro','produtos','assinaturas','barbeiros','configuracoes','automacoes','inbox'];
-    return adminPages.includes(hash) ? false : true;
-  });
+    if (user && user.role !== 'CLIENTE') {
+      window.location.hash = activeTab;
+    } else {
+      // Remove o hash para manter URL limpa e PWA abrindo na página pública
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  }, [activeTab, user]);
+  // Sempre começa na página pública — o admin acessa pelo botão de cadeado
+  // Isso evita tela preta quando o PWA é salvo com #dashboard na URL
+  const [isPublicView, setIsPublicView] = useState(true);
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   // ── Esqueci senha ADM ──────────────────────────────────────
