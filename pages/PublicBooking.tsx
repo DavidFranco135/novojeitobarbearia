@@ -149,52 +149,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const comentRef    = React.useRef<HTMLDivElement>(null);
   const [selectedProduct, setSelectedProduct] = React.useState<any | null>(null);
 
-  // ── Accordion das seções da home ────────────────────────────
-  const [openSections, setOpenSections] = React.useState<Set<string>>(() => new Set());
-  const toggleSection = (key: string) => {
-    setOpenSections(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-  // Helper: renderiza cabeçalho de accordion
-  const AccordionHeader: React.FC<{
-    sectionKey: string;
-    label: string;
-    icon?: React.ReactNode;
-  }> = ({ sectionKey, label, icon }) => {
-    const isOpen = openSections.has(sectionKey);
-    return (
-      <button
-        onClick={() => toggleSection(sectionKey)}
-        className={`w-full flex items-center justify-between px-6 py-5 rounded-[2rem] border transition-all duration-300 group
-          ${isOpen
-            ? theme === 'light'
-              ? 'bg-white border-[#C58A4A]/40 shadow-sm'
-              : 'bg-white/5 border-[#C58A4A]/30'
-            : theme === 'light'
-              ? 'bg-white border-zinc-200 hover:border-[#C58A4A]/30'
-              : 'bg-white/[0.03] border-white/8 hover:border-[#C58A4A]/20'
-          }`}
-      >
-        <div className="flex items-center gap-3">
-          {icon && <span className="text-[#C58A4A]">{icon}</span>}
-          <span className={`text-base font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-            {label}
-          </span>
-        </div>
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0
-          ${isOpen ? 'gradiente-ouro' : theme === 'light' ? 'bg-zinc-100' : 'bg-white/10'}`}>
-          <ChevronRight
-            size={18}
-            className={`transition-transform duration-300 ${isOpen ? 'rotate-90 text-black' : theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}
-          />
-        </div>
-      </button>
-    );
-  };
-
   const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
     if (!ref.current) return;
     setIsDragging(true);
@@ -839,10 +793,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* 2. Nossos Rituais */}
-             <section className="mb-6" id="catalogo">
-                <AccordionHeader sectionKey="servicos" label="Todos os Serviços" icon={<Scissors size={18}/>} />
-                {openSections.has('servicos') && (
-                <div className={`mt-3 px-2 pb-6 animate-in slide-in-from-top-2`}>
+             <section className="mb-24" id="catalogo">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                    <h2 className={`text-2xl font-black font-display italic flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Todos os serviços <div className="h-1 w-10 gradiente-ouro opacity-10"></div></h2>
                 </div>
@@ -890,16 +841,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      );
                    })}
                 </div>
-                </div>
-                )}
              </section>
 
              {/* 2.5 Produtos */}
              {products && products.filter((p: any) => p.active !== false).length > 0 && (
-             <section className="mb-6">
-                <AccordionHeader sectionKey="produtos" label="Produtos" icon={<span style={{fontSize:16}}>🛒</span>} />
-                {openSections.has('produtos') && (
-                <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                   Produtos <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                 </h2>
@@ -948,16 +894,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     ))}
                   </div>
                 </div>
-                </div>
-                )}
              </section>
              )}
 
              {/* 3. A Experiência Signature */}
-             <section className="mb-6">
-                <AccordionHeader sectionKey="ambiente" label="Nosso Ambiente" icon={<span style={{fontSize:16}}>📸</span>} />
-                {openSections.has('ambiente') && (
-                <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Nosso Ambiente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
                 <div className="relative group">
                   <button 
@@ -990,8 +931,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
                 </div>
               </div>
-                </div>
-                )}
              </section>
 
              {/* 4. Avaliações & Comentários — unificado */}
@@ -999,10 +938,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                const hasReviews  = config.reviews && config.reviews.length > 0;
                const hasComments = suggestions && suggestions.length > 0;
                return (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="avaliacoes" label="Avaliações & Comentários" icon={<Star size={18}/>} />
-                 {openSections.has('avaliacoes') && (
-                 <div className="mt-3 animate-in slide-in-from-top-2 py-6 -mx-6 px-6 bg-black">
+               <section className="mb-24 py-10 -mx-6 px-6 bg-black">
                  <h2 className="text-2xl font-black font-display italic mb-6 flex items-center gap-6 text-white">
                    Avaliações & Comentários <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1083,16 +1019,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    </div>
                  )}
-               </div>
-               )}
                </section>
                );
              })()}
              {/* 5. Nossos Artífices */}
-             <section className="mb-6">
-                <AccordionHeader sectionKey="profissionais" label="Nossos Profissionais" icon={<User size={18}/>} />
-                {openSections.has('profissionais') && (
-                <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                   Nossos Profissionais <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                 </h2>
@@ -1196,16 +1127,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     </div>
                   </div>
                 )}
-                </div>
-                )}
              </section>
 
              {/* 6. Planos VIP */}
              {config.vipPlans && config.vipPlans.filter(p => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="planos" label="Planos VIP" icon={<Crown size={18}/>} />
-                 {openSections.has('planos') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Planos VIP <Crown size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1243,17 +1169,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    ))}
                  </div>
-                 </div>
-                 )}
                </section>
              )}
 
              {/* 7. Programa de Fidelidade */}
              {((config as any).stampsForFreeCut || (config as any).cashbackPercent) && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="fidelidade" label="Programa de Fidelidade" icon={<Star size={18}/>} />
-                 {openSections.has('fidelidade') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Programa de Fidelidade <Star size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1313,17 +1234,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    </div>
                  </div>
-                 </div>
-                 )}
                </section>
              )}
 
              {/* Vitrine de Parceiros — sem QR público */}
              {(partners || []).filter((p: any) => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="parceiros" label="Parceiros & Benefícios" icon={<Gift size={18}/>} />
-                 {openSections.has('parceiros') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-4 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Parceiros & Benefícios <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1411,8 +1327,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      })
                    }
                  </div>
-                 </div>
-                 )}
                </section>
              )}
 
@@ -1456,10 +1370,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* ── RANKING TOP 10 ── */}
-             <section className="mb-6" id="ranking">
-               <AccordionHeader sectionKey="ranking" label="Ranking de Clientes" icon={<Trophy size={18}/>} />
-               {openSections.has('ranking') && (
-               <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24" id="ranking">
                <div className="flex items-center gap-3 mb-3">
                  <Trophy size={22} className="text-[#C58A4A] shrink-0"/>
                  <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Ranking de Clientes</h2>
@@ -1560,8 +1471,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
                {clientRanking.length === 0 && (
                  <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
-               )}
-               </div>
                )}
              </section>
 
@@ -2100,15 +2009,17 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                       )}
 
                       <div className="relative mt-1">
-                        <img
-                          src={p.avatar}
-                          className={`w-20 h-20 rounded-2xl object-cover transition-all ${
-                            p.isMaster
-                              ? 'border-2 border-[#C58A4A] group-hover:border-[#E8B97A]'
-                              : 'border-2 border-white/10 group-hover:border-[#C58A4A]'
-                          }`}
-                          alt=""
-                        />
+                        <div className={`w-20 rounded-2xl overflow-hidden transition-all ${
+                          p.isMaster
+                            ? 'border-2 border-[#C58A4A] group-hover:border-[#E8B97A]'
+                            : 'border-2 border-white/10 group-hover:border-[#C58A4A]'
+                        }`}>
+                          <img
+                            src={p.avatar}
+                            className="w-full h-auto object-contain block"
+                            alt=""
+                          />
+                        </div>
                         {p.isMaster ? (
                           <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-[#8B5E2A] to-[#E8B97A] text-black p-1.5 rounded-lg shadow-lg">
                             <Crown size={10} />
