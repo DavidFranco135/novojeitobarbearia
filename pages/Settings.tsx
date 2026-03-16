@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Save, Store, Upload, ImageIcon, User as UserIcon, Trash2, Plus,
   MapPin, RotateCcw, Crown, X, Star, Image, Phone, Instagram,
-  Clock, Link, Edit3, Eye, EyeOff, Wifi, WifiOff, AlertTriangle
+  Clock, Link, Edit3
 } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { VipPlan } from '../types';
@@ -15,13 +15,10 @@ const Settings: React.FC = () => {
     avatar: user?.avatar || config.logo || 'https://i.pravatar.cc/150'
   });
   const [loading, setLoading] = useState(false);
-  const [showAsaasKey, setShowAsaasKey] = useState(false);
-  const [asaasTestStatus, setAsaasTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
-  const [asaasTestMsg, setAsaasTestMsg] = useState('');
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<VipPlan | null>(null);
   const [newPlan, setNewPlan] = useState<Partial<VipPlan>>({
-    name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO'
+    name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', maxCuts: 4, vipCommissionPct: 50
   });
 
   const IMGBB_API_KEY = 'da736db48f154b9108b23a36d4393848';
@@ -65,47 +62,6 @@ const Settings: React.FC = () => {
     setFormData(prev => ({ ...prev, gallery: (prev.gallery || []).filter((_, i) => i !== index) }));
   };
 
-  // ── Testa conexão com Asaas ──────────────────────────────────
-  const testAsaasConnection = async () => {
-    const rawKey = ((formData as any).asaasKey || '').trim().replace(/[\r\n\t ]/g, '');
-    const env    = (formData as any).asaasEnv || 'sandbox';
-
-    if (!rawKey) {
-      setAsaasTestStatus('error');
-      setAsaasTestMsg('Chave não preenchida. Cole a chave e clique em Testar.');
-      return;
-    }
-
-    setAsaasTestStatus('testing');
-    setAsaasTestMsg('Conectando...');
-
-    try {
-      const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: '/customers?limit=1', method: 'GET', key: rawKey, env }),
-      });
-      const data = await res.json();
-
-      if (res.status === 401 || data?.errors?.[0]?.code === 'invalid_access_token') {
-        setAsaasTestStatus('error');
-        const envLabel = env === 'sandbox' ? 'Sandbox' : 'Produção';
-        setAsaasTestMsg(`Chave inválida para ambiente ${envLabel}. Verifique se copiou a chave correta em sandbox.asaas.com → Minha Conta → Integrações.`);
-      } else if (data?.data !== undefined || data?.totalCount !== undefined) {
-        setAsaasTestStatus('ok');
-        setAsaasTestMsg(`✅ Conexão OK! Ambiente: ${env === 'sandbox' ? 'Sandbox' : 'Produção'}.`);
-        // Salva automaticamente a chave saneada no formData
-        setFormData(prev => ({ ...prev, asaasKey: rawKey } as any));
-      } else {
-        setAsaasTestStatus('error');
-        setAsaasTestMsg(`Resposta inesperada: ${JSON.stringify(data).substring(0, 120)}`);
-      }
-    } catch (err: any) {
-      setAsaasTestStatus('error');
-      setAsaasTestMsg(`Erro de rede: ${err?.message || 'verifique sua conexão'}`);
-    }
-  };
-
   const handleSave = async () => {
     setLoading(true);
     try {
@@ -137,7 +93,9 @@ const Settings: React.FC = () => {
       benefits: newPlan.benefits!.filter(b => b.trim()),
       discount: newPlan.discount ?? 0,
       featured: newPlan.featured ?? false,
-      status: newPlan.status!
+      status: newPlan.status!,
+      maxCuts: newPlan.maxCuts ?? 4,
+      vipCommissionPct: newPlan.vipCommissionPct ?? 50
     };
     const current = formData.vipPlans || [];
     setFormData(prev => ({
@@ -146,7 +104,7 @@ const Settings: React.FC = () => {
     }));
     setShowVipPlanModal(false);
     setEditingPlan(null);
-    setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30, featured: false });
+    setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30, featured: false, maxCuts: 4, vipCommissionPct: 50 });
   };
 
   const handleEditPlan   = (plan: VipPlan) => { setEditingPlan(plan); setNewPlan(plan); setShowVipPlanModal(true); };
@@ -370,6 +328,41 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
+            {/* ── Indique e Ganhe ── */}
+            <div className={`rounded-[2rem] border p-6 space-y-4 ${isDark ? 'border-[#C58A4A]/20 bg-[#C58A4A]/5' : 'border-amber-200 bg-amber-50'}`}>
+              <h4 className={`font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                🎁 Indique e Ganhe
+              </h4>
+              <p className={`text-[10px] ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                O cliente recebe recompensa quando o indicado concluir o primeiro corte.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className={lbl}>Recompensa por Indicação (R$)</label>
+                  <input type="number" min={0} step={1}
+                    value={(formData as any).referralRewardAmount ?? 5}
+                    onChange={e => setFormData({ ...formData, referralRewardAmount: parseFloat(e.target.value) || 5 } as any)}
+                    className={inp}
+                    placeholder="Ex: 5"
+                  />
+                  <p className={`text-[10px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Crédito adicionado à carteira do indicador</p>
+                </div>
+                <div className="space-y-2">
+                  <label className={lbl}>Indicações para Corte Grátis</label>
+                  <input type="number" min={1} step={1}
+                    value={(formData as any).referralFreeCutThreshold ?? 3}
+                    onChange={e => setFormData({ ...formData, referralFreeCutThreshold: parseInt(e.target.value) || 3 } as any)}
+                    className={inp}
+                    placeholder="Ex: 3"
+                  />
+                  <p className={`text-[10px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>A cada X indicações validadas, ganha 1 corte grátis</p>
+                </div>
+              </div>
+              <div className={`p-3 rounded-xl text-[10px] ${isDark ? 'bg-black/30 text-zinc-300' : 'bg-white text-zinc-600'}`}>
+                💡 Exemplo: R$ {(formData as any).referralRewardAmount ?? 5} por indicação · {(formData as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
+              </div>
+            </div>
+
             {/* ── Integração Asaas ────────────────────────────────── */}
             <div className={`rounded-[2rem] border p-8 space-y-6 ${isDark ? 'border-white/5 bg-white/2' : 'border-zinc-200 bg-white'}`}>
               <div className="flex items-center gap-3 mb-2">
@@ -384,71 +377,14 @@ const Settings: React.FC = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Chave de API</label>
-                  <div className="relative flex gap-2">
-                    <input
-                      type={showAsaasKey ? 'text' : 'password'}
-                      placeholder="$aact_... (cole sua chave sandbox)"
-                      value={(formData as any).asaasKey || ''}
-                      onChange={e => {
-                        // FIX: sanitiza na digitação — remove espaços/quebras acidentais
-                        const clean = e.target.value.replace(/[\r\n\t]/g, '').trimStart();
-                        setFormData({ ...formData, asaasKey: clean } as any);
-                        setAsaasTestStatus('idle');
-                      }}
-                      className={`flex-1 border p-4 rounded-2xl outline-none font-mono text-sm transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-[#00a650]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#00a650]'}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowAsaasKey(v => !v)}
-                      title={showAsaasKey ? 'Ocultar chave' : 'Mostrar chave'}
-                      className={`px-4 rounded-2xl border transition-all flex-shrink-0 ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-100 border-zinc-300 text-zinc-500 hover:text-zinc-900'}`}
-                    >
-                      {showAsaasKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                    Sandbox: acesse <strong>sandbox.asaas.com</strong> → Minha Conta → Integrações → Chave de API
-                  </p>
-
-                  {/* Botão Testar Conexão */}
-                  <button
-                    type="button"
-                    onClick={testAsaasConnection}
-                    disabled={asaasTestStatus === 'testing'}
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all
-                      ${asaasTestStatus === 'testing'
-                        ? 'opacity-60 cursor-wait bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
-                        : isDark
-                          ? 'bg-[#00a650]/10 border-[#00a650]/30 text-[#00a650] hover:bg-[#00a650]/20'
-                          : 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'}`}
-                  >
-                    {asaasTestStatus === 'testing'
-                      ? <><span className="animate-spin">⏳</span> Testando...</>
-                      : asaasTestStatus === 'ok'
-                        ? <><Wifi size={14} /> Conexão OK — Testar Novamente</>
-                        : asaasTestStatus === 'error'
-                          ? <><WifiOff size={14} /> Falhou — Testar Novamente</>
-                          : <><Wifi size={14} /> Testar Conexão Asaas</>}
-                  </button>
-
-                  {/* Resultado do teste */}
-                  {asaasTestStatus !== 'idle' && asaasTestStatus !== 'testing' && (
-                    <div className={`p-4 rounded-2xl border text-[10px] font-bold leading-relaxed flex items-start gap-2
-                      ${asaasTestStatus === 'ok'
-                        ? isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                        : isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-200 text-red-700'}`}
-                    >
-                      {asaasTestStatus === 'ok' ? <Wifi size={13} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />}
-                      {asaasTestMsg}
-                    </div>
-                  )}
-
-                  {/* Aviso sobre chave sandbox vs produção */}
-                  <div className={`p-3 rounded-xl border ${isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
-                    <p className={`text-[9px] font-bold ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
-                      ⚠️ <strong>Sandbox e Produção têm chaves diferentes.</strong> A chave sandbox começa com <code>$aact_</code> e só funciona em <code>sandbox.asaas.com</code>. Não misture os ambientes.
-                    </p>
-                  </div>
+                  <input
+                    type="password"
+                    placeholder="$aas_... (cole sua chave de API)"
+                    value={(formData as any).asaasKey || ''}
+                    onChange={e => setFormData({ ...formData, asaasKey: e.target.value } as any)}
+                    className={`w-full border p-4 rounded-2xl outline-none font-mono text-sm transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-[#00a650]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#00a650]'}`}
+                  />
+                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Encontre em: Asaas → Minha Conta → Integrações → Chave de API</p>
                 </div>
                 <div className="space-y-2">
                   <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Ambiente</label>
@@ -496,6 +432,7 @@ const Settings: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <h4 className={`text-lg font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{plan.name}</h4>
                           {(plan as any).featured && <span className="text-[9px] font-black text-[#C58A4A] bg-[#C58A4A]/10 border border-[#C58A4A]/30 px-2 py-0.5 rounded-full">⭐ DESTAQUE</span>}
+                          {(plan as any).maxCuts && <span className="text-[9px] font-black text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">✂️ {(plan as any).maxCuts} cortes • {(plan as any).vipCommissionPct || 0}% comissão</span>}
                         </div>
                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${plan.status === 'ATIVO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{plan.status}</span>
                       </div>
@@ -662,6 +599,38 @@ const Settings: React.FC = () => {
                     onChange={e => setNewPlan({ ...newPlan, discount: parseInt(e.target.value) || 0 })} className={inp} />
                 </div>
               </div>
+              {/* Cortes por período + Comissão VIP */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className={lbl}>Cortes por Período</label>
+                  <input type="number" min="1" max="100" value={newPlan.maxCuts || 4}
+                    onChange={e => setNewPlan({ ...newPlan, maxCuts: parseInt(e.target.value) || 4 })} className={inp}
+                    placeholder="Ex: 4" />
+                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Máximo de cortes incluídos</p>
+                </div>
+                <div className="space-y-2">
+                  <label className={lbl}>Comissão Barbeiro (%)</label>
+                  <input type="number" min="0" max="100" value={newPlan.vipCommissionPct || 50}
+                    onChange={e => setNewPlan({ ...newPlan, vipCommissionPct: parseInt(e.target.value) || 0 })} className={inp}
+                    placeholder="Ex: 50" />
+                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>% sobre valor por corte</p>
+                </div>
+              </div>
+              {/* Preview do cálculo */}
+              {(newPlan.price || 0) > 0 && (newPlan.maxCuts || 0) > 0 && (
+                <div className={`p-4 rounded-2xl border text-[11px] space-y-1 ${isDark ? 'bg-[#C58A4A]/5 border-[#C58A4A]/20' : 'bg-amber-50 border-amber-200'}`}>
+                  <p className="font-black text-[#C58A4A]">💡 Preview do cálculo</p>
+                  <p className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>
+                    Valor por corte: <strong>R$ {((newPlan.price || 0) / (newPlan.maxCuts || 1)).toFixed(2)}</strong>
+                  </p>
+                  <p className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>
+                    Comissão por corte ({newPlan.vipCommissionPct || 0}%): <strong>R$ {(((newPlan.price || 0) / (newPlan.maxCuts || 1)) * ((newPlan.vipCommissionPct || 0) / 100)).toFixed(2)}</strong>
+                  </p>
+                  <p className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>
+                    Total comissão por plano: <strong>R$ {(((newPlan.price || 0) / (newPlan.maxCuts || 1)) * ((newPlan.vipCommissionPct || 0) / 100) * (newPlan.maxCuts || 1)).toFixed(2)}</strong>
+                  </p>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setNewPlan({ ...newPlan, featured: !newPlan.featured })}
