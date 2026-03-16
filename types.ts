@@ -146,6 +146,8 @@ export interface VipPlan {
   discount?: number;
   featured?: boolean;
   status: 'ATIVO' | 'INATIVO';
+  maxCuts?: number;           // Limite de cortes por período (ex: 4)
+  vipCommissionPct?: number;  // % de comissão do barbeiro sobre (price/maxCuts)
 }
 
 export interface ShopConfig {
@@ -218,6 +220,8 @@ export interface Subscription {
   status: 'ATIVA' | 'VENCIDA' | 'CANCELADA' | 'PAUSADA';
   usageCount: number;
   usageLimit?: number;
+  cutsThisPeriod?: number;    // Cortes realizados no período atual
+  periodStartDate?: string;   // Início do período vigente
   paymentHistory: SubscriptionPayment[];
   createdAt: string;
 }
