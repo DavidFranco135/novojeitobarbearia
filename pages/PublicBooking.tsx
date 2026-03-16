@@ -1278,6 +1278,100 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </section>
              )}
 
+             {/* ── INDIQUE E GANHE — Banner ── */}
+             <section className="mb-10">
+               <button
+                 onClick={() => setView('LOGIN')}
+                 className="w-full relative overflow-hidden rounded-[2rem] p-0 border-2 border-[#C58A4A]/40 hover:border-[#C58A4A] transition-all group"
+                 style={{background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0e00 50%, #0a0a0a 100%)'}}
+               >
+                 {/* Glow animado */}
+                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500" style={{background: 'radial-gradient(ellipse at center, rgba(197,138,74,0.15) 0%, transparent 70%)'}}/>
+                 {/* Linha dourada topo */}
+                 <div className="absolute top-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+
+                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
+                   <div className="flex items-center gap-5 text-left">
+                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
+                       <span className="text-2xl sm:text-3xl">🎁</span>
+                     </div>
+                     <div>
+                       <p className="text-[#E8B97A] text-[10px] font-black uppercase tracking-[0.3em] mb-1">Programa de Indicação</p>
+                       <p className="text-white text-xl sm:text-2xl font-black font-display italic leading-tight">
+                         Indique e Ganhe{' '}
+                         <span style={{color: '#C58A4A'}}>R$ {(config as any).referralRewardAmount ?? 5}</span>
+                       </p>
+                       <p className="text-zinc-400 text-[11px] sm:text-xs mt-1">
+                         Cada amigo que cortar = crédito na sua carteira · {(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
+                       </p>
+                     </div>
+                   </div>
+                   <div className="shrink-0">
+                     <span className="inline-flex items-center gap-2 text-black font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg transition-all group-hover:scale-105" style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
+                       Quero Indicar <ArrowRight size={14}/>
+                     </span>
+                   </div>
+                 </div>
+                 {/* Linha dourada base */}
+                 <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+               </button>
+             </section>
+
+             {/* ── RANKING TOP 10 ── */}
+             <section className="mb-24" id="ranking">
+               <div className="flex items-center gap-3 mb-3">
+                 <Trophy size={22} className="text-[#C58A4A] shrink-0"/>
+                 <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Ranking de Clientes</h2>
+                 <div className="h-px flex-1 gradiente-ouro opacity-20"/>
+               </div>
+               <p className={`text-sm mb-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Os clientes mais dedicados da nossa família. ✂️ cortes + 👥 indicações</p>
+
+               {/* Top 3 — destaque especial */}
+               {clientRanking.length > 0 && (
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                   {clientRanking.slice(0, 3).map((cl: any, idx: number) => {
+                     const tiers = [
+                       { label: 'PREMIUM BLACK', icon: '👑', textColor: '#E8B97A', borderColor: '#C58A4A', bg: 'linear-gradient(135deg, #000000 0%, #1a1a1a 40%, #0d0800 100%)', glow: '0 0 30px rgba(197,138,74,0.35), 0 0 60px rgba(197,138,74,0.15)', badgeBg: 'linear-gradient(135deg, #8B5E2A, #E8B97A)', order: 'sm:order-2' },
+                       { label: 'OURO', icon: '🥇', textColor: '#000', borderColor: '#E8B97A', bg: 'linear-gradient(135deg, #8B5E2A, #C58A4A)', glow: '0 0 20px rgba(197,138,74,0.4)', badgeBg: 'rgba(0,0,0,0.3)', order: 'sm:order-1' },
+                       { label: 'PRATA', icon: '🥈', textColor: '#000', borderColor: '#d1d5db', bg: 'linear-gradient(135deg, #9ca3af, #d1d5db)', glow: '0 0 15px rgba(200,200,200,0.25)', badgeBg: 'rgba(0,0,0,0.2)', order: 'sm:order-3' },
+                     ][idx];
+                     return (
+                       <div key={cl.id} className={`relative rounded-[1.5rem] border-2 p-5 flex flex-col items-center text-center ${tiers.order} ${idx === 0 ? 'sm:mt-0' : 'sm:mt-4'}`}
+                         style={{background: tiers.bg, borderColor: tiers.borderColor, boxShadow: tiers.glow}}>
+                         {/* Badge posição */}
+                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest" style={{background: tiers.badgeBg, color: idx === 0 ? '#C58A4A' : '#fff', border: `1px solid ${tiers.borderColor}`}}>
+                           {tiers.label}
+                         </div>
+                         <span className="text-3xl mt-2 mb-2">{tiers.icon}</span>
+                         <p className="font-black text-sm leading-tight mb-1 truncate w-full" style={{color: tiers.textColor}}>{cl.name}</p>
+                         <div className="flex gap-3 text-[9px] font-black mt-1" style={{color: tiers.textColor, opacity: 0.8}}>
+                           <span>✂️ {cl.totalCuts}</span>
+                           <span>👥 {cl.totalReferrals}</span>
+                         </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               )}
+
+               {/* 4º ao 10º — lista compacta */}
+               {clientRanking.length > 3 && (
+                 <div className="space-y-2">
+                   {clientRanking.slice(3, 10).map((cl: any, idx: number) => (
+                     <div key={cl.id} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${theme === 'light' ? 'bg-white border-zinc-200 hover:border-zinc-300' : 'bg-white/[0.04] border-white/5 hover:border-white/10'}`}>
+                       <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${theme === 'light' ? 'bg-zinc-100 text-zinc-500' : 'bg-white/10 text-zinc-400'}`}>{idx + 4}</span>
+                       <span className={`flex-1 font-bold text-sm truncate ${theme === 'light' ? 'text-zinc-900' : 'text-zinc-200'}`}>{cl.name}</span>
+                       <span className={`text-[10px] font-black shrink-0 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>✂️ {cl.totalCuts} · 👥 {cl.totalReferrals}</span>
+                     </div>
+                   ))}
+                 </div>
+               )}
+
+               {clientRanking.length === 0 && (
+                 <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
+               )}
+             </section>
+
              {/* 8. Onde Nos Encontrar */}
              <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Onde Nos Encontrar <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
@@ -1297,42 +1391,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* 7. Redes Sociais */}
-             {/* ── RANKING TOP 10 ── */}
-             <section className="mb-24" id="ranking">
-               <h2 className={`text-2xl font-black font-display italic mb-2 flex items-center gap-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                 <Trophy size={24} className="text-[#C58A4A]"/> Ranking de Clientes <div className="h-1 flex-1 gradiente-ouro opacity-10"/>
-               </h2>
-               <p className={`text-sm mb-8 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Os clientes mais dedicados da nossa família.</p>
-               <div className="space-y-3">
-                 {clientRanking.slice(0, 10).map((cl: any, idx: number) => {
-                   const tier = idx === 0 ? { label: 'PREMIUM BLACK', bg: 'bg-gradient-to-r from-zinc-900 to-black border-zinc-600', text: 'text-white', badge: '⚫', glow: 'shadow-[0_0_20px_rgba(0,0,0,0.8)]' }
-                     : idx === 1 ? { label: 'OURO', bg: 'bg-gradient-to-r from-[#8B5E2A] to-[#C58A4A] border-[#E8B97A]', text: 'text-black', badge: '🥇', glow: 'shadow-[0_0_20px_rgba(197,138,74,0.4)]' }
-                     : idx === 2 ? { label: 'PRATA', bg: 'bg-gradient-to-r from-zinc-400 to-zinc-500 border-zinc-300', text: 'text-black', badge: '🥈', glow: 'shadow-[0_0_15px_rgba(160,160,160,0.3)]' }
-                     : { label: '', bg: theme === 'light' ? 'bg-white border-zinc-200' : 'bg-white/5 border-white/5', text: theme === 'light' ? 'text-zinc-900' : 'text-white', badge: `${idx+1}`, glow: '' };
-                   return (
-                     <div key={cl.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${tier.bg} ${tier.glow} transition-all`}>
-                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black shrink-0 ${idx < 3 ? 'bg-black/20' : (theme === 'light' ? 'bg-zinc-100' : 'bg-white/10')}`}>
-                         {tier.badge}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                         <div className="flex items-center gap-2 flex-wrap">
-                           <span className={`font-black text-sm truncate ${tier.text}`}>{cl.name}</span>
-                           {tier.label && <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-white/20 text-white' : 'bg-black/20'} ${tier.text}`}>{tier.label}</span>}
-                         </div>
-                         <div className={`flex gap-4 mt-0.5 text-[9px] font-black ${idx < 3 ? 'opacity-80' : (theme === 'light' ? 'text-zinc-500' : 'text-zinc-500')}`}>
-                           <span>✂️ {cl.totalCuts} cortes</span>
-                           <span>👥 {cl.totalReferrals} indicações</span>
-                         </div>
-                       </div>
-                       {idx < 3 && <Trophy size={18} className={idx === 0 ? 'text-zinc-400' : idx === 1 ? 'text-[#8B5E2A]' : 'text-zinc-300'} />}
-                     </div>
-                   );
-                 })}
-               </div>
-               {clientRanking.length === 0 && (
-                 <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
-               )}
-             </section>
 
              <section className="mb-20 text-center">
                 <h2 className={`text-2xl font-black font-display italic mb-10 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Conecte-se Conosco</h2>
