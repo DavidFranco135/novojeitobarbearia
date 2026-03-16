@@ -23,12 +23,8 @@ import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
 const App: React.FC = () => {
   const { user, config, theme, login, toggleTheme, addClient, clients, logout, changePassword } = useBarberStore() as any;
-  const [activeTab, setActiveTab] = useState(() => {
-    // Lê a aba da URL hash ao carregar (ex: #agenda, #clientes)
-    const hash = window.location.hash.replace('#', '');
-    const valid = ['dashboard','agenda','clientes','servicos','financeiro','produtos','assinaturas','barbeiros','configuracoes','automacoes','inbox'];
-    return valid.includes(hash) ? hash : 'dashboard';
-  });
+  // Sempre começa no dashboard — o index.html já limpa #dashboard antes do React carregar
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Atualiza a URL hash apenas quando admin/staff estiver logado
   React.useEffect(() => {
