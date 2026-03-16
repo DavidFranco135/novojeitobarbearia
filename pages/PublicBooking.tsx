@@ -1,14 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Scissors, Calendar, Check, MapPin, ChevronLeft, ChevronRight, ArrowRight, Clock, User, Phone, 
-  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift, Trophy, Medal, Share2, Users, Copy, QrCode, ChevronDown
+  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift, Trophy, Medal, Share2, Users, Copy, QrCode
 } from 'lucide-react';
 // Crown já importado acima — usado para badge Barbeiro Master
 import { useBarberStore } from '../store';
 import { Service, Review, Professional, Client } from '../types';
-import ClubeBeneficios from '../components/ClubeBeneficios';
-import SlidingTab from '../components/SlidingTab';
+import ClubeBeneficios from '../components/ClubeBeneficios'; // ── NOVO
 
 interface PublicBookingProps {
   initialView?: 'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD';
@@ -94,8 +92,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [showProfessionalModal, setShowProfessionalModal] = useState(false);
   const [showBeneficios, setShowBeneficios] = useState(false); // ── NOVO
   const [activeReviewTab, setActiveReviewTab] = useState<'reviews'|'comments'>('reviews');
-  const [openTab, setOpenTab] = useState<string | null>(null);
-  const toggleTab = (tab: string) => setOpenTab(prev => prev === tab ? null : tab);
 
   // ✅ CORREÇÃO: Estado para modal de criação rápida de cliente
   const [showQuickClient, setShowQuickClient] = useState(false);
@@ -796,11 +792,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
              </section>
 
-             {/* ══ ABAS DESLIZANTES ══ */}
-             <div className={`rounded-2xl overflow-hidden ring-1 mb-10 ${theme === 'light' ? 'ring-black/[0.06] bg-white' : 'ring-white/5 bg-white/[0.02]'}`}>
-
-             <SlidingTab title="Todos os Serviços" isOpen={openTab === 'servicos'} onToggle={() => toggleTab('servicos')} theme={theme} badge={<span className={`text-[12px] font-medium tabular-nums ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>{services.length}</span>}>
-             <div id="catalogo">
+             {/* 2. Nossos Rituais */}
+             <section className="mb-24" id="catalogo">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                    <h2 className={`text-2xl font-black font-display italic flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Todos os serviços <div className="h-1 w-10 gradiente-ouro opacity-10"></div></h2>
                 </div>
@@ -848,12 +841,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      );
                    })}
                 </div>
-              </div>
-             </SlidingTab>
+             </section>
 
+             {/* 2.5 Produtos */}
              {products && products.filter((p: any) => p.active !== false).length > 0 && (
-             <SlidingTab title="Produtos" isOpen={openTab === 'produtos'} onToggle={() => toggleTab('produtos')} theme={theme}>
-             <div>
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                   Produtos <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                 </h2>
@@ -902,12 +894,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     ))}
                   </div>
                 </div>
-              </div>
-             </SlidingTab>
+             </section>
              )}
 
-             <SlidingTab title="Nosso Ambiente" isOpen={openTab === 'ambiente'} onToggle={() => toggleTab('ambiente')} theme={theme} badge={<span className={`text-[12px] font-medium tabular-nums ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>{Array.isArray(config.gallery) ? config.gallery.length : 0} fotos</span>}>
-             <div>
+             {/* 3. A Experiência Signature */}
+             <section className="mb-24">
+                <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Nosso Ambiente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
                 <div className="relative group">
                   <button 
                     onClick={() => experienciaRef.current?.scrollBy({ left: -500, behavior: 'smooth' })}
@@ -939,15 +931,17 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
                 </div>
               </div>
-              </div>
-             </SlidingTab>
+             </section>
 
+             {/* 4. Avaliações & Comentários — unificado */}
              {((config.reviews && config.reviews.length > 0) || (suggestions && suggestions.length > 0)) && (() => {
                const hasReviews  = config.reviews && config.reviews.length > 0;
                const hasComments = suggestions && suggestions.length > 0;
                return (
-             <SlidingTab title="Avaliações e Comentários" isOpen={openTab === 'avaliacoes'} onToggle={() => toggleTab('avaliacoes')} theme={theme} badge={<span className={`text-[12px] font-medium tabular-nums ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>⭐ {config.reviews?.length || 0}</span>}>
-             <div className="py-10 -mx-6 px-6 bg-black">
+               <section className="mb-24 py-10 -mx-6 px-6 bg-black">
+                 <h2 className="text-2xl font-black font-display italic mb-6 flex items-center gap-6 text-white">
+                   Avaliações & Comentários <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                 </h2>
                  {/* Tabs */}
                  <div className="flex gap-2 mb-8">
                    <button onClick={() => setActiveReviewTab('reviews')} onTouchEnd={e=>{e.preventDefault();setActiveReviewTab('reviews');}} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeReviewTab==='reviews' ? 'gradiente-ouro text-black' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
@@ -1025,16 +1019,14 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    </div>
                  )}
-               </div>
-             </SlidingTab>
+               </section>
                );
              })()}
-
-             <SlidingTab title="Nossos Profissionais" isOpen={openTab === 'profissionais'} onToggle={() => toggleTab('profissionais')} theme={theme} badge={<span className={`text-[12px] font-medium tabular-nums ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>{professionals.length}</span>}>
-             <div>
-                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                   Nossos Profissionais <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                 </h2>
+             {/* 5. Nossos Artífices */}
+             <section className="mb-24">
+                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                  Nossos Profissionais <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                </h2>
 
                 {/* ── Barbeiro Master (destaque full-width) ── */}
                 {professionals.filter(p => p.isMaster).length > 0 && (
@@ -1135,12 +1127,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     </div>
                   </div>
                 )}
-              </div>
-             </SlidingTab>
+             </section>
 
+             {/* 6. Planos VIP */}
              {config.vipPlans && config.vipPlans.filter(p => p.status === 'ATIVO').length > 0 && (
-             <SlidingTab title="Planos VIP" isOpen={openTab === 'vip'} onToggle={() => toggleTab('vip')} theme={theme} badge={<span className={`text-[9px] font-medium uppercase tracking-widest px-2 py-0.5 rounded-full ${theme === 'light' ? 'bg-zinc-100 text-zinc-400' : 'bg-white/5 text-zinc-500'}`}>Premium</span>}>
-             <div>
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Planos VIP <Crown size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1178,16 +1169,15 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    ))}
                  </div>
-              </div>
-             </SlidingTab>
+               </section>
              )}
 
+             {/* 7. Programa de Fidelidade */}
              {((config as any).stampsForFreeCut || (config as any).cashbackPercent) && (
-             <SlidingTab title="Programa de Fidelidade" isOpen={openTab === 'fidelidade'} onToggle={() => toggleTab('fidelidade')} theme={theme}>
-             <div>
-                  <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                    Programa de Fidelidade <Star size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                  </h2>
+               <section className="mb-24">
+                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                   Programa de Fidelidade <Star size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                 </h2>
                  <div className={`rounded-[2.5rem] p-8 md:p-12 border overflow-hidden relative ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
                    <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
@@ -1244,16 +1234,15 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    </div>
                  </div>
-              </div>
-             </SlidingTab>
+               </section>
              )}
 
+             {/* Vitrine de Parceiros — sem QR público */}
              {(partners || []).filter((p: any) => p.status === 'ATIVO').length > 0 && (
-             <SlidingTab title="Parceiros e Benefícios" isOpen={openTab === 'parceiros'} onToggle={() => toggleTab('parceiros')} theme={theme}>
-             <div>
-                  <h2 className={`text-2xl font-black font-display italic mb-4 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                    Parceiros & Benefícios <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                  </h2>
+               <section className="mb-24">
+                 <h2 className={`text-2xl font-black font-display italic mb-4 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                   Parceiros & Benefícios <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                 </h2>
                  <p className={`text-sm mb-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                    Faça login no portal para gerar seu QR Code e usar o desconto em qualquer parceiro.
                  </p>
@@ -1338,8 +1327,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      })
                    }
                  </div>
-              </div>
-             </SlidingTab>
+               </section>
              )}
 
              {/* ── INDIQUE E GANHE — Banner ── */}
@@ -1381,9 +1369,14 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </button>
              </section>
 
-             <SlidingTab title="Ranking de Clientes" isOpen={openTab === 'ranking'} onToggle={() => toggleTab('ranking')} theme={theme} badge={<span className={`text-[12px] font-medium tabular-nums ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>🏆 Top {Math.min(clientRanking.length, 10)}</span>}>
-             <div id="ranking">
-                <p className={`text-sm mb-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Os clientes mais dedicados da nossa família. ✂️ cortes + 👥 indicações</p>
+             {/* ── RANKING TOP 10 ── */}
+             <section className="mb-24" id="ranking">
+               <div className="flex items-center gap-3 mb-3">
+                 <Trophy size={22} className="text-[#C58A4A] shrink-0"/>
+                 <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Ranking de Clientes</h2>
+                 <div className="h-px flex-1 gradiente-ouro opacity-20"/>
+               </div>
+               <p className={`text-sm mb-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Os clientes mais dedicados da nossa família. ✂️ cortes + 👥 indicações</p>
 
                {/* Top 3 — destaque especial */}
                {clientRanking.length > 0 && (
@@ -1479,10 +1472,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                {clientRanking.length === 0 && (
                  <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
                )}
-              </div>
-             </SlidingTab>
-
-             </div>{/* ══ FIM ABAS DESLIZANTES ══ */}
+             </section>
 
              {/* 8. Onde Nos Encontrar */}
              <section className="mb-24">
