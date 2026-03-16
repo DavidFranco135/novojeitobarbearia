@@ -424,6 +424,21 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
 
   // ── APPOINTMENTS ─────────────────────────────────────────────
   const addAppointment = async (data: any, isPublic = false) => {
+    // ── Verifica limite de cortes do plano VIP ──────────────────────────────
+    if (data.clientId) {
+      const clientSub = subscriptions.find((s: any) =>
+        s.clientId === data.clientId && s.status === 'ATIVA'
+      );
+      if (clientSub) {
+        const plan = ((config as any).vipPlans || []).find((p: any) => p.id === clientSub.planId);
+        if (plan && plan.maxCuts) {
+          const cutsUsed = clientSub.cutsThisPeriod || 0;
+          if (cutsUsed >= plan.maxCuts) {
+            throw new Error(`Limite de ${plan.maxCuts} cortes do plano "${plan.name}" atingido neste período. Próximo corte disponível na renovação.`);
+          }
+        }
+      }
+    }
     await addDoc(collection(db, COLLECTIONS.APPOINTMENTS), { ...data, status: 'PENDENTE' });
 
     if (isPublic) {
@@ -527,14 +542,68 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       const existingEntry = financialEntries.find(e => e.description === entryDescription);
 
       if (!existingEntry) {
+        // ── Verifica se cliente tem assinatura ativa e calcula comissão ──
+        const clientSub = subscriptions.find(
+          s => s.clientId === appointment.clientId && s.status === 'ATIVA'
+        );
+        const activePlan = clientSub
+          ? (config as any).vipPlans?.find((p: any) => p.id === clientSub.planId)
+          : null;
+
+        // Valor base para receita: se tem plano, usa valor por corte; caso contrário preço normal
+        let revenueAmount = appointment.price;
+        let commissionAmount: number | null = null;
+
+        if (clientSub && activePlan && activePlan.maxCuts && activePlan.maxCuts > 0) {
+          const pricePerCut = clientSub.price / activePlan.maxCuts;
+          revenueAmount = pricePerCut;
+
+          // Comissão do barbeiro: % configurada no profissional sobre o valor por corte
+          const professional = professionals.find((p: any) => p.id === appointment.professionalId);
+          if (professional && professional.commission > 0) {
+            commissionAmount = parseFloat(((pricePerCut * professional.commission) / 100).toFixed(2));
+          }
+        }
+
         await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
           description: entryDescription,
-          amount: appointment.price,
+          amount: revenueAmount,
           type: 'RECEITA',
-          category: 'Serviços',
+          category: clientSub ? `Plano VIP - ${clientSub.planName}` : 'Serviços',
           date: new Date().toISOString().split('T')[0],
-          appointmentId: id
+          appointmentId: id,
+          isSubscriptionService: !!clientSub,
+          subscriptionId: clientSub?.id || null,
         });
+
+        // Registra comissão do barbeiro separadamente
+        if (commissionAmount !== null && commissionAmount > 0 && appointment.professionalId) {
+          await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+            description: `Comissão - ${appointment.serviceName} (${appointment.professionalName}) — Plano VIP`,
+            amount: commissionAmount,
+            type: 'DESPESA',
+            category: 'Comissões',
+            date: new Date().toISOString().split('T')[0],
+            appointmentId: id,
+            professionalId: appointment.professionalId,
+          });
+        }
+
+        // ── Incrementa contador de cortes da assinatura ──────────────────
+        if (clientSub && activePlan && activePlan.maxCuts) {
+          const newCount = (clientSub.cutsThisPeriod || 0) + 1;
+          const blocked = newCount >= activePlan.maxCuts;
+
+          await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, clientSub.id), {
+            cutsThisPeriod: newCount,
+            // Se atingiu o limite, marca como bloqueada até renovação
+            ...(blocked ? { status: 'PAUSADA', blockedReason: 'Limite de cortes atingido' } : {}),
+          });
+
+          if (blocked) {
+            console.log(`⛔ Assinatura ${clientSub.id} bloqueada: ${newCount}/${activePlan.maxCuts} cortes utilizados.`);
+          }
+        }
       }
 
       // Cashback + Selos
@@ -577,6 +646,52 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           expiryDate: expiryDate.toISOString(),
           createdAt: new Date().toISOString(),
         });
+      }
+
+      // ── Comissão VIP: detecta assinatura ativa do cliente ──────────────────
+      const clientSub = subscriptions.find(s =>
+        s.clientId === appointment.clientId &&
+        s.status === 'ATIVA'
+      );
+      if (clientSub) {
+        const plan = ((config as any).vipPlans || []).find((p: any) => p.id === clientSub.planId);
+        if (plan && plan.maxCuts && plan.vipCommissionPct) {
+          const valuePerCut   = plan.price / plan.maxCuts;                    // ex: 80/4 = 20
+          const commissionVal = parseFloat(((valuePerCut * plan.vipCommissionPct) / 100).toFixed(2)); // ex: 20 * 50% = 10
+
+          // Registra comissão do barbeiro no financeiro
+          const prof = professionals.find((p: any) => p.id === appointment.professionalId);
+          if (prof && commissionVal > 0) {
+            const commDesc = `Comissão VIP • ${prof.name} • ${appointment.clientName} (${plan.name})`;
+            const existsComm = financialEntries.find(e => e.description === commDesc && e.appointmentId === id);
+            if (!existsComm) {
+              await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+                description: commDesc,
+                amount: commissionVal,
+                type: 'DESPESA',
+                category: 'Comissão',
+                date: new Date().toISOString().split('T')[0],
+                appointmentId: id,
+                professionalId: prof.id,
+              });
+            }
+          }
+
+          // Incrementa cutsThisPeriod na assinatura
+          const today   = new Date().toISOString().split('T')[0];
+          const subRef  = doc(db, COLLECTIONS.SUBSCRIPTIONS, clientSub.id);
+          const newCuts = (clientSub.cutsThisPeriod || 0) + 1;
+          await updateDoc(subRef, {
+            cutsThisPeriod: newCuts,
+            usageCount: (clientSub.usageCount || 0) + 1,
+            periodStartDate: clientSub.periodStartDate || clientSub.startDate,
+          });
+
+          // Notifica se atingiu o limite
+          if (newCuts >= plan.maxCuts) {
+            console.log(`⛔ Cliente ${appointment.clientName} atingiu o limite de ${plan.maxCuts} cortes do plano ${plan.name}`);
+          }
+        }
       }
     }
   };
@@ -878,7 +993,20 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
 
     return { id: docRef.id, invoiceUrl: resolvedInvoiceUrl };
   };
-  const updateSubscription = async (id: string, data: Partial<Subscription>) => { await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id), data); };
+  const updateSubscription = async (id: string, data: Partial<Subscription>) => {
+    // Se está reativando assinatura (PAUSADA/VENCIDA → ATIVA), reseta contador de cortes
+    if (data.status === 'ATIVA') {
+      const subSnap = await getDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id));
+      if (subSnap.exists()) {
+        const sub = subSnap.data() as Subscription;
+        if (sub.status !== 'ATIVA') {
+          data = { ...data, cutsThisPeriod: 0, blockedReason: null as any, periodStartDate: new Date().toISOString().split('T')[0] };
+          console.log(`♻️ Assinatura ${id} reativada — contador de cortes zerado`);
+        }
+      }
+    }
+    await updateDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id), data);
+  };
   const deleteSubscription = async (id: string) => { await deleteDoc(doc(db, COLLECTIONS.SUBSCRIPTIONS, id)); };
 
   // ── PARTNERS ──────────────────────────────────────────────────
