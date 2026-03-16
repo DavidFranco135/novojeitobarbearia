@@ -1807,10 +1807,10 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     const isLiked = loggedClient.likedProfessionals?.includes(prof.id);
                     return (
                       <div key={prof.id} className={`rounded-2xl p-4 text-center space-y-3 transition-all ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                         <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+                         <div className="relative mx-auto w-24 h-28 flex items-center justify-center">
                             <img 
                               src={prof.avatar} 
-                              className="w-full h-full rounded-xl object-cover border-2 border-[#B8860B] cursor-pointer" 
+                              className="w-full h-full rounded-xl object-cover object-top border-2 border-[#B8860B] cursor-pointer" 
                               alt="" 
                               onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
                             />
