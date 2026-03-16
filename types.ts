@@ -296,3 +296,19 @@ export interface ClientBenefit {
   usedByPartnerName?: string;     // parceiro que confirmou o uso
   createdAt: string;
 }
+
+// ── INDICAÇÕES ──────────────────────────────────────────────
+export interface Referral {
+  id: string;
+  referrerId: string;         // ID do cliente que indicou
+  referrerName: string;
+  referredName: string;       // Nome de quem foi indicado
+  referredPhone: string;
+  referredClientId?: string;  // ID após cadastro
+  status: 'PENDENTE' | 'VALIDADO' | 'CANCELADO';
+  rewardAmount: number;       // R$ creditado ao indicador
+  rewardCredited: boolean;    // Se já foi creditado na carteira
+  appointmentId?: string;     // Agendamento que ativou a recompensa
+  createdAt: string;
+  validatedAt?: string;
+}
