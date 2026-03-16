@@ -21,6 +21,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [referralName, setReferralName] = useState('');
   const [referralPhone, setReferralPhone] = useState('');
+  const [referralEmail, setReferralEmail] = useState('');
+  const [referralCpf, setReferralCpf] = useState('');
+  const [referralBirthdate, setReferralBirthdate] = useState('');
   const [referralSaving, setReferralSaving] = useState(false);
   const [referralDone, setReferralDone] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
@@ -661,6 +664,10 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
   const handleCreateReferral = async () => {
     if (!loggedClient || !referralName.trim()) return;
+    if (!referralPhone.trim() && !referralEmail.trim()) {
+      alert('Informe ao menos o WhatsApp ou e-mail do amigo.');
+      return;
+    }
     setReferralSaving(true);
     try {
       const rewardAmount = (config as any).referralRewardAmount ?? 5;
@@ -669,14 +676,17 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
         referrerName: loggedClient.name,
         referredName: referralName.trim(),
         referredPhone: referralPhone.trim(),
+        referredEmail: referralEmail.trim(),
+        referredCpf: referralCpf.trim(),
+        referredBirthdate: referralBirthdate.trim(),
         status: 'PENDENTE',
         rewardAmount,
         rewardCredited: false,
       });
       setReferralDone(true);
-      setReferralName('');
-      setReferralPhone('');
-      setTimeout(() => { setReferralDone(false); setShowReferralModal(false); }, 2500);
+      setReferralName(''); setReferralPhone('');
+      setReferralEmail(''); setReferralCpf(''); setReferralBirthdate('');
+      setTimeout(() => { setReferralDone(false); setShowReferralModal(false); }, 3000);
     } catch (e) { alert('Erro ao registrar indicação.'); }
     finally { setReferralSaving(false); }
   };
@@ -2294,7 +2304,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       {/* ── MODAL: Registrar Indicação ── */}
       {showReferralModal && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
-          <div className={`w-full max-w-sm rounded-[2.5rem] p-8 border shadow-2xl space-y-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0f0f0f] border-white/10'}`}>
+          <div className={`w-full max-w-md rounded-[2.5rem] p-8 border shadow-2xl space-y-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0f0f0f] border-white/10'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Indique e Ganhe</p>
@@ -2312,32 +2322,65 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-amber-50 border border-amber-200' : 'bg-[#C58A4A]/10 border border-[#C58A4A]/20'}`}>
-                  <p className={`text-[10px] font-bold ${theme === 'light' ? 'text-amber-700' : 'text-[#C58A4A]'}`}>
-                    💡 Mostre este formulário ao barbeiro quando seu amigo vier cortar aqui para validação.
+              <div className="space-y-4 overflow-y-auto max-h-[60vh] scrollbar-hide pr-1">
+                <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-emerald-50 border border-emerald-200' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
+                  <p className={`text-[10px] font-bold leading-relaxed ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'}`}>
+                    ✅ <strong>Validação automática!</strong> Quando seu amigo concluir o primeiro corte aqui, você recebe <strong>R$ {(config as any).referralRewardAmount ?? 5}</strong> automaticamente — sem precisar fazer nada! ✂️
                   </p>
                 </div>
+
+                {/* ── Dados do amigo ── */}
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A]">Dados do Amigo</p>
+
                 <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Nome do Amigo</label>
-                  <input
-                    type="text" placeholder="Nome completo"
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Nome Completo <span className="text-red-400">*</span></label>
+                  <input type="text" placeholder="Nome completo"
                     value={referralName} onChange={e => setReferralName(e.target.value)}
                     className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>WhatsApp do Amigo (opcional)</label>
-                  <input
-                    type="tel" placeholder="(21) 99999-9999"
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>WhatsApp <span className="text-red-400">*</span></label>
+                  <input type="tel" placeholder="(21) 99999-9999"
                     value={referralPhone} onChange={e => setReferralPhone(e.target.value)}
                     className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
                   />
                 </div>
-                <div className="flex gap-3">
+
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>E-mail</label>
+                  <input type="email" placeholder="email@exemplo.com"
+                    value={referralEmail} onChange={e => setReferralEmail(e.target.value)}
+                    className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>CPF</label>
+                    <input type="text" placeholder="000.000.000-00"
+                      value={referralCpf} onChange={e => setReferralCpf(e.target.value)}
+                      className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Nascimento</label>
+                    <input type="date"
+                      value={referralBirthdate} onChange={e => setReferralBirthdate(e.target.value)}
+                      className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2 sticky bottom-0 pb-1">
                   <button onClick={() => setShowReferralModal(false)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] ${theme === 'light' ? 'bg-zinc-100 text-zinc-500' : 'bg-white/5 text-zinc-500'}`}>Cancelar</button>
-                  <button onClick={handleCreateReferral} disabled={referralSaving || !referralName.trim()} className="flex-1 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[9px] disabled:opacity-40">
-                    {referralSaving ? '⟳ Salvando...' : '✓ Registrar'}
+                  <button
+                    onClick={handleCreateReferral}
+                    disabled={referralSaving || !referralName.trim() || (!referralPhone.trim() && !referralEmail.trim())}
+                    className="flex-1 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[9px] disabled:opacity-40"
+                  >
+                    {referralSaving ? '⟳ Cadastrando...' : '🎁 Indicar Agora'}
                   </button>
                 </div>
               </div>
