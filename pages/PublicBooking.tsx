@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Scissors, Calendar, Check, MapPin, ChevronLeft, ChevronRight, ArrowRight, Clock, User, Phone, 
-  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift
+  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift, Trophy, Medal, Share2, Users, Copy, QrCode
 } from 'lucide-react';
 // Crown já importado acima — usado para badge Barbeiro Master
 import { useBarberStore } from '../store';
@@ -13,11 +13,17 @@ interface PublicBookingProps {
 }
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
   const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [referralName, setReferralName] = useState('');
+  const [referralPhone, setReferralPhone] = useState('');
+  const [referralSaving, setReferralSaving] = useState(false);
+  const [referralDone, setReferralDone] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
   const [passo, setPasso] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -620,6 +626,58 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     } catch(err: any) {
       setVipError(err.message || 'Erro ao processar.');
     } finally { setVipLoading(false); }
+  };
+
+
+  // ── Ranking de clientes ──────────────────────────────────
+  const clientRanking = useMemo(() => {
+    return clients
+      .filter((cl: any) => cl.phone)
+      .map((cl: any) => {
+        const card = loyaltyCards?.find((lc: any) => lc.clientId === cl.id);
+        const totalCuts = appointments.filter((a: any) =>
+          (a.clientId === cl.id || a.clientPhone === cl.phone) && a.status === 'CONCLUIDO_PAGO'
+        ).length;
+        const totalReferrals = referrals?.filter((r: any) => r.referrerId === cl.id && r.status === 'VALIDADO').length || 0;
+        return { ...cl, totalCuts, totalReferrals, credits: card?.credits || 0, card };
+      })
+      .sort((a: any, b: any) => (b.totalCuts + b.totalReferrals * 2) - (a.totalCuts + a.totalReferrals * 2))
+      .slice(0, 20);
+  }, [clients, appointments, referrals, loyaltyCards]);
+
+  // ── Link de indicação do cliente logado ──────────────────
+  const referralLink = useMemo(() => {
+    if (!loggedClient) return '';
+    const base = window.location.origin + window.location.pathname;
+    return `${base}?ref=${loggedClient.id}`;
+  }, [loggedClient]);
+
+  // ── QR Code simples via API pública ─────────────────────
+  const referralQrUrl = useMemo(() => {
+    if (!referralLink) return '';
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralLink)}`;
+  }, [referralLink]);
+
+  const handleCreateReferral = async () => {
+    if (!loggedClient || !referralName.trim()) return;
+    setReferralSaving(true);
+    try {
+      const rewardAmount = (config as any).referralRewardAmount ?? 5;
+      await createReferral({
+        referrerId: loggedClient.id,
+        referrerName: loggedClient.name,
+        referredName: referralName.trim(),
+        referredPhone: referralPhone.trim(),
+        status: 'PENDENTE',
+        rewardAmount,
+        rewardCredited: false,
+      });
+      setReferralDone(true);
+      setReferralName('');
+      setReferralPhone('');
+      setTimeout(() => { setReferralDone(false); setShowReferralModal(false); }, 2500);
+    } catch (e) { alert('Erro ao registrar indicação.'); }
+    finally { setReferralSaving(false); }
   };
 
   return (
@@ -1239,6 +1297,43 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* 7. Redes Sociais */}
+             {/* ── RANKING TOP 10 ── */}
+             <section className="mb-24" id="ranking">
+               <h2 className={`text-2xl font-black font-display italic mb-2 flex items-center gap-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                 <Trophy size={24} className="text-[#C58A4A]"/> Ranking de Clientes <div className="h-1 flex-1 gradiente-ouro opacity-10"/>
+               </h2>
+               <p className={`text-sm mb-8 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Os clientes mais dedicados da nossa família.</p>
+               <div className="space-y-3">
+                 {clientRanking.slice(0, 10).map((cl: any, idx: number) => {
+                   const tier = idx === 0 ? { label: 'PREMIUM BLACK', bg: 'bg-gradient-to-r from-zinc-900 to-black border-zinc-600', text: 'text-white', badge: '⚫', glow: 'shadow-[0_0_20px_rgba(0,0,0,0.8)]' }
+                     : idx === 1 ? { label: 'OURO', bg: 'bg-gradient-to-r from-[#8B5E2A] to-[#C58A4A] border-[#E8B97A]', text: 'text-black', badge: '🥇', glow: 'shadow-[0_0_20px_rgba(197,138,74,0.4)]' }
+                     : idx === 2 ? { label: 'PRATA', bg: 'bg-gradient-to-r from-zinc-400 to-zinc-500 border-zinc-300', text: 'text-black', badge: '🥈', glow: 'shadow-[0_0_15px_rgba(160,160,160,0.3)]' }
+                     : { label: '', bg: theme === 'light' ? 'bg-white border-zinc-200' : 'bg-white/5 border-white/5', text: theme === 'light' ? 'text-zinc-900' : 'text-white', badge: `${idx+1}`, glow: '' };
+                   return (
+                     <div key={cl.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${tier.bg} ${tier.glow} transition-all`}>
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black shrink-0 ${idx < 3 ? 'bg-black/20' : (theme === 'light' ? 'bg-zinc-100' : 'bg-white/10')}`}>
+                         {tier.badge}
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2 flex-wrap">
+                           <span className={`font-black text-sm truncate ${tier.text}`}>{cl.name}</span>
+                           {tier.label && <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-white/20 text-white' : 'bg-black/20'} ${tier.text}`}>{tier.label}</span>}
+                         </div>
+                         <div className={`flex gap-4 mt-0.5 text-[9px] font-black ${idx < 3 ? 'opacity-80' : (theme === 'light' ? 'text-zinc-500' : 'text-zinc-500')}`}>
+                           <span>✂️ {cl.totalCuts} cortes</span>
+                           <span>👥 {cl.totalReferrals} indicações</span>
+                         </div>
+                       </div>
+                       {idx < 3 && <Trophy size={18} className={idx === 0 ? 'text-zinc-400' : idx === 1 ? 'text-[#8B5E2A]' : 'text-zinc-300'} />}
+                     </div>
+                   );
+                 })}
+               </div>
+               {clientRanking.length === 0 && (
+                 <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
+               )}
+             </section>
+
              <section className="mb-20 text-center">
                 <h2 className={`text-2xl font-black font-display italic mb-10 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Conecte-se Conosco</h2>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -1596,6 +1691,99 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     </div>
                  ))}
               </div>
+
+              {/* ── INDIQUE E GANHE ── */}
+              <div className={`rounded-[2rem] p-6 border mt-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className={`font-black font-display italic text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>🎁 Indique e Ganhe!</h3>
+                    <p className={`text-[10px] mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      Ganhe <strong className="text-[#C58A4A]">R$ {(config as any).referralRewardAmount ?? 5}</strong> por cada amigo que cortar aqui. A cada <strong className="text-[#C58A4A]">{(config as any).referralFreeCutThreshold ?? 3} indicações</strong> validadas: 1 corte grátis!
+                    </p>
+                  </div>
+                  <button onClick={() => setShowReferralModal(true)} className="gradiente-ouro text-black px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shrink-0 ml-3">
+                    Indicar Amigo
+                  </button>
+                </div>
+
+                {/* Progresso de indicações */}
+                {(() => {
+                  const myRefs = (referrals || []).filter((r: any) => r.referrerId === loggedClient.id);
+                  const validated = myRefs.filter((r: any) => r.status === 'VALIDADO').length;
+                  const pending = myRefs.filter((r: any) => r.status === 'PENDENTE').length;
+                  const threshold = (config as any).referralFreeCutThreshold ?? 3;
+                  const progress = validated % threshold;
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-[9px] font-black uppercase">
+                        <span className={theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}>✅ {validated} validadas · ⏳ {pending} pendentes</span>
+                        <span className="text-[#C58A4A]">{progress}/{threshold} para corte grátis</span>
+                      </div>
+                      <div className={`w-full h-2 rounded-full ${theme === 'light' ? 'bg-zinc-200' : 'bg-white/10'}`}>
+                        <div className="h-full rounded-full gradiente-ouro transition-all" style={{width: `${(progress/threshold)*100}%`}}/>
+                      </div>
+                      {myRefs.length > 0 && (
+                        <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-hide">
+                          {myRefs.map((r: any) => (
+                            <div key={r.id} className={`flex items-center justify-between p-2.5 rounded-xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
+                              <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>👤 {r.referredName}</span>
+                              <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${r.status === 'VALIDADO' ? 'bg-emerald-500/20 text-emerald-400' : r.status === 'CANCELADO' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                                {r.status === 'VALIDADO' ? `✓ +R$ ${r.rewardAmount}` : r.status === 'CANCELADO' ? 'Cancelada' : 'Aguardando'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Link/QR de indicação */}
+                <div className={`mt-4 p-4 rounded-2xl border space-y-3 ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Seu link de indicação</p>
+                  <div className="flex gap-2">
+                    <input readOnly value={referralLink} className={`flex-1 text-[10px] p-2.5 rounded-xl border truncate ${theme === 'light' ? 'bg-white border-zinc-300 text-zinc-700' : 'bg-black/30 border-white/10 text-zinc-300'}`}/>
+                    <button onClick={() => { navigator.clipboard?.writeText(referralLink); alert('Link copiado!'); }} className="p-2.5 gradiente-ouro text-black rounded-xl">
+                      <Copy size={14}/>
+                    </button>
+                  </div>
+                  {referralQrUrl && (
+                    <div className="flex justify-center">
+                      <img src={referralQrUrl} alt="QR Code" className="w-28 h-28 rounded-xl"/>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── RANKING TOP 20 (posição do cliente) ── */}
+              <div className={`rounded-[2rem] p-6 border mt-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
+                <h3 className={`font-black font-display italic text-lg mb-1 flex items-center gap-2 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                  <Trophy size={18} className="text-[#C58A4A]"/> Ranking de Clientes
+                </h3>
+                <p className={`text-[10px] mb-4 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Top 20 · Sua posição destacada</p>
+                <div className="space-y-2">
+                  {clientRanking.map((cl: any, idx: number) => {
+                    const isMe = cl.id === loggedClient.id;
+                    const tier = idx === 0 ? { badge: '⚫', label: 'PREMIUM BLACK' }
+                      : idx === 1 ? { badge: '🥇', label: 'OURO' }
+                      : idx === 2 ? { badge: '🥈', label: 'PRATA' }
+                      : { badge: `${idx+1}`, label: '' };
+                    return (
+                      <div key={cl.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isMe ? 'border-[#C58A4A]/50 bg-[#C58A4A]/10' : (theme === 'light' ? 'border-zinc-100 bg-zinc-50' : 'border-white/5 bg-white/5')}`}>
+                        <span className="text-base w-8 text-center shrink-0">{tier.badge}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-[11px] font-black truncate block ${isMe ? 'text-[#C58A4A]' : (theme === 'light' ? 'text-zinc-900' : 'text-white')}`}>
+                            {cl.name} {isMe ? '← você' : ''}
+                          </span>
+                          <span className={`text-[9px] ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>✂️ {cl.totalCuts} · 👥 {cl.totalReferrals}</span>
+                        </div>
+                        {tier.label && <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border ${idx === 0 ? 'border-zinc-600 bg-black text-white' : idx === 1 ? 'border-[#C58A4A] bg-[#C58A4A]/20 text-[#C58A4A]' : 'border-zinc-400 bg-zinc-400/20 text-zinc-400'}`}>{tier.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
            </div>
         </div>
       )}
@@ -2042,6 +2230,61 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                  </div>
               </div>
            </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Registrar Indicação ── */}
+      {showReferralModal && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
+          <div className={`w-full max-w-sm rounded-[2.5rem] p-8 border shadow-2xl space-y-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0f0f0f] border-white/10'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Indique e Ganhe</p>
+                <h2 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Indicar um Amigo</h2>
+              </div>
+              <button onClick={() => { setShowReferralModal(false); setReferralDone(false); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white"><X size={18}/></button>
+            </div>
+
+            {referralDone ? (
+              <div className="text-center py-6 space-y-3">
+                <div className="text-5xl">🎉</div>
+                <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Indicação registrada!</p>
+                <p className={`text-sm ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                  Quando seu amigo concluir o primeiro corte, você recebe <strong className="text-[#C58A4A]">R$ {(config as any).referralRewardAmount ?? 5}</strong> na carteira! 💰
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-amber-50 border border-amber-200' : 'bg-[#C58A4A]/10 border border-[#C58A4A]/20'}`}>
+                  <p className={`text-[10px] font-bold ${theme === 'light' ? 'text-amber-700' : 'text-[#C58A4A]'}`}>
+                    💡 Mostre este formulário ao barbeiro quando seu amigo vier cortar aqui para validação.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Nome do Amigo</label>
+                  <input
+                    type="text" placeholder="Nome completo"
+                    value={referralName} onChange={e => setReferralName(e.target.value)}
+                    className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>WhatsApp do Amigo (opcional)</label>
+                  <input
+                    type="tel" placeholder="(21) 99999-9999"
+                    value={referralPhone} onChange={e => setReferralPhone(e.target.value)}
+                    className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowReferralModal(false)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] ${theme === 'light' ? 'bg-zinc-100 text-zinc-500' : 'bg-white/5 text-zinc-500'}`}>Cancelar</button>
+                  <button onClick={handleCreateReferral} disabled={referralSaving || !referralName.trim()} className="flex-1 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[9px] disabled:opacity-40">
+                    {referralSaving ? '⟳ Salvando...' : '✓ Registrar'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
