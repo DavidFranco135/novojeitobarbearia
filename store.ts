@@ -119,6 +119,7 @@ const COLLECTIONS = {
   SUGGESTIONS: 'suggestions',
   LOYALTY_CARDS: 'loyaltyCards',
   SUBSCRIPTIONS: 'subscriptions',
+  REFERRALS: 'referrals',
   PARTNERS: 'partners',
   BLOCKED_SLOTS: 'blockedSlots',
   INACTIVITY_CAMPAIGNS: 'inactivityCampaigns',
@@ -172,6 +173,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   });
   const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCard[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [referrals, setReferrals] = useState<any[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
@@ -196,6 +198,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       onSnapshot(collection(db, COLLECTIONS.SUGGESTIONS), snap => setSuggestions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Suggestion)))),
       onSnapshot(collection(db, COLLECTIONS.LOYALTY_CARDS), snap => setLoyaltyCards(snap.docs.map(d => ({ id: d.id, ...d.data() } as LoyaltyCard)))),
       onSnapshot(collection(db, COLLECTIONS.SUBSCRIPTIONS), snap => setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Subscription)))),
+      onSnapshot(collection(db, COLLECTIONS.REFERRALS), snap => setReferrals(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, COLLECTIONS.PARTNERS), snap => setPartners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Partner)))),
       onSnapshot(collection(db, COLLECTIONS.BLOCKED_SLOTS), snap => setBlockedSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlockedSlot)))),
       onSnapshot(collection(db, COLLECTIONS.INACTIVITY_CAMPAIGNS), snap => setInactivityCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as InactivityCampaign)))),
@@ -373,6 +376,70 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const updateProduct = async (id: string, data: any) => {
     await updateDoc(doc(db, COLLECTIONS.PRODUCTS, id), data);
   };
+  // ── REFERRAL (Indique e Ganhe) ──────────────────────────
+  const createReferral = async (data: Omit<any,'id'>) => {
+    await addDoc(collection(db, COLLECTIONS.REFERRALS), { ...data, createdAt: new Date().toISOString() });
+  };
+
+  const validateReferral = async (referralId: string) => {
+    const ref = referrals.find((r: any) => r.id === referralId);
+    if (!ref || ref.status === 'VALIDADO') return;
+    
+    const rewardAmount = ref.rewardAmount || (config as any).referralRewardAmount || 5;
+    
+    // Credita na carteira do indicador (loyalty credits)
+    const loyaltySnap = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+    const cardDoc = loyaltySnap.docs.find(d => d.data().clientId === ref.referrerId);
+    if (cardDoc) {
+      await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
+        credits: parseFloat(((cardDoc.data().credits || 0) + rewardAmount).toFixed(2)),
+        referralCount: (cardDoc.data().referralCount || 0) + 1,
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      // Cria cartela se não existir
+      const referrer = clients.find((cl: any) => cl.id === ref.referrerId);
+      if (referrer) {
+        await addDoc(collection(db, COLLECTIONS.LOYALTY_CARDS), {
+          clientId: ref.referrerId,
+          clientName: referrer.name,
+          stamps: 0,
+          totalStamps: 0,
+          credits: rewardAmount,
+          referralCount: 1,
+          freeCutsPending: 0,
+          freeCutsEarned: 0,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Marca indicação como validada
+    await updateDoc(doc(db, COLLECTIONS.REFERRALS, referralId), {
+      status: 'VALIDADO',
+      rewardCredited: true,
+      validatedAt: new Date().toISOString(),
+    });
+
+    // Verifica se atingiu o limite de indicações para corte grátis
+    const threshold = (config as any).referralFreeCutThreshold || 3;
+    const validated = referrals.filter((r: any) => r.referrerId === ref.referrerId && r.status === 'VALIDADO').length + 1;
+    if (validated % threshold === 0) {
+      const loyaltySnap2 = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+      const cardDoc2 = loyaltySnap2.docs.find(d => d.data().clientId === ref.referrerId);
+      if (cardDoc2) {
+        await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc2.id), {
+          freeCutsPending: (cardDoc2.data().freeCutsPending || 0) + 1,
+          freeCutsEarned: (cardDoc2.data().freeCutsEarned || 0) + 1,
+        });
+      }
+    }
+  };
+
+  const cancelReferral = async (referralId: string) => {
+    await updateDoc(doc(db, COLLECTIONS.REFERRALS, referralId), { status: 'CANCELADO' });
+  };
+
   const deleteProduct = async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, id));
   };
@@ -700,6 +767,18 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             console.log(`⛔ Cliente ${appointment.clientName} atingiu o limite de ${plan.maxCuts} cortes do plano ${plan.name}`);
           }
         }
+      // ── Auto-valida indicação se for o primeiro atendimento com referralCode ──
+      if (appointment.referralCode && !existingEntry) {
+        const pendingRef = referrals.find(
+          (r: any) => r.referrerId === appointment.referralCode &&
+                      (r.referredPhone === appointment.clientPhone || r.referredClientId === appointment.clientId) &&
+                      r.status === 'PENDENTE'
+        );
+        if (pendingRef) {
+          // Valida automaticamente ao concluir o primeiro corte
+          await validateReferral(pendingRef.id);
+        }
+      }
       }
     }
   };
@@ -1137,7 +1216,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     value: {
       user, clients, professionals, services, appointments, financialEntries,
       notifications, suggestions, config, loading, theme,
-      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns,
+      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral,
       clientBenefits,  // ── NOVO ──
       toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
       products, addProduct, updateProduct, deleteProduct, decreaseProductStock,
