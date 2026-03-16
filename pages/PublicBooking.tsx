@@ -1402,7 +1402,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                        },
                        {
                          // 2º lugar — OURO
-                         label: '2º OURO',
+                         label: 'OURO',
                          medal: '2',
                          icon: '🥈',            // 🥈 = prata = 2º lugar (medalha correta)
                          nameColor: '#1a0800',
@@ -1418,7 +1418,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                        },
                        {
                          // 3º lugar — PRATA
-                         label: '3º PRATA',
+                         label: 'PRATA',
                          medal: '3',
                          icon: '🥉',            // 🥉 = bronze = 3º lugar (medalha correta)
                          nameColor: '#1a1a1a',
@@ -1940,8 +1940,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   {clientRanking.map((cl: any, idx: number) => {
                     const isMe = cl.id === loggedClient.id;
                     const tier = idx === 0 ? { badge: '👑', label: 'PREMIUM BLACK' }
-                      : idx === 1 ? { badge: '🥈', label: '2º OURO' }
-                      : idx === 2 ? { badge: '🥉', label: '3º PRATA' }
+                      : idx === 1 ? { badge: '🥈', label: 'OURO' }
+                      : idx === 2 ? { badge: '🥉', label: 'PRATA' }
                       : { badge: `${idx+1}`, label: '' };
                     return (
                       <div key={cl.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isMe ? 'border-[#C58A4A]/50 bg-[#C58A4A]/10' : (theme === 'light' ? 'border-zinc-100 bg-zinc-50' : 'border-white/5 bg-white/5')}`}>
