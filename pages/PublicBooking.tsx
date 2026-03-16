@@ -1405,7 +1405,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                          label: 'OURO',
                          medal: '2',
                          icon: '🥈',            // 🥈 = prata = 2º lugar (medalha correta)
-                         nameColor: '#1a0800',
+                         nameColor: '#fcf2ed',
                          statColor: 'rgba(0,0,0,0.6)',
                          labelColor: '#000',
                          borderColor: '#E8B97A',
@@ -1421,7 +1421,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                          label: 'PRATA',
                          medal: '3',
                          icon: '🥉',            // 🥉 = bronze = 3º lugar (medalha correta)
-                         nameColor: '#1a1a1a',
+                         nameColor: '#fcf2ed',
                          statColor: 'rgba(0,0,0,0.5)',
                          labelColor: '#333',
                          borderColor: '#cbd5e1',
