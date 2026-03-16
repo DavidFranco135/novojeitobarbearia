@@ -6,7 +6,7 @@
     <title>Novo Jeito | Gestão de Barbearia</title>
 
     <meta name="description" content="Sistema Premium de Gestão de Barbearia Novo Jeito">
-    <meta name="theme-color" content="#C58A4A">
+    <meta name="theme-color" content="#050505">
     <link rel="manifest" href="/manifest.json">
 
     <!-- Favicon navegador (tab) -->
@@ -18,8 +18,13 @@
     <!-- Apple / iOS (salvar na tela inicial) -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Novo Jeito">
+
+    <!-- Splash screen iOS — fundo preto para não piscar branco -->
+    <style>
+      html, body, #root { background-color: #050505; min-height: 100vh; }
+    </style>
 
     <!-- Windows tiles -->
     <meta name="msapplication-TileImage" content="/icon-192.png">
