@@ -82,6 +82,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [showProfessionalModal, setShowProfessionalModal] = useState(false);
   const [showBeneficios, setShowBeneficios] = useState(false); // ── NOVO
+  const [activeReviewTab, setActiveReviewTab] = useState<'reviews'|'comments'>('reviews');
 
   // ✅ CORREÇÃO: Estado para modal de criação rápida de cliente
   const [showQuickClient, setShowQuickClient] = useState(false);
@@ -882,7 +883,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
              {/* 4. Avaliações & Comentários — unificado */}
              {((config.reviews && config.reviews.length > 0) || (suggestions && suggestions.length > 0)) && (() => {
-               const [activeReviewTab, setActiveReviewTab] = React.useState<'reviews'|'comments'>('reviews');
                const hasReviews  = config.reviews && config.reviews.length > 0;
                const hasComments = suggestions && suggestions.length > 0;
                return (
