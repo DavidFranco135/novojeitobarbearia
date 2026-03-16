@@ -110,8 +110,8 @@ const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
     addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, theme,
-    addFinancialEntry
-  } = useBarberStore();
+    addFinancialEntry, products, decreaseProductStock
+  } = useBarberStore() as any;
 
   const mountTimeRef = useRef<number>(Date.now());
   const prevNotifCountRef = useRef<number | null>(null);
@@ -149,6 +149,8 @@ const Appointments: React.FC = () => {
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
+  // Reset product list when opening detail modal
+  const openDetailModal = (app: Appointment) => { setUsedProducts([]); setShowDetailModal(app); };
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
@@ -167,6 +169,7 @@ const Appointments: React.FC = () => {
     withoutRegistration: false,
   });
   const [walkInQuickNew, setWalkInQuickNew] = useState({ name: '', phone: '' });
+  const [usedProducts, setUsedProducts] = useState<{productId: string, qty: number}[]>([]);
 
   // Persiste a fila no localStorage sempre que muda
   useEffect(() => { saveQueue(walkInQueue); }, [walkInQueue]);
@@ -507,7 +510,7 @@ const Appointments: React.FC = () => {
                           {app ? (
                             <div className={`h-full w-full rounded-2xl border flex flex-col justify-between transition-all group ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[#C58A4A]/30 bg-[#C58A4A]/5'} ${compactView ? 'p-1.5 rounded-lg' : 'p-2'}`}>
                               <div className="truncate">
-                                <h4 onClick={(e) => { e.stopPropagation(); setShowDetailModal(app); }} className={`font-black uppercase truncate cursor-pointer hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`} title="Ver detalhes">{app.clientName}</h4>
+                                <h4 onClick={(e) => { e.stopPropagation(); openDetailModal(app); }} className={`font-black uppercase truncate cursor-pointer hover:text-[#C58A4A] transition-colors ${compactView ? 'text-[8px]' : 'text-[10px]'} ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`} title="Ver detalhes">{app.clientName}</h4>
                                 {!compactView && <p className="text-[8px] font-black opacity-50 uppercase mt-1 truncate">{app.serviceName}</p>}
                               </div>
                               <div className={`flex items-center justify-end gap-1 ${compactView ? 'mt-0.5' : 'mt-1'}`}>
@@ -542,7 +545,7 @@ const Appointments: React.FC = () => {
                       {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : <Clock size={20}/>}
                     </div>
                     <div>
-                      <p className="text-xs font-black cursor-pointer hover:text-[#C58A4A] transition-colors" onClick={() => setShowDetailModal(app)} title="Ver detalhes">{app.clientName} • <span className="text-[#C58A4A]">{app.startTime}</span></p>
+                      <p className="text-xs font-black cursor-pointer hover:text-[#C58A4A] transition-colors" onClick={() => openDetailModal(app)} title="Ver detalhes">{app.clientName} • <span className="text-[#C58A4A]">{app.startTime}</span></p>
                       <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">{app.serviceName} com {app.professionalName}</p>
                     </div>
                   </div>
@@ -938,11 +941,50 @@ const Appointments: React.FC = () => {
                   </div>
                 )}
               </div>
+              {/* ── Produtos Usados no Atendimento ── */}
+              {products && products.filter((p: any) => p.active !== false && p.stock !== null && p.stock !== undefined).length > 0 && app.status !== 'CONCLUIDO_PAGO' && (
+                <div className={`rounded-2xl p-4 border space-y-3 ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A]">🧴 Produtos Utilizados</p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto scrollbar-hide">
+                    {products.filter((p: any) => p.active !== false && p.stock !== null && p.stock !== undefined).map((p: any) => {
+                      const used = usedProducts.find((u: any) => u.productId === p.id);
+                      const qty = used?.qty || 0;
+                      return (
+                        <div key={p.id} className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[10px] font-black truncate ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-200'}`}>{p.name}</p>
+                            <p className="text-[8px] text-zinc-500">{p.stock} em estoque</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => setUsedProducts(prev => { const ex = prev.find(u => u.productId === p.id); if (!ex || ex.qty === 0) return prev; return prev.map(u => u.productId === p.id ? {...u, qty: u.qty - 1} : u).filter(u => u.qty > 0); })} className="w-6 h-6 rounded-lg bg-zinc-500/20 text-zinc-400 flex items-center justify-center font-black text-xs">−</button>
+                            <span className={`w-6 text-center text-[11px] font-black ${qty > 0 ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{qty}</span>
+                            <button onClick={() => setUsedProducts(prev => { const ex = prev.find(u => u.productId === p.id); if (ex) return prev.map(u => u.productId === p.id ? {...u, qty: u.qty + 1} : u); return [...prev, {productId: p.id, qty: 1}]; })} disabled={qty >= p.stock} className="w-6 h-6 rounded-lg bg-[#C58A4A]/20 text-[#C58A4A] flex items-center justify-center font-black text-xs disabled:opacity-30">+</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {usedProducts.length > 0 && (
+                    <p className="text-[9px] text-zinc-500">O estoque será descontado ao marcar como pago.</p>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <button onClick={() => { setShowDetailModal(null); setShowRescheduleModal(app); }} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl font-black uppercase text-[9px] text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2">
                   <RefreshCw size={12}/> Reagendar
                 </button>
-                <button onClick={() => { updateAppointmentStatus(app.id, app.status === 'CONCLUIDO_PAGO' ? 'PENDENTE' : 'CONCLUIDO_PAGO'); setShowDetailModal(null); }} className={`flex-1 py-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 ${app.status === 'CONCLUIDO_PAGO' ? 'bg-white/10 text-zinc-300 border border-white/10' : 'gradiente-ouro text-black'}`}>
+                <button onClick={async () => {
+                  // Desconta estoque dos produtos usados
+                  if (usedProducts.length > 0 && app.status !== 'CONCLUIDO_PAGO') {
+                    for (const u of usedProducts) {
+                      await decreaseProductStock(u.productId, u.qty);
+                    }
+                    setUsedProducts([]);
+                  }
+                  updateAppointmentStatus(app.id, app.status === 'CONCLUIDO_PAGO' ? 'PENDENTE' : 'CONCLUIDO_PAGO');
+                  setShowDetailModal(null);
+                }} className={`flex-1 py-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 ${app.status === 'CONCLUIDO_PAGO' ? 'bg-white/10 text-zinc-300 border border-white/10' : 'gradiente-ouro text-black'}`}>
                   <DollarSign size={12}/> {app.status === 'CONCLUIDO_PAGO' ? 'Voltar a Pendente' : 'Marcar Pago'}
                 </button>
               </div>
