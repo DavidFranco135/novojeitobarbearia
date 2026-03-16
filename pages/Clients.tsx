@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Search, UserPlus, Phone, Mail, Trash2, Edit2, X, Clock, Calendar, Scissors, CheckCircle2, History, Camera, NotebookPen, Instagram, MapPin, Briefcase, Heart } from 'lucide-react';
+import { Search, UserPlus, Phone, Mail, Trash2, Edit2, X, Clock, Calendar, Scissors, CheckCircle2, History, Camera, NotebookPen, Instagram, MapPin, Briefcase, Heart, Trophy, Users, Check } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Client, Appointment } from '../types';
 
 const Clients: React.FC = () => {
-  const { clients, appointments, addClient, updateClient, deleteClient, theme } = useBarberStore() as any;
+  const { clients, appointments, referrals, validateReferral, cancelReferral, addClient, updateClient, deleteClient, theme } = useBarberStore() as any;
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -103,6 +103,54 @@ const Clients: React.FC = () => {
           className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-5 pl-16 pr-8 text-sm focus:border-[#C58A4A]/50 outline-none transition-all placeholder:text-zinc-700 font-bold text-white"
         />
       </div>
+
+      {/* ── Painel de Indicações Pendentes ── */}
+      {(referrals || []).filter((r: any) => r.status === 'PENDENTE').length > 0 && (
+        <div className={`rounded-2xl p-5 border ${theme === 'light' ? 'bg-amber-50 border-amber-200' : 'bg-[#C58A4A]/10 border-[#C58A4A]/25'}`}>
+          <div className="flex items-center gap-3 mb-4">
+            <Users size={18} className="text-[#C58A4A]"/>
+            <h3 className={`font-black text-sm uppercase tracking-widest ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+              Indicações Pendentes de Validação
+            </h3>
+            <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full">
+              {(referrals || []).filter((r: any) => r.status === 'PENDENTE').length}
+            </span>
+          </div>
+          <p className={`text-[10px] mb-3 ${theme === 'light' ? 'text-amber-700' : 'text-[#C58A4A]/80'}`}>
+            Valide quando o indicado concluir o primeiro corte. O indicador receberá R$ {' '}
+            automaticamente na carteira.
+          </p>
+          <div className="space-y-2">
+            {(referrals || []).filter((r: any) => r.status === 'PENDENTE').map((r: any) => (
+              <div key={r.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl ${theme === 'light' ? 'bg-white border border-amber-100' : 'bg-white/5 border border-white/5'}`}>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[11px] font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                    👤 {r.referredName} {r.referredPhone && <span className="text-zinc-500 font-normal">· {r.referredPhone}</span>}
+                  </p>
+                  <p className={`text-[9px] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    Indicado por: <strong>{r.referrerName}</strong> · Recompensa: R$ {r.rewardAmount}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => { if (window.confirm(`Validar indicação de ${r.referredName}?
+${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferral(r.id); }}
+                    className="flex items-center gap-1 px-3 py-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-xl text-[9px] font-black uppercase transition-all"
+                  >
+                    <Check size={11}/> Validar
+                  </button>
+                  <button
+                    onClick={() => { if (window.confirm('Cancelar esta indicação?')) cancelReferral(r.id); }}
+                    className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all"
+                  >
+                    <X size={12}/>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="cartao-vidro rounded-[2.5rem] overflow-hidden border-white/5 shadow-2xl">
         <div className="overflow-x-auto scrollbar-hide">
