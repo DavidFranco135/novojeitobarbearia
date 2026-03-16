@@ -15,6 +15,8 @@ const Settings: React.FC = () => {
     avatar: user?.avatar || config.logo || 'https://i.pravatar.cc/150'
   });
   const [loading, setLoading] = useState(false);
+  const [asaasStatus, setAsaasStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [asaasMsg, setAsaasMsg] = useState('');
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<VipPlan | null>(null);
   const [newPlan, setNewPlan] = useState<Partial<VipPlan>>({
@@ -60,6 +62,36 @@ const Settings: React.FC = () => {
 
   const removeGalleryImage = (index: number) => {
     setFormData(prev => ({ ...prev, gallery: (prev.gallery || []).filter((_, i) => i !== index) }));
+  };
+
+  const verifyAsaasKey = async () => {
+    const key = (formData as any).asaasKey || '';
+    const env = (formData as any).asaasEnv || 'sandbox';
+    if (!key) {
+      setAsaasStatus('error');
+      setAsaasMsg('Cole sua chave de API antes de verificar.');
+      return;
+    }
+    setAsaasStatus('loading');
+    setAsaasMsg('');
+    try {
+      const res = await fetch('https://us-central1-financeiro-a7116.cloudfunctions.net/asaasProxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: '/myAccount', method: 'GET', key, env }),
+      });
+      const json = await res.json();
+      if (res.ok && json && (json.name || json.id || json.commercialName)) {
+        setAsaasStatus('ok');
+        setAsaasMsg(`Conta verificada: ${json.name || json.commercialName || json.id}`);
+      } else {
+        setAsaasStatus('error');
+        setAsaasMsg(json?.errors?.[0]?.description || json?.message || 'Chave inválida ou sem permissão.');
+      }
+    } catch (err: any) {
+      setAsaasStatus('error');
+      setAsaasMsg('Erro de conexão. Verifique sua internet ou o proxy.');
+    }
   };
 
   const handleSave = async () => {
@@ -381,7 +413,7 @@ const Settings: React.FC = () => {
                     type="password"
                     placeholder="$aas_... (cole sua chave de API)"
                     value={(formData as any).asaasKey || ''}
-                    onChange={e => setFormData({ ...formData, asaasKey: e.target.value } as any)}
+                    onChange={e => { setFormData({ ...formData, asaasKey: e.target.value } as any); setAsaasStatus('idle'); }}
                     className={`w-full border p-4 rounded-2xl outline-none font-mono text-sm transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-[#00a650]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#00a650]'}`}
                   />
                   <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Encontre em: Asaas → Minha Conta → Integrações → Chave de API</p>
@@ -390,7 +422,7 @@ const Settings: React.FC = () => {
                   <label className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Ambiente</label>
                   <select
                     value={(formData as any).asaasEnv || 'sandbox'}
-                    onChange={e => setFormData({ ...formData, asaasEnv: e.target.value } as any)}
+                    onChange={e => { setFormData({ ...formData, asaasEnv: e.target.value } as any); setAsaasStatus('idle'); }}
                     className={`w-full border p-4 rounded-2xl outline-none font-bold transition-all ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
                     style={{ colorScheme: isDark ? 'dark' : 'light' }}
                   >
@@ -398,6 +430,47 @@ const Settings: React.FC = () => {
                     <option value="producao">Produção (dinheiro real)</option>
                   </select>
                 </div>
+
+                {/* ── Botão Verificar Chave ── */}
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={verifyAsaasKey}
+                    disabled={asaasStatus === 'loading'}
+                    className={`w-full py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2
+                      ${asaasStatus === 'loading'
+                        ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                        : 'bg-[#00a650] text-white hover:bg-[#00c45e] hover:scale-[1.02] shadow-lg shadow-[#00a650]/20'
+                      }`}
+                  >
+                    {asaasStatus === 'loading' ? (
+                      <><span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> Verificando...</>
+                    ) : (
+                      <><span className="text-base">🔑</span> Verificar Chave API</>
+                    )}
+                  </button>
+
+                  {/* Status da verificação */}
+                  {asaasStatus === 'ok' && (
+                    <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-300'}`}>
+                      <span className="text-emerald-500 text-xl shrink-0">✅</span>
+                      <div>
+                        <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>Chave válida!</p>
+                        <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}>{asaasMsg}</p>
+                      </div>
+                    </div>
+                  )}
+                  {asaasStatus === 'error' && (
+                    <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-300'}`}>
+                      <span className="text-red-500 text-xl shrink-0">❌</span>
+                      <div>
+                        <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-red-400' : 'text-red-600'}`}>Falha na verificação</p>
+                        <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}>{asaasMsg}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className={`flex items-center gap-3 p-4 rounded-2xl ${isDark ? 'bg-[#00a650]/10 border border-[#00a650]/20' : 'bg-green-50 border border-green-200'}`}>
                   <span className="text-green-500 text-xl">💳</span>
                   <div>
