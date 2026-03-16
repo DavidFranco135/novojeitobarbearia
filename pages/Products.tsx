@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Package, Plus, Trash2, Edit2, X, ImagePlus, Tag, DollarSign, AlignLeft, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Package, Plus, Trash2, Edit2, X, ImagePlus, Tag, DollarSign, AlignLeft, ToggleLeft, ToggleRight, AlertTriangle, ShoppingCart, TrendingDown, BarChart3 } from 'lucide-react';
 import { useBarberStore } from '../store';
 
 const IMGBB_API_KEY = 'da736db48f154b9108b23a36d4393848';
@@ -40,14 +40,14 @@ const Products: React.FC = () => {
   const [saving,    setSaving]    = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
 
-  const empty = { name: '', description: '', price: '', category: 'Pomada', image: '', active: true };
+  const empty = { name: '', description: '', price: '', category: 'Pomada', image: '', active: true, stock: '', minStock: '' };
   const [form, setForm] = useState(empty);
 
   const cardClass = isDark ? 'cartao-vidro border-white/5' : 'bg-white border border-zinc-200 shadow-sm';
   const inputClass = `w-full border p-4 rounded-xl outline-none font-bold transition-all text-sm ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`;
 
   const openNew = () => { setEditingId(null); setForm(empty); setShowModal(true); };
-  const openEdit = (p: any) => { setEditingId(p.id); setForm({ name: p.name, description: p.description || '', price: String(p.price), category: p.category || 'Pomada', image: p.image || '', active: p.active !== false }); setShowModal(true); };
+  const openEdit = (p: any) => { setEditingId(p.id); setForm({ name: p.name, description: p.description || '', price: String(p.price), category: p.category || 'Pomada', image: p.image || '', active: p.active !== false, stock: p.stock !== undefined ? String(p.stock) : '', minStock: p.minStock !== undefined ? String(p.minStock) : '' }); setShowModal(true); };
 
   const handleImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -63,11 +63,24 @@ const Products: React.FC = () => {
     if (!form.name || !form.price) { alert('Preencha nome e preço.'); return; }
     setSaving(true);
     try {
-      const data = { ...form, price: parseFloat(form.price) || 0 };
+      const data = {
+        ...form,
+        price: parseFloat(form.price as string) || 0,
+        stock: form.stock !== '' && form.stock !== null ? parseInt(form.stock as string) : null,
+        minStock: form.minStock !== '' && form.minStock !== null ? parseInt(form.minStock as string) : null,
+      };
       if (editingId) await updateProduct(editingId, data);
       else           await addProduct(data);
       setShowModal(false);
     } finally { setSaving(false); }
+  };
+
+  // Ajusta estoque manualmente
+  const adjustStock = async (productId: string, delta: number) => {
+    const p = products.find((x: any) => x.id === productId);
+    if (!p) return;
+    const newStock = Math.max(0, (p.stock ?? 0) + delta);
+    await updateProduct(productId, { stock: newStock });
   };
 
   return (
@@ -80,13 +93,30 @@ const Products: React.FC = () => {
             Produtos
           </h1>
           <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">
-            Vitrine de produtos — aparecem na página pública.
+            Vitrine de produtos e controle de estoque.
           </p>
         </div>
         <button onClick={openNew} className="flex items-center gap-2 gradiente-ouro text-black px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">
           <Plus size={16}/> NOVO PRODUTO
         </button>
       </div>
+
+      {/* Alertas de estoque */}
+      {products && products.some((p: any) => p.stock !== null && p.stock !== undefined && p.minStock !== null && p.minStock !== undefined && p.stock <= p.minStock) && (
+        <div className={`rounded-2xl p-4 border flex items-start gap-3 ${isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200'}`}>
+          <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5"/>
+          <div className="flex-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-2">⚠️ Estoque Baixo — Produtos precisam de reposição</p>
+            <div className="flex flex-wrap gap-2">
+              {products.filter((p: any) => p.stock !== null && p.stock !== undefined && p.minStock !== null && p.minStock !== undefined && p.stock <= p.minStock).map((p: any) => (
+                <span key={p.id} className={`text-[10px] font-black px-3 py-1 rounded-full border ${p.stock === 0 ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
+                  {p.name}: {p.stock === 0 ? 'ESGOTADO' : `${p.stock} restantes`}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grid */}
       {(!products || products.length === 0) ? (
@@ -125,6 +155,29 @@ const Products: React.FC = () => {
                 {p.description && (
                   <p className={`text-xs leading-relaxed line-clamp-2 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{p.description}</p>
                 )}
+
+                {/* Estoque */}
+                {p.stock !== null && p.stock !== undefined && (
+                  <div className={`rounded-xl p-3 border ${p.stock === 0 ? (isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200') : p.stock <= (p.minStock || 0) ? (isDark ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200') : (isDark ? 'bg-white/5 border-white/10' : 'bg-zinc-50 border-zinc-200')}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${p.stock === 0 ? 'text-red-400' : p.stock <= (p.minStock || 0) ? 'text-amber-400' : isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                        <ShoppingCart size={10}/> Estoque
+                      </span>
+                      <span className={`text-sm font-black ${p.stock === 0 ? 'text-red-400' : p.stock <= (p.minStock || 0) ? 'text-amber-400' : isDark ? 'text-white' : 'text-zinc-900'}`}>
+                        {p.stock} {p.stock === 0 ? '— ESGOTADO' : p.stock <= (p.minStock || 0) ? '— BAIXO' : 'un.'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => adjustStock(p.id, -1)} disabled={p.stock === 0} className="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 font-black text-sm flex items-center justify-center disabled:opacity-30">−</button>
+                      <div className={`flex-1 h-1.5 rounded-full ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`}>
+                        {p.minStock ? <div className={`h-full rounded-full transition-all ${p.stock === 0 ? 'bg-red-500' : p.stock <= p.minStock ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{width: `${Math.min((p.stock / (p.minStock * 3)) * 100, 100)}%`}}/> : null}
+                      </div>
+                      <button onClick={() => adjustStock(p.id, +1)} className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 font-black text-sm flex items-center justify-center">+</button>
+                    </div>
+                    {p.minStock && <p className={`text-[8px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Mínimo: {p.minStock} un.</p>}
+                  </div>
+                )}
+
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => openEdit(p)} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${isDark ? 'bg-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-100 text-zinc-500 hover:text-zinc-900'}`}>
                     <Edit2 size={13}/> Editar
@@ -211,6 +264,20 @@ const Products: React.FC = () => {
               <div className="space-y-1">
                 <label className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Descrição</label>
                 <textarea rows={3} placeholder="Descreva o produto, benefícios, como usar..." value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className={inputClass + ' resize-none leading-relaxed'}/>
+              </div>
+
+              {/* Estoque */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Quantidade em Estoque</label>
+                  <input type="number" min="0" placeholder="Ex: 10" value={form.stock as string} onChange={e => setForm(f => ({...f, stock: e.target.value}))} className={inputClass}/>
+                  <p className={`text-[8px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Deixe vazio para não controlar</p>
+                </div>
+                <div className="space-y-1">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Estoque Mínimo</label>
+                  <input type="number" min="0" placeholder="Ex: 3" value={form.minStock as string} onChange={e => setForm(f => ({...f, minStock: e.target.value}))} className={inputClass}/>
+                  <p className={`text-[8px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Alerta quando atingir esse valor</p>
+                </div>
               </div>
 
               {/* Ativo */}
