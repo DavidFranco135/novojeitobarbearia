@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Scissors, Calendar, Check, MapPin, ChevronLeft, ChevronRight, ArrowRight, Clock, User, Phone, 
-  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift
+  History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift, Trophy, Medal, Share2, Users, Copy, QrCode
 } from 'lucide-react';
 // Crown já importado acima — usado para badge Barbeiro Master
 import { useBarberStore } from '../store';
@@ -13,11 +13,26 @@ interface PublicBookingProps {
 }
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
   const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [referralName, setReferralName] = useState('');
+  const [referralPhone, setReferralPhone] = useState('');
+  const [referralEmail, setReferralEmail] = useState('');
+  const [referralCpf, setReferralCpf] = useState('');
+  const [referralBirthdate, setReferralBirthdate] = useState('');
+  const [referralSaving, setReferralSaving] = useState(false);
+  const [referralDone, setReferralDone] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
+  // ── Indicação via URL ?ref=ID ──
+  const [urlReferrerId, setUrlReferrerId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('ref');
+  });
+  const [urlReferrerName, setUrlReferrerName] = useState<string>('');
   const [passo, setPasso] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -64,12 +79,19 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
   // States para o portal do membro
   const [suggestionText, setSuggestionText] = useState('');
+  const [likedSuggs, setLikedSuggs] = React.useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('nj_liked_suggs');
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
   const [editData, setEditData] = useState({ name: '', phone: '', email: '' });
 
   // State para modal de história do barbeiro
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [showProfessionalModal, setShowProfessionalModal] = useState(false);
   const [showBeneficios, setShowBeneficios] = useState(false); // ── NOVO
+  const [activeReviewTab, setActiveReviewTab] = useState<'reviews'|'comments'>('reviews');
 
   // ✅ CORREÇÃO: Estado para modal de criação rápida de cliente
   const [showQuickClient, setShowQuickClient] = useState(false);
@@ -90,6 +112,18 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
     return [...withAppts, ...withoutAppts];
   }, [services, appointments]);
+
+  // ── Detecta ?ref=ID na URL → abre cadastro com banner de indicação ──
+  useEffect(() => {
+    if (!urlReferrerId || !clients || clients.length === 0) return;
+    const referrer = clients.find((cl: any) => cl.id === urlReferrerId);
+    if (referrer) setUrlReferrerName(referrer.name);
+    if (!loggedClient) {
+      setView('LOGIN');
+      setLoginMode('register');
+    }
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [urlReferrerId, clients]);
 
   // Sincroniza o usuário logado do store com o loggedClient deste componente
   useEffect(() => {
@@ -112,6 +146,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const experienciaRef = React.useRef<HTMLDivElement>(null);
   const membroRef = React.useRef<HTMLDivElement>(null);
   const produtosRef = React.useRef<HTMLDivElement>(null);
+  const comentRef    = React.useRef<HTMLDivElement>(null);
   const [selectedProduct, setSelectedProduct] = React.useState<any | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
@@ -265,6 +300,30 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
       setRegisterData({ name: '', phone: '', email: '', password: '', confirmPassword: '' });
       setRegisterError(null);
+
+      // ── Se veio de link de indicação (?ref=ID), cria a indicação ──
+      if (urlReferrerId && urlReferrerId !== client.id) {
+        try {
+          const referrer = clients.find((cl: any) => cl.id === urlReferrerId);
+          if (referrer) {
+            const rewardAmount = (config as any).referralRewardAmount ?? 5;
+            await createReferral({
+              referrerId: urlReferrerId,
+              referrerName: referrer.name,
+              referredName: client.name,
+              referredPhone: client.phone,
+              referredEmail: client.email || '',
+              referredClientId: client.id,
+              status: 'PENDENTE',
+              rewardAmount,
+              rewardCredited: false,
+            });
+          }
+        } catch (_) {}
+        setUrlReferrerId(null);
+        setUrlReferrerName('');
+      }
+
       // Se veio de um agendamento em progresso, volta para o agendamento já verificado
       if (selecao.serviceId && selecao.date && selecao.time && selecao.professionalId) {
         setSelecao(prev => ({ ...prev, clientName: client.name, clientPhone: client.phone, clientEmail: client.email || '' }));
@@ -615,6 +674,65 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     } finally { setVipLoading(false); }
   };
 
+
+  // ── Ranking de clientes ──────────────────────────────────
+  const clientRanking = useMemo(() => {
+    return clients
+      .filter((cl: any) => cl.phone)
+      .map((cl: any) => {
+        const card = loyaltyCards?.find((lc: any) => lc.clientId === cl.id);
+        const totalCuts = appointments.filter((a: any) =>
+          (a.clientId === cl.id || a.clientPhone === cl.phone) && a.status === 'CONCLUIDO_PAGO'
+        ).length;
+        const totalReferrals = referrals?.filter((r: any) => r.referrerId === cl.id && r.status === 'VALIDADO').length || 0;
+        return { ...cl, totalCuts, totalReferrals, credits: card?.credits || 0, card };
+      })
+      .sort((a: any, b: any) => (b.totalCuts + b.totalReferrals * 2) - (a.totalCuts + a.totalReferrals * 2))
+      .slice(0, 20);
+  }, [clients, appointments, referrals, loyaltyCards]);
+
+  // ── Link de indicação do cliente logado ──────────────────
+  const referralLink = useMemo(() => {
+    if (!loggedClient) return '';
+    const base = window.location.origin + window.location.pathname;
+    return `${base}?ref=${loggedClient.id}`;
+  }, [loggedClient]);
+
+  // ── QR Code simples via API pública ─────────────────────
+  const referralQrUrl = useMemo(() => {
+    if (!referralLink) return '';
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralLink)}`;
+  }, [referralLink]);
+
+  const handleCreateReferral = async () => {
+    if (!loggedClient || !referralName.trim()) return;
+    if (!referralPhone.trim() && !referralEmail.trim()) {
+      alert('Informe ao menos o WhatsApp ou e-mail do amigo.');
+      return;
+    }
+    setReferralSaving(true);
+    try {
+      const rewardAmount = (config as any).referralRewardAmount ?? 5;
+      await createReferral({
+        referrerId: loggedClient.id,
+        referrerName: loggedClient.name,
+        referredName: referralName.trim(),
+        referredPhone: referralPhone.trim(),
+        referredEmail: referralEmail.trim(),
+        referredCpf: referralCpf.trim(),
+        referredBirthdate: referralBirthdate.trim(),
+        status: 'PENDENTE',
+        rewardAmount,
+        rewardCredited: false,
+      });
+      setReferralDone(true);
+      setReferralName(''); setReferralPhone('');
+      setReferralEmail(''); setReferralCpf(''); setReferralBirthdate('');
+      setTimeout(() => { setReferralDone(false); setShowReferralModal(false); }, 3000);
+    } catch (e) { alert('Erro ao registrar indicação.'); }
+    finally { setReferralSaving(false); }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col theme-transition ${theme === 'light' ? 'bg-[#F3F4F6] text-black' : 'bg-[#050505] text-white'}`}>
       {view === 'HOME' && (
@@ -815,54 +933,95 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
              </section>
 
-             {/* 4. Voz dos Membros */}
-             <section className="mb-24 py-10 -mx-6 px-6 bg-black">
-                <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 text-white`}>Avalições do cliente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
-                <div className="relative group">
-                  <button 
-                    onClick={() => membroRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-                    className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button 
-                    onClick={() => membroRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-                    className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                  
-                  <div 
-                    ref={membroRef}
-                    className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide"
-                    style={{ scrollBehavior: 'smooth' }}
-                    onMouseDown={(e) => handleMouseDown(e, membroRef)}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseUp={handleMouseUp}
-                    onMouseMove={(e) => handleMouseMove(e, membroRef)}
-                  >
-                   {config.reviews?.length === 0 && <p className={`italic py-10 text-center w-full text-zinc-500`}>Aguardando seu feedback para brilhar aqui.</p>}
-                   {config.reviews?.map((rev, i) => (
-                      <div key={i} className={`snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative group cartao-vidro border-white/5`}>
-                         <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
-                         <div className="flex gap-1 mb-4">
-                            {[1,2,3,4,5].map(s => (
-                               <Star key={s} size={14} fill={s <= rev.rating ? '#C58A4A' : 'none'} className={s <= rev.rating ? 'text-[#C58A4A]' : 'text-zinc-800'}/>
-                            ))}
+             {/* 4. Avaliações & Comentários — unificado */}
+             {((config.reviews && config.reviews.length > 0) || (suggestions && suggestions.length > 0)) && (() => {
+               const hasReviews  = config.reviews && config.reviews.length > 0;
+               const hasComments = suggestions && suggestions.length > 0;
+               return (
+               <section className="mb-24 py-10 -mx-6 px-6 bg-black">
+                 <h2 className="text-2xl font-black font-display italic mb-6 flex items-center gap-6 text-white">
+                   Avaliações & Comentários <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                 </h2>
+                 {/* Tabs */}
+                 <div className="flex gap-2 mb-8">
+                   <button onClick={() => setActiveReviewTab('reviews')} onTouchEnd={e=>{e.preventDefault();setActiveReviewTab('reviews');}} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeReviewTab==='reviews' ? 'gradiente-ouro text-black' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
+                     ⭐ Avaliações{hasReviews ? ` (${config.reviews.length})` : ''}
+                   </button>
+                   <button onClick={() => setActiveReviewTab('comments')} onTouchEnd={e=>{e.preventDefault();setActiveReviewTab('comments');}} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeReviewTab==='comments' ? 'gradiente-ouro text-black' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
+                     💬 Comentários{hasComments ? ` (${suggestions.length})` : ''}
+                   </button>
+                 </div>
+                 {/* Avaliações */}
+                 {activeReviewTab === 'reviews' && (
+                   <div className="relative group">
+                     <button onClick={() => membroRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronLeft size={24}/></button>
+                     <button onClick={() => membroRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronRight size={24}/></button>
+                     <div ref={membroRef} className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide" style={{scrollBehavior:'smooth'}} onMouseDown={e=>handleMouseDown(e,membroRef)} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={e=>handleMouseMove(e,membroRef)}>
+                       {!hasReviews && <p className="italic py-10 text-center w-full text-zinc-500">Aguardando seu feedback para brilhar aqui.</p>}
+                       {config.reviews?.map((rev: any, i: number) => (
+                         <div key={i} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5">
+                           <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
+                           <div className="flex gap-1 mb-4">{[1,2,3,4,5].map(s => <Star key={s} size={14} fill={s<=rev.rating?'#C58A4A':'none'} className={s<=rev.rating?'text-[#C58A4A]':'text-zinc-800'}/>)}</div>
+                           <p className="text-sm italic leading-relaxed mb-6 text-zinc-300">"{rev.comment}"</p>
+                           <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center"><User size={18} className="text-[#C58A4A]"/></div>
+                             <p className="text-[10px] font-black text-white">{rev.userName}</p>
+                           </div>
                          </div>
-                         <p className={`text-sm italic leading-relaxed mb-6 text-zinc-300`}>\"{rev.comment}\"</p>
-                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[#C58A4A]/20 flex items-center justify-center">
-                               <User size={18} className="text-[#C58A4A]"/>
-                            </div>
-                            <p className={`text-[10px] font-black text-white`}>{rev.userName}</p>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-              </div>
-             </section>
-
+                       ))}
+                     </div>
+                   </div>
+                 )}
+                 {/* Comentários */}
+                 {activeReviewTab === 'comments' && (
+                   <div className="relative group">
+                     <button onClick={() => comentRef.current?.scrollBy({ left: -400, behavior: 'smooth' })} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronLeft size={24}/></button>
+                     <button onClick={() => comentRef.current?.scrollBy({ left: 400, behavior: 'smooth' })} className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border-2 border-white/20 text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all shadow-xl"><ChevronRight size={24}/></button>
+                     <div ref={comentRef} className="flex gap-6 overflow-x-auto pb-6 snap-x cursor-grab active:cursor-grabbing scrollbar-hide" style={{scrollBehavior:'smooth'}} onMouseDown={e=>handleMouseDown(e,comentRef)} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={e=>handleMouseMove(e,comentRef)}>
+                       {!hasComments && <p className="italic py-10 text-center w-full text-zinc-500">Nenhum comentário ainda.</p>}
+                       {suggestions?.slice().reverse().map((sugg: any) => {
+                         const alreadyLiked = likedSuggs.has(sugg.id);
+                         const likeCount = sugg.likes || 0;
+                         const handleLike = () => {
+                           if (alreadyLiked) return;
+                           const next = new Set(likedSuggs).add(sugg.id);
+                           setLikedSuggs(next);
+                           try { localStorage.setItem('nj_liked_suggs', JSON.stringify([...next])); } catch {}
+                           updateSuggestion(sugg.id, { likes: likeCount + 1, likedBy: [...(sugg.likedBy||[]), 'anon_'+Date.now()] });
+                         };
+                         const dateStr = (() => { if (!sugg.date) return ''; const d = new Date(sugg.date); return isNaN(d.getTime()) ? sugg.date : d.toLocaleDateString('pt-BR'); })();
+                         return (
+                           <div key={sugg.id} className="snap-center flex-shrink-0 w-80 p-8 rounded-[2rem] relative cartao-vidro border-white/5 flex flex-col">
+                             <div className="absolute -top-4 -left-4 w-10 h-10 gradiente-ouro rounded-full flex items-center justify-center text-black shadow-lg"><Quote size={18} fill="currentColor"/></div>
+                             <p className="text-sm italic leading-relaxed text-zinc-300 flex-1 mb-6">"{sugg.text}"</p>
+                             {sugg.response && (
+                               <div className="mb-4 pl-4 border-l-2 border-[#C58A4A]/40">
+                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Barbearia respondeu</p>
+                                 <p className="text-xs text-zinc-400 leading-relaxed">{sugg.response}</p>
+                               </div>
+                             )}
+                             <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-3">
+                                 <div className="w-9 h-9 rounded-full bg-[#C58A4A]/20 flex items-center justify-center"><User size={16} className="text-[#C58A4A]"/></div>
+                                 <div>
+                                   <p className="text-[10px] font-black text-white">{sugg.clientName}</p>
+                                   {dateStr && <p className="text-[9px] text-zinc-600">{dateStr}</p>}
+                                 </div>
+                               </div>
+                               <button onClick={handleLike} onTouchEnd={e=>{e.preventDefault();handleLike();}} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${alreadyLiked?'bg-[#C58A4A]/20 text-[#C58A4A]':'bg-white/5 text-zinc-500 hover:text-[#C58A4A] hover:bg-[#C58A4A]/10'}`}>
+                                 <Heart size={13} fill={alreadyLiked?'currentColor':'none'}/>
+                                 {likeCount > 0 && <span>{likeCount}</span>}
+                               </button>
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 )}
+               </section>
+               );
+             })()}
              {/* 5. Nossos Artífices */}
              <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
@@ -896,7 +1055,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                             <div className="relative shrink-0">
                               <img
                                 src={prof.avatar}
-                                className="w-28 h-28 rounded-2xl object-cover border-2 border-[#C58A4A] shadow-xl"
+                                className="w-28 h-auto rounded-2xl object-contain border-2 border-[#C58A4A] shadow-xl block"
                                 alt={prof.name}
                               />
                               <div className="absolute -bottom-2 -right-2 bg-gradient-to-br from-[#8B5E2A] to-[#E8B97A] p-2 rounded-xl shadow-lg">
@@ -953,9 +1112,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           className={`rounded-[2rem] p-6 text-center space-y-4 group transition-all hover:scale-105 cursor-pointer ${theme === 'light' ? 'bg-white border border-zinc-200 hover:border-[#C58A4A]/40' : 'cartao-vidro border-white/5 hover:border-[#C58A4A]/30'}`}
                           onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
                         >
-                          <div className="relative mx-auto w-24 h-24">
-                            <img src={prof.avatar} className="w-full h-full rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg" alt="" />
-                            <div className="absolute -right-10 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
+                          <div className="relative mx-auto w-28">
+                            <img src={prof.avatar} className="w-full h-auto rounded-2xl object-contain border-2 border-[#C58A4A] shadow-lg block" alt="" />
+                            <div className="absolute -right-8 top-1 text-red-500 text-xs font-black flex items-center gap-0.5 whitespace-nowrap">
                               <Heart size={12} fill="currentColor" /> <span>{prof.likes || 0}</span>
                             </div>
                           </div>
@@ -1171,6 +1330,150 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </section>
              )}
 
+             {/* ── INDIQUE E GANHE — Banner ── */}
+             <section className="mb-10">
+               <button
+                 onClick={() => setView('LOGIN')}
+                 className="w-full relative overflow-hidden rounded-[2rem] p-0 border-2 border-[#C58A4A]/40 hover:border-[#C58A4A] transition-all group"
+                 style={{background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0e00 50%, #0a0a0a 100%)'}}
+               >
+                 {/* Glow animado */}
+                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500" style={{background: 'radial-gradient(ellipse at center, rgba(197,138,74,0.15) 0%, transparent 70%)'}}/>
+                 {/* Linha dourada topo */}
+                 <div className="absolute top-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+
+                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
+                   <div className="flex items-center gap-5 text-left">
+                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
+                       <span className="text-2xl sm:text-3xl">🎁</span>
+                     </div>
+                     <div>
+                       <p className="text-[#E8B97A] text-[10px] font-black uppercase tracking-[0.3em] mb-1">Programa de Indicação</p>
+                       <p className="text-white text-xl sm:text-2xl font-black font-display italic leading-tight">
+                         Indique e Ganhe{' '}
+                         <span style={{color: '#C58A4A'}}>R$ {(config as any).referralRewardAmount ?? 5}</span>
+                       </p>
+                       <p className="text-zinc-400 text-[11px] sm:text-xs mt-1">
+                         Cada amigo que cortar = crédito na sua carteira · {(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
+                       </p>
+                     </div>
+                   </div>
+                   <div className="shrink-0">
+                     <span className="inline-flex items-center gap-2 text-black font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg transition-all group-hover:scale-105" style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
+                       Quero Indicar <ArrowRight size={14}/>
+                     </span>
+                   </div>
+                 </div>
+                 {/* Linha dourada base */}
+                 <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+               </button>
+             </section>
+
+             {/* ── RANKING TOP 10 ── */}
+             <section className="mb-24" id="ranking">
+               <div className="flex items-center gap-3 mb-3">
+                 <Trophy size={22} className="text-[#C58A4A] shrink-0"/>
+                 <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Ranking de Clientes</h2>
+                 <div className="h-px flex-1 gradiente-ouro opacity-20"/>
+               </div>
+               <p className={`text-sm mb-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Os clientes mais dedicados da nossa família. ✂️ cortes + 👥 indicações</p>
+
+               {/* Top 3 — destaque especial */}
+               {clientRanking.length > 0 && (
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                   {clientRanking.slice(0, 3).map((cl: any, idx: number) => {
+                     // 1º = PREMIUM BLACK (centro, maior), 2º = OURO (esquerda), 3º = PRATA (direita)
+                     const tiers = [
+                       {
+                         // 1º lugar — PREMIUM BLACK
+                         label: 'PREMIUM BLACK',
+                         medal: '1',           // número da posição
+                         icon: '👑',
+                         nameColor: '#E8B97A',  // dourado — legível no fundo preto
+                         statColor: 'rgba(232,185,122,0.7)',
+                         labelColor: '#C58A4A',
+                         borderColor: '#C58A4A',
+                         bg: 'linear-gradient(160deg, #0a0a0a 0%, #1c1000 60%, #0a0a0a 100%)',
+                         glow: '0 0 32px rgba(197,138,74,0.4), 0 0 64px rgba(197,138,74,0.15)',
+                         badgeBg: 'linear-gradient(135deg, #8B5E2A, #C58A4A)',
+                         badgeTextColor: '#000',
+                         order: 'sm:order-2',
+                         scale: 'sm:scale-105',
+                       },
+                       {
+                         // 2º lugar — OURO
+                         label: 'OURO',
+                         medal: '2',
+                         icon: '🥈',            // 🥈 = prata = 2º lugar (medalha correta)
+                         nameColor: '#1a0800',
+                         statColor: 'rgba(0,0,0,0.6)',
+                         labelColor: '#000',
+                         borderColor: '#E8B97A',
+                         bg: 'linear-gradient(135deg, #C58A4A 0%, #E8B97A 100%)',
+                         glow: '0 0 20px rgba(197,138,74,0.5)',
+                         badgeBg: 'rgba(0,0,0,0.25)',
+                         badgeTextColor: '#1a0800',
+                         order: 'sm:order-1',
+                         scale: '',
+                       },
+                       {
+                         // 3º lugar — PRATA
+                         label: 'PRATA',
+                         medal: '3',
+                         icon: '🥉',            // 🥉 = bronze = 3º lugar (medalha correta)
+                         nameColor: '#1a1a1a',
+                         statColor: 'rgba(0,0,0,0.5)',
+                         labelColor: '#333',
+                         borderColor: '#cbd5e1',
+                         bg: 'linear-gradient(135deg, #94a3b8 0%, #e2e8f0 100%)',
+                         glow: '0 0 16px rgba(148,163,184,0.3)',
+                         badgeBg: 'rgba(0,0,0,0.15)',
+                         badgeTextColor: '#1a1a1a',
+                         order: 'sm:order-3',
+                         scale: '',
+                       },
+                     ][idx];
+                     return (
+                       <div key={cl.id} className={`relative rounded-[1.5rem] border-2 p-5 flex flex-col items-center text-center transition-all ${tiers.order} ${tiers.scale} ${idx === 0 ? 'sm:mt-0' : 'sm:mt-6'}`}
+                         style={{background: tiers.bg, borderColor: tiers.borderColor, boxShadow: tiers.glow}}>
+                         {/* Badge label no topo */}
+                         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest whitespace-nowrap"
+                           style={{background: tiers.badgeBg, color: tiers.badgeTextColor, border: `1.5px solid ${tiers.borderColor}`}}>
+                           {tiers.label}
+                         </div>
+                         {/* Ícone medalha */}
+                         <span className="text-4xl mt-3 mb-2 drop-shadow-lg">{tiers.icon}</span>
+                         {/* Nome — sempre legível */}
+                         <p className="font-black text-sm leading-tight mb-1 truncate w-full" style={{color: tiers.nameColor}}>{cl.name}</p>
+                         {/* Stats */}
+                         <div className="flex gap-3 text-[9px] font-black mt-1" style={{color: tiers.statColor}}>
+                           <span>✂️ {cl.totalCuts}</span>
+                           <span>👥 {cl.totalReferrals}</span>
+                         </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               )}
+
+               {/* 4º ao 10º — lista compacta */}
+               {clientRanking.length > 3 && (
+                 <div className="space-y-2">
+                   {clientRanking.slice(3, 10).map((cl: any, idx: number) => (
+                     <div key={cl.id} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${theme === 'light' ? 'bg-white border-zinc-200 hover:border-zinc-300' : 'bg-white/[0.04] border-white/5 hover:border-white/10'}`}>
+                       <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${theme === 'light' ? 'bg-zinc-100 text-zinc-500' : 'bg-white/10 text-zinc-400'}`}>{idx + 4}</span>
+                       <span className={`flex-1 font-bold text-sm truncate ${theme === 'light' ? 'text-zinc-900' : 'text-zinc-200'}`}>{cl.name}</span>
+                       <span className={`text-[10px] font-black shrink-0 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>✂️ {cl.totalCuts} · 👥 {cl.totalReferrals}</span>
+                     </div>
+                   ))}
+                 </div>
+               )}
+
+               {clientRanking.length === 0 && (
+                 <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
+               )}
+             </section>
+
              {/* 8. Onde Nos Encontrar */}
              <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Onde Nos Encontrar <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
@@ -1190,6 +1493,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* 7. Redes Sociais */}
+
              <section className="mb-20 text-center">
                 <h2 className={`text-2xl font-black font-display italic mb-10 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Conecte-se Conosco</h2>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -1372,6 +1676,21 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               ) : (
                 <div className="space-y-4">
                    {registerError && <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-[10px] font-black uppercase text-center">{registerError}</div>}
+                  {/* Banner de indicação quando vem via link */}
+                  {urlReferrerId && (
+                    <div className="rounded-2xl p-4 border mb-2" style={{background:'linear-gradient(135deg,#0d0800,#1a0e00)', borderColor:'#C58A4A'}}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl shrink-0">🎁</span>
+                        <div>
+                          <p className="text-[#E8B97A] font-black text-[10px] uppercase tracking-widest">Você foi indicado!</p>
+                          <p className={`text-sm font-bold mt-0.5 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                            {urlReferrerName ? <><strong className="text-[#C58A4A]">{urlReferrerName}</strong> te convidou para a barbearia!</> : 'Você foi convidado por um amigo!'}
+                          </p>
+                          <p className="text-zinc-400 text-[10px] mt-1">Cadastre-se e faça seu primeiro corte — seu amigo ganha uma recompensa 💰</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                    <input type="text" placeholder="Nome Completo" value={registerData.name} onChange={e => setRegisterData({...registerData, name: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
                    <input type="tel" placeholder="WhatsApp" value={registerData.phone} onChange={e => setRegisterData({...registerData, phone: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
                    <input type="email" placeholder="E-mail" value={registerData.email} onChange={e => setRegisterData({...registerData, email: e.target.value})} className={`w-full border p-5 rounded-2xl outline-none font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`} />
@@ -1488,10 +1807,10 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     const isLiked = loggedClient.likedProfessionals?.includes(prof.id);
                     return (
                       <div key={prof.id} className={`rounded-2xl p-4 text-center space-y-3 transition-all ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/10'}`}>
-                         <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+                         <div className="relative mx-auto w-24 h-28 flex items-center justify-center">
                             <img 
                               src={prof.avatar} 
-                              className="w-full h-full rounded-xl object-cover border-2 border-[#B8860B] cursor-pointer" 
+                              className="w-full h-full rounded-xl object-cover object-top border-2 border-[#B8860B] cursor-pointer" 
                               alt="" 
                               onClick={() => { setSelectedProfessional(prof); setShowProfessionalModal(true); }}
                             />
@@ -1547,6 +1866,99 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     </div>
                  ))}
               </div>
+
+              {/* ── INDIQUE E GANHE ── */}
+              <div className={`rounded-[2rem] p-6 border mt-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className={`font-black font-display italic text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>🎁 Indique e Ganhe!</h3>
+                    <p className={`text-[10px] mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      Ganhe <strong className="text-[#C58A4A]">R$ {(config as any).referralRewardAmount ?? 5}</strong> por cada amigo que cortar aqui. A cada <strong className="text-[#C58A4A]">{(config as any).referralFreeCutThreshold ?? 3} indicações</strong> validadas: 1 corte grátis!
+                    </p>
+                  </div>
+                  <button onClick={() => setShowReferralModal(true)} className="gradiente-ouro text-black px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shrink-0 ml-3">
+                    Indicar Amigo
+                  </button>
+                </div>
+
+                {/* Progresso de indicações */}
+                {(() => {
+                  const myRefs = (referrals || []).filter((r: any) => r.referrerId === loggedClient.id);
+                  const validated = myRefs.filter((r: any) => r.status === 'VALIDADO').length;
+                  const pending = myRefs.filter((r: any) => r.status === 'PENDENTE').length;
+                  const threshold = (config as any).referralFreeCutThreshold ?? 3;
+                  const progress = validated % threshold;
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-[9px] font-black uppercase">
+                        <span className={theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}>✅ {validated} validadas · ⏳ {pending} pendentes</span>
+                        <span className="text-[#C58A4A]">{progress}/{threshold} para corte grátis</span>
+                      </div>
+                      <div className={`w-full h-2 rounded-full ${theme === 'light' ? 'bg-zinc-200' : 'bg-white/10'}`}>
+                        <div className="h-full rounded-full gradiente-ouro transition-all" style={{width: `${(progress/threshold)*100}%`}}/>
+                      </div>
+                      {myRefs.length > 0 && (
+                        <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-hide">
+                          {myRefs.map((r: any) => (
+                            <div key={r.id} className={`flex items-center justify-between p-2.5 rounded-xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
+                              <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>👤 {r.referredName}</span>
+                              <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${r.status === 'VALIDADO' ? 'bg-emerald-500/20 text-emerald-400' : r.status === 'CANCELADO' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                                {r.status === 'VALIDADO' ? `✓ +R$ ${r.rewardAmount}` : r.status === 'CANCELADO' ? 'Cancelada' : 'Aguardando'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Link/QR de indicação */}
+                <div className={`mt-4 p-4 rounded-2xl border space-y-3 ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Seu link de indicação</p>
+                  <div className="flex gap-2">
+                    <input readOnly value={referralLink} className={`flex-1 text-[10px] p-2.5 rounded-xl border truncate ${theme === 'light' ? 'bg-white border-zinc-300 text-zinc-700' : 'bg-black/30 border-white/10 text-zinc-300'}`}/>
+                    <button onClick={() => { navigator.clipboard?.writeText(referralLink); alert('Link copiado!'); }} className="p-2.5 gradiente-ouro text-black rounded-xl">
+                      <Copy size={14}/>
+                    </button>
+                  </div>
+                  {referralQrUrl && (
+                    <div className="flex justify-center">
+                      <img src={referralQrUrl} alt="QR Code" className="w-28 h-28 rounded-xl"/>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── RANKING TOP 20 (posição do cliente) ── */}
+              <div className={`rounded-[2rem] p-6 border mt-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
+                <h3 className={`font-black font-display italic text-lg mb-1 flex items-center gap-2 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                  <Trophy size={18} className="text-[#C58A4A]"/> Ranking de Clientes
+                </h3>
+                <p className={`text-[10px] mb-4 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Top 20 · Sua posição destacada</p>
+                <div className="space-y-2">
+                  {clientRanking.map((cl: any, idx: number) => {
+                    const isMe = cl.id === loggedClient.id;
+                    const tier = idx === 0 ? { badge: '👑', label: 'PREMIUM BLACK' }
+                      : idx === 1 ? { badge: '🥈', label: 'OURO' }
+                      : idx === 2 ? { badge: '🥉', label: 'PRATA' }
+                      : { badge: `${idx+1}`, label: '' };
+                    return (
+                      <div key={cl.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isMe ? 'border-[#C58A4A]/50 bg-[#C58A4A]/10' : (theme === 'light' ? 'border-zinc-100 bg-zinc-50' : 'border-white/5 bg-white/5')}`}>
+                        <span className="text-base w-8 text-center shrink-0">{tier.badge}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-[11px] font-black truncate block ${isMe ? 'text-[#C58A4A]' : (theme === 'light' ? 'text-zinc-900' : 'text-white')}`}>
+                            {cl.name} {isMe ? '← você' : ''}
+                          </span>
+                          <span className={`text-[9px] ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>✂️ {cl.totalCuts} · 👥 {cl.totalReferrals}</span>
+                        </div>
+                        {tier.label && <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border ${idx === 0 ? 'border-zinc-600 bg-black text-white' : idx === 1 ? 'border-[#C58A4A] bg-[#C58A4A]/20 text-[#C58A4A]' : 'border-zinc-400 bg-zinc-400/20 text-zinc-400'}`}>{tier.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
            </div>
         </div>
       )}
@@ -1938,53 +2350,149 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       )}
 
       {showProfessionalModal && selectedProfessional && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`}>
-           <div className={`w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
-              <div className="relative h-96">
-                 <img src={selectedProfessional.avatar} className="w-full rounded-[2rem] object-contain shadow-xl" alt={selectedProfessional.name} />
-                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                 <button 
-                   onClick={() => setShowProfessionalModal(false)} 
-                   className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all"
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`} onClick={() => setShowProfessionalModal(false)}>
+           <div className="w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl max-h-[92vh]" onClick={e => e.stopPropagation()}>
+              {/* Foto com overlay — descrição na metade inferior */}
+              <div className="relative">
+                 <img src={selectedProfessional.avatar} className="w-full h-auto object-contain block" alt={selectedProfessional.name} />
+
+                 {/* Botão fechar */}
+                 <button
+                   onClick={() => setShowProfessionalModal(false)}
+                   className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all z-10"
                  >
                    <X size={20} />
                  </button>
-                 <div className="absolute bottom-6 left-6 right-6">
-                    <h2 className="text-4xl font-black font-display italic text-white mb-2">{selectedProfessional.name}</h2>
-                    <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-2 text-[#C58A4A]">
-                          <Heart size={14} fill="currentColor" />
-                          <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
-                       </div>
-                       <div className="text-white text-xs font-black uppercase tracking-widest">
-                          {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
-                       </div>
-                    </div>
+
+                 {/* Overlay gradiente cobrindo a metade inferior */}
+                 <div className="absolute bottom-0 inset-x-0 h-3/5 bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-none" />
+
+                 {/* Conteúdo sobre a foto — metade inferior */}
+                 <div className="absolute bottom-0 inset-x-0 p-6 z-10">
+                   {/* Nome + stats */}
+                   <h2 className="text-3xl font-black font-display italic text-white mb-1">{selectedProfessional.name}</h2>
+                   <div className="flex items-center gap-4 mb-4">
+                     <div className="flex items-center gap-1.5 text-[#C58A4A]">
+                       <Heart size={13} fill="currentColor" />
+                       <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
+                     </div>
+                     {selectedProfessional.workingHours && (
+                       <span className="text-white/70 text-[10px] font-black uppercase tracking-widest">
+                         {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
+                       </span>
+                     )}
+                   </div>
+
+                   {/* Descrição scrollável dentro da foto */}
+                   {selectedProfessional.description ? (
+                     <div className="max-h-36 overflow-y-auto scrollbar-hide pr-1">
+                       <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
+                         {selectedProfessional.description}
+                       </p>
+                     </div>
+                   ) : (
+                     <p className="text-sm italic text-white/50">Este profissional ainda não compartilhou sua história.</p>
+                   )}
+
+                   {/* Botão fechar */}
+                   <button
+                     onClick={() => setShowProfessionalModal(false)}
+                     onTouchEnd={e => { e.preventDefault(); setShowProfessionalModal(false); }}
+                     className="w-full mt-4 gradiente-ouro text-black py-3.5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
+                   >
+                     Fechar
+                   </button>
                  </div>
               </div>
-              
-              <div className="p-10">
-                 {selectedProfessional.description ? (
-                   <>
-                     <h3 className={`text-xl font-black font-display italic mb-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>História</h3>
-                     <p className={`text-sm leading-relaxed whitespace-pre-line ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                       {selectedProfessional.description}
-                     </p>
-                   </>
-                 ) : (
-                   <p className={`text-sm italic text-center py-6 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>
-                     Este profissional ainda não compartilhou sua história.
-                   </p>
-                 )}
-                 
-                 <button 
-                   onClick={() => setShowProfessionalModal(false)} 
-                   className="w-full mt-8 gradiente-ouro text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
-                 >
-                   Fechar
-                 </button>
-              </div>
            </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Registrar Indicação ── */}
+      {showReferralModal && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95">
+          <div className={`w-full max-w-md rounded-[2.5rem] p-8 border shadow-2xl space-y-6 ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0f0f0f] border-white/10'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">Indique e Ganhe</p>
+                <h2 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Indicar um Amigo</h2>
+              </div>
+              <button onClick={() => { setShowReferralModal(false); setReferralDone(false); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white"><X size={18}/></button>
+            </div>
+
+            {referralDone ? (
+              <div className="text-center py-6 space-y-3">
+                <div className="text-5xl">🎉</div>
+                <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Indicação registrada!</p>
+                <p className={`text-sm ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                  Quando seu amigo concluir o primeiro corte, você recebe <strong className="text-[#C58A4A]">R$ {(config as any).referralRewardAmount ?? 5}</strong> na carteira! 💰
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4 overflow-y-auto max-h-[60vh] scrollbar-hide pr-1">
+                <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-emerald-50 border border-emerald-200' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
+                  <p className={`text-[10px] font-bold leading-relaxed ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'}`}>
+                    ✅ <strong>Validação automática!</strong> Quando seu amigo concluir o primeiro corte aqui, você recebe <strong>R$ {(config as any).referralRewardAmount ?? 5}</strong> automaticamente — sem precisar fazer nada! ✂️
+                  </p>
+                </div>
+
+                {/* ── Dados do amigo ── */}
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A]">Dados do Amigo</p>
+
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Nome Completo <span className="text-red-400">*</span></label>
+                  <input type="text" placeholder="Nome completo"
+                    value={referralName} onChange={e => setReferralName(e.target.value)}
+                    className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>WhatsApp <span className="text-red-400">*</span></label>
+                  <input type="tel" placeholder="(21) 99999-9999"
+                    value={referralPhone} onChange={e => setReferralPhone(e.target.value)}
+                    className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>E-mail</label>
+                  <input type="email" placeholder="email@exemplo.com"
+                    value={referralEmail} onChange={e => setReferralEmail(e.target.value)}
+                    className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>CPF</label>
+                    <input type="text" placeholder="000.000.000-00"
+                      value={referralCpf} onChange={e => setReferralCpf(e.target.value)}
+                      className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Nascimento</label>
+                    <input type="date"
+                      value={referralBirthdate} onChange={e => setReferralBirthdate(e.target.value)}
+                      className={`w-full border p-4 rounded-xl outline-none font-bold text-sm transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2 sticky bottom-0 pb-1">
+                  <button onClick={() => setShowReferralModal(false)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] ${theme === 'light' ? 'bg-zinc-100 text-zinc-500' : 'bg-white/5 text-zinc-500'}`}>Cancelar</button>
+                  <button
+                    onClick={handleCreateReferral}
+                    disabled={referralSaving || !referralName.trim() || (!referralPhone.trim() && !referralEmail.trim())}
+                    className="flex-1 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[9px] disabled:opacity-40"
+                  >
+                    {referralSaving ? '⟳ Cadastrando...' : '🎁 Indicar Agora'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
