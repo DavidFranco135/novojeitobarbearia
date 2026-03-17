@@ -14,7 +14,35 @@ import {
   LineChart, Line,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
-import { Rental, FinancialTransaction, User } from '../types';
+// Tipos locais — evita conflito com lucide-react e dependências externas
+interface Rental {
+  id: string;
+  customerName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  totalValue: number;
+  entryValue: number;
+  paymentMethod?: string;
+  eventAddress?: string;
+  additionalService?: string;
+  additionalServiceValue?: number;
+}
+
+interface FinancialTransaction {
+  id: string;
+  description: string;
+  date: string;
+  type: 'EXPENSE' | 'INCOME';
+  value: number;
+  category?: string;
+}
+
+interface AppUser {
+  id: string;
+  name: string;
+  profilePhotoUrl?: string;
+}
 
 interface FinancialProps {
   rentals: Rental[];
@@ -31,7 +59,7 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   const userStr = localStorage.getItem('susu_user');
-  const user: User | null = userStr ? JSON.parse(userStr) : null;
+  const user: AppUser | null = userStr ? JSON.parse(userStr) : null;
 
   // Cores para os gráficos
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
