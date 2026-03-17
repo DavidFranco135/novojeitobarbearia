@@ -149,52 +149,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const comentRef    = React.useRef<HTMLDivElement>(null);
   const [selectedProduct, setSelectedProduct] = React.useState<any | null>(null);
 
-  // ── Accordion das seções da home ────────────────────────────
-  const [openSections, setOpenSections] = React.useState<Set<string>>(() => new Set());
-  const toggleSection = (key: string) => {
-    setOpenSections(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-  // Helper: renderiza cabeçalho de accordion
-  const AccordionHeader: React.FC<{
-    sectionKey: string;
-    label: string;
-    icon?: React.ReactNode;
-  }> = ({ sectionKey, label, icon }) => {
-    const isOpen = openSections.has(sectionKey);
-    return (
-      <button
-        onClick={() => toggleSection(sectionKey)}
-        className={`w-full flex items-center justify-between px-6 py-5 rounded-[2rem] border transition-all duration-300 group
-          ${isOpen
-            ? theme === 'light'
-              ? 'bg-white border-[#C58A4A]/40 shadow-sm'
-              : 'bg-white/5 border-[#C58A4A]/30'
-            : theme === 'light'
-              ? 'bg-white border-zinc-200 hover:border-[#C58A4A]/30'
-              : 'bg-white/[0.03] border-white/8 hover:border-[#C58A4A]/20'
-          }`}
-      >
-        <div className="flex items-center gap-3">
-          {icon && <span className="text-[#C58A4A]">{icon}</span>}
-          <span className={`text-base font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-            {label}
-          </span>
-        </div>
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0
-          ${isOpen ? 'gradiente-ouro' : theme === 'light' ? 'bg-zinc-100' : 'bg-white/10'}`}>
-          <ChevronRight
-            size={18}
-            className={`transition-transform duration-300 ${isOpen ? 'rotate-90 text-black' : theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}
-          />
-        </div>
-      </button>
-    );
-  };
-
   const handleMouseDown = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement>) => {
     if (!ref.current) return;
     setIsDragging(true);
@@ -839,10 +793,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* 2. Nossos Rituais */}
-             <section className="mb-6" id="catalogo">
-                <AccordionHeader sectionKey="servicos" label="Todos os Serviços" icon={<Scissors size={18}/>} />
-                {openSections.has('servicos') && (
-                <div className={`mt-3 px-2 pb-6 animate-in slide-in-from-top-2`}>
+             <section className="mb-24" id="catalogo">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                    <h2 className={`text-2xl font-black font-display italic flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Todos os serviços <div className="h-1 w-10 gradiente-ouro opacity-10"></div></h2>
                 </div>
@@ -890,16 +841,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      );
                    })}
                 </div>
-                </div>
-                )}
              </section>
 
              {/* 2.5 Produtos */}
              {products && products.filter((p: any) => p.active !== false).length > 0 && (
-             <section className="mb-6">
-                <AccordionHeader sectionKey="produtos" label="Produtos" icon={<span style={{fontSize:16}}>🛒</span>} />
-                {openSections.has('produtos') && (
-                <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                   Produtos <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                 </h2>
@@ -948,16 +894,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     ))}
                   </div>
                 </div>
-                </div>
-                )}
              </section>
              )}
 
              {/* 3. A Experiência Signature */}
-             <section className="mb-6">
-                <AccordionHeader sectionKey="ambiente" label="Nosso Ambiente" icon={<span style={{fontSize:16}}>📸</span>} />
-                {openSections.has('ambiente') && (
-                <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Nosso Ambiente <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
                 <div className="relative group">
                   <button 
@@ -990,8 +931,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    {(!config.gallery || config.gallery.length === 0) && <p className={`italic py-10 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-600'}`}>Em breve, novas fotos do nosso ambiente.</p>}
                 </div>
               </div>
-                </div>
-                )}
              </section>
 
              {/* 4. Avaliações & Comentários — unificado */}
@@ -999,10 +938,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                const hasReviews  = config.reviews && config.reviews.length > 0;
                const hasComments = suggestions && suggestions.length > 0;
                return (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="avaliacoes" label="Avaliações & Comentários" icon={<Star size={18}/>} />
-                 {openSections.has('avaliacoes') && (
-                 <div className="mt-3 animate-in slide-in-from-top-2 py-6 -mx-6 px-6 bg-black">
+               <section className="mb-24 py-10 -mx-6 px-6 bg-black">
                  <h2 className="text-2xl font-black font-display italic mb-6 flex items-center gap-6 text-white">
                    Avaliações & Comentários <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1083,16 +1019,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    </div>
                  )}
-               </div>
-               )}
                </section>
                );
              })()}
              {/* 5. Nossos Artífices */}
-             <section className="mb-6">
-                <AccordionHeader sectionKey="profissionais" label="Nossos Profissionais" icon={<User size={18}/>} />
-                {openSections.has('profissionais') && (
-                <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24">
                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                   Nossos Profissionais <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                 </h2>
@@ -1196,16 +1127,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     </div>
                   </div>
                 )}
-                </div>
-                )}
              </section>
 
              {/* 6. Planos VIP */}
              {config.vipPlans && config.vipPlans.filter(p => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="planos" label="Planos VIP" icon={<Crown size={18}/>} />
-                 {openSections.has('planos') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Planos VIP <Crown size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1243,17 +1169,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    ))}
                  </div>
-                 </div>
-                 )}
                </section>
              )}
 
              {/* 7. Programa de Fidelidade */}
              {((config as any).stampsForFreeCut || (config as any).cashbackPercent) && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="fidelidade" label="Programa de Fidelidade" icon={<Star size={18}/>} />
-                 {openSections.has('fidelidade') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Programa de Fidelidade <Star size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1313,17 +1234,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                    </div>
                  </div>
-                 </div>
-                 )}
                </section>
              )}
 
              {/* Vitrine de Parceiros — sem QR público */}
              {(partners || []).filter((p: any) => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="parceiros" label="Parceiros & Benefícios" icon={<Gift size={18}/>} />
-                 {openSections.has('parceiros') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+               <section className="mb-24">
                  <h2 className={`text-2xl font-black font-display italic mb-4 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                    Parceiros & Benefícios <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
@@ -1411,8 +1327,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      })
                    }
                  </div>
-                 </div>
-                 )}
                </section>
              )}
 
@@ -1456,10 +1370,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              </section>
 
              {/* ── RANKING TOP 10 ── */}
-             <section className="mb-6" id="ranking">
-               <AccordionHeader sectionKey="ranking" label="Ranking de Clientes" icon={<Trophy size={18}/>} />
-               {openSections.has('ranking') && (
-               <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
+             <section className="mb-24" id="ranking">
                <div className="flex items-center gap-3 mb-3">
                  <Trophy size={22} className="text-[#C58A4A] shrink-0"/>
                  <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Ranking de Clientes</h2>
@@ -1494,32 +1405,32 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                          label: 'OURO',
                          medal: '2',
                          icon: '🥈',            // 🥈 = prata = 2º lugar (medalha correta)
-                          nameColor: '#E8B97A',  // dourado — legível no fundo preto
-                         statColor: 'rgba(232,185,122,0.7)',
-                         labelColor: '#C58A4A',
-                         borderColor: '#C58A4A',
-                         bg: 'linear-gradient(160deg, #0a0a0a 0%, #1c1000 60%, #0a0a0a 100%)',
-                         glow: '0 0 32px rgba(197,138,74,0.4), 0 0 64px rgba(197,138,74,0.15)',
-                         badgeBg: 'linear-gradient(135deg, #8B5E2A, #C58A4A)',
-                         badgeTextColor: '#000',
-                         order: 'sm:order-2',
-                         scale: 'sm:scale-105',
+                         nameColor: '#1a0800',
+                         statColor: 'rgba(0,0,0,0.6)',
+                         labelColor: '#000',
+                         borderColor: '#E8B97A',
+                         bg: 'linear-gradient(135deg, #C58A4A 0%, #E8B97A 100%)',
+                         glow: '0 0 20px rgba(197,138,74,0.5)',
+                         badgeBg: 'rgba(0,0,0,0.25)',
+                         badgeTextColor: '#1a0800',
+                         order: 'sm:order-1',
+                         scale: '',
                        },
                        {
                          // 3º lugar — PRATA
                          label: 'PRATA',
                          medal: '3',
                          icon: '🥉',            // 🥉 = bronze = 3º lugar (medalha correta)
-                          nameColor: '#E8B97A',  // dourado — legível no fundo preto
-                         statColor: 'rgba(232,185,122,0.7)',
-                         labelColor: '#C58A4A',
-                         borderColor: '#C58A4A',
-                         bg: 'linear-gradient(160deg, #0a0a0a 0%, #1c1000 60%, #0a0a0a 100%)',
-                         glow: '0 0 32px rgba(197,138,74,0.4), 0 0 64px rgba(197,138,74,0.15)',
-                         badgeBg: 'linear-gradient(135deg, #8B5E2A, #C58A4A)',
-                         badgeTextColor: '#000',
-                         order: 'sm:order-2',
-                         scale: 'sm:scale-105',
+                         nameColor: '#1a1a1a',
+                         statColor: 'rgba(0,0,0,0.5)',
+                         labelColor: '#333',
+                         borderColor: '#cbd5e1',
+                         bg: 'linear-gradient(135deg, #94a3b8 0%, #e2e8f0 100%)',
+                         glow: '0 0 16px rgba(148,163,184,0.3)',
+                         badgeBg: 'rgba(0,0,0,0.15)',
+                         badgeTextColor: '#1a1a1a',
+                         order: 'sm:order-3',
+                         scale: '',
                        },
                      ][idx];
                      return (
@@ -1560,8 +1471,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
                {clientRanking.length === 0 && (
                  <p className={`text-center py-10 text-sm italic ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Nenhum cliente no ranking ainda. Seja o primeiro! ✂️</p>
-               )}
-               </div>
                )}
              </section>
 
@@ -2441,59 +2350,71 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       )}
 
       {showProfessionalModal && selectedProfessional && (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`} onClick={() => setShowProfessionalModal(false)}>
-           <div className="w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl max-h-[92vh]" onClick={e => e.stopPropagation()}>
-              {/* Foto com overlay — descrição na metade inferior */}
-              <div className="relative">
-                 <img src={selectedProfessional.avatar} className="w-full h-auto object-contain block" alt={selectedProfessional.name} />
+        <div className={`fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-6 backdrop-blur-xl animate-in fade-in ${theme === 'light' ? 'bg-black/70' : 'bg-black/95'}`} onClick={() => setShowProfessionalModal(false)}>
+           <div
+             className={`w-full sm:max-w-lg rounded-t-[3rem] sm:rounded-[3rem] shadow-2xl flex flex-col max-h-[92vh] ${theme === 'light' ? 'bg-white' : 'bg-[#0a0a0a]'}`}
+             onClick={e => e.stopPropagation()}
+           >
+              {/* ── Foto inteira no topo ── */}
+              <div className="relative flex-shrink-0">
+                <img
+                  src={selectedProfessional.avatar}
+                  className="w-full h-auto object-contain block rounded-t-[3rem] sm:rounded-t-[3rem]"
+                  style={{ maxHeight: '55vh' }}
+                  alt={selectedProfessional.name}
+                />
+                {/* Gradiente sobre a foto */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none rounded-t-[3rem]" />
+                {/* Botão fechar */}
+                <button
+                  onClick={() => setShowProfessionalModal(false)}
+                  className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all z-10"
+                >
+                  <X size={20} />
+                </button>
+                {/* Nome sobre a foto */}
+                <div className="absolute bottom-4 left-6 right-6 z-10">
+                  <h2 className="text-3xl font-black font-display italic text-white mb-1 drop-shadow-lg">{selectedProfessional.name}</h2>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5 text-[#C58A4A]">
+                      <Heart size={13} fill="currentColor" />
+                      <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
+                    </div>
+                    {selectedProfessional.workingHours && (
+                      <span className="text-white/70 text-[10px] font-black uppercase tracking-widest">
+                        {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-                 {/* Botão fechar */}
-                 <button
-                   onClick={() => setShowProfessionalModal(false)}
-                   className="absolute top-4 right-4 p-3 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-all z-10"
-                 >
-                   <X size={20} />
-                 </button>
-
-                 {/* Overlay gradiente cobrindo a metade inferior */}
-                 <div className="absolute bottom-0 inset-x-0 h-3/5 bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-none" />
-
-                 {/* Conteúdo sobre a foto — metade inferior */}
-                 <div className="absolute bottom-0 inset-x-0 p-6 z-10">
-                   {/* Nome + stats */}
-                   <h2 className="text-3xl font-black font-display italic text-white mb-1">{selectedProfessional.name}</h2>
-                   <div className="flex items-center gap-4 mb-4">
-                     <div className="flex items-center gap-1.5 text-[#C58A4A]">
-                       <Heart size={13} fill="currentColor" />
-                       <span className="text-xs font-black">{selectedProfessional.likes || 0} curtidas</span>
-                     </div>
-                     {selectedProfessional.workingHours && (
-                       <span className="text-white/70 text-[10px] font-black uppercase tracking-widest">
-                         {selectedProfessional.workingHours.start} - {selectedProfessional.workingHours.end}
-                       </span>
-                     )}
-                   </div>
-
-                   {/* Descrição scrollável dentro da foto */}
-                   {selectedProfessional.description ? (
-                     <div className="max-h-36 overflow-y-auto scrollbar-hide pr-1">
-                       <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
-                         {selectedProfessional.description}
-                       </p>
-                     </div>
-                   ) : (
-                     <p className="text-sm italic text-white/50">Este profissional ainda não compartilhou sua história.</p>
-                   )}
-
-                   {/* Botão fechar */}
-                   <button
-                     onClick={() => setShowProfessionalModal(false)}
-                     onTouchEnd={e => { e.preventDefault(); setShowProfessionalModal(false); }}
-                     className="w-full mt-4 gradiente-ouro text-black py-3.5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
-                   >
-                     Fechar
-                   </button>
-                 </div>
+              {/* ── Descrição rolável abaixo da foto ── */}
+              <div className="overflow-y-auto scrollbar-hide flex-1 p-6 pt-5">
+                {selectedProfessional.specialty && (
+                  <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-4 ${theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/10 text-zinc-300'}`}>
+                    {selectedProfessional.specialty}
+                  </span>
+                )}
+                {selectedProfessional.description ? (
+                  <>
+                    <h3 className={`text-base font-black font-display italic mb-3 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>História</h3>
+                    <p className={`text-sm leading-relaxed whitespace-pre-line ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                      {selectedProfessional.description}
+                    </p>
+                  </>
+                ) : (
+                  <p className={`text-sm italic text-center py-4 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                    Este profissional ainda não compartilhou sua história.
+                  </p>
+                )}
+                <button
+                  onClick={() => setShowProfessionalModal(false)}
+                  onTouchEnd={e => { e.preventDefault(); setShowProfessionalModal(false); }}
+                  className="w-full mt-6 mb-2 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl"
+                >
+                  Fechar
+                </button>
               </div>
            </div>
         </div>
