@@ -179,6 +179,10 @@ export interface ShopConfig {
   cashbackPercent?: number;
   stampsForFreeCut?: number;
   masterBarberSurcharge?: number;
+  // ── Indicação ──────────────────────────────────────────────
+  referralRewardAmount?: number;        // crédito para o INDICADOR (ex: R$ 5)
+  referralReferredRewardAmount?: number; // crédito para o INDICADO (ex: R$ 5) — NOVO
+  referralFreeCutThreshold?: number;    // qtd de indicações para ganhar corte grátis
   // ── NOVO: Clube de Benefícios ──────────────────────────────
   benefitValidityDays?: number; // padrão: 7 dias
   // ── Integração Asaas ──────────────────────────────────────
