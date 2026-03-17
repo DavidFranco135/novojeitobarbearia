@@ -288,7 +288,7 @@ const Professionals: React.FC = () => {
             <div key={p.id} className={`rounded-[2.5rem] p-10 group relative overflow-hidden border hover:border-[#C58A4A]/40 transition-all duration-500 ${cardClass}`}>
               <div className="flex items-start justify-between">
                 <div className="relative">
-                  <img src={p.avatar} className="w-24 h-24 rounded-3xl object-cover border-2 border-white/10 group-hover:border-[#C58A4A]/50 transition-all shadow-2xl" alt={p.name}/>
+                  <img src={p.avatar} className="w-24 h-auto rounded-3xl object-contain border-2 border-white/10 group-hover:border-[#C58A4A]/50 transition-all shadow-2xl block" alt={p.name}/>
                   <div className="absolute -bottom-2 -right-2 bg-[#C58A4A] text-black p-2 rounded-xl shadow-xl"><Sparkles size={14}/></div>
                 </div>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -366,7 +366,7 @@ const Professionals: React.FC = () => {
             {/* Foto */}
             <div className="flex flex-col items-center gap-3">
               <div className="relative group">
-                <img src={formData.avatar} className="w-28 h-28 rounded-[2rem] object-cover border-4 border-white/10 shadow-xl" alt="Avatar"/>
+                <img src={formData.avatar} className="w-28 h-auto rounded-[2rem] object-contain border-4 border-white/10 shadow-xl block" alt="Avatar"/>
                 <label className={`absolute inset-0 flex flex-col items-center justify-center rounded-[2rem] cursor-pointer transition-all ${uploadState==='uploading'?'bg-black/70':'bg-black/60 opacity-0 group-hover:opacity-100'}`}>
                   {uploadState==='uploading'
                     ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"/>
