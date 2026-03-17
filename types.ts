@@ -8,7 +8,17 @@ export interface User {
   avatar?: string;
   phone?: string;
 }
+// Adicionar no types.ts
 
+export interface Rental {
+  id: string;
+  // ... campos que Financial.tsx usa
+}
+
+export interface FinancialTransaction {
+  id: string;
+  // ... campos que Financial.tsx usa
+}
 export interface Service {
   id: string;
   name: string;
