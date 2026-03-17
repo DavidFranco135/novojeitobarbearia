@@ -458,6 +458,36 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       validatedAt: new Date().toISOString(),
     });
 
+    // ── Recompensa para o INDICADO também ────────────────────────────
+    const referredRewardAmount = (config as any).referralReferredRewardAmount ?? rewardAmount;
+    if (ref.referredClientId && referredRewardAmount > 0) {
+      const loyaltySnap3 = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+      const referredCardDoc = loyaltySnap3.docs.find(d => d.data().clientId === ref.referredClientId);
+      if (referredCardDoc) {
+        await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, referredCardDoc.id), {
+          credits: parseFloat(((referredCardDoc.data().credits || 0) + referredRewardAmount).toFixed(2)),
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        const referredClient = clients.find((cl: any) => cl.id === ref.referredClientId);
+        if (referredClient) {
+          await addDoc(collection(db, COLLECTIONS.LOYALTY_CARDS), {
+            clientId: ref.referredClientId,
+            clientName: referredClient.name,
+            stamps: 0,
+            totalStamps: 0,
+            credits: referredRewardAmount,
+            referralCount: 0,
+            freeCutsPending: 0,
+            freeCutsEarned: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+      console.log(`🎁 Indicado ${ref.referredName} recebeu R$ ${referredRewardAmount} de crédito.`);
+    }
+
     // Verifica se atingiu o limite de indicações para corte grátis
     const threshold = (config as any).referralFreeCutThreshold || 3;
     const validated = referrals.filter((r: any) => r.referrerId === ref.referrerId && r.status === 'VALIDADO').length + 1;
@@ -865,14 +895,97 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     if (!appt) return {};
 
     const addTotal   = additionals.reduce((s: number, a: any) => s + a.price * a.qty, 0);
-    const totalPrice = appt.price + addTotal;
+    let totalPrice   = appt.price + addTotal;
 
-    // Salva adicionais + totalPrice no Firestore
+    // ── Verifica créditos e corte grátis do cliente ───────────────────────
+    let creditUsed      = 0;
+    let freeCutUsed     = false;
+    let discountDesc    = '';
+
+    if (appt.clientId) {
+      const loyaltySnap = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+      const cardDoc = loyaltySnap.docs.find(d => d.data().clientId === appt.clientId);
+
+      if (cardDoc) {
+        const card = cardDoc.data();
+
+        // Prioridade 1: Corte grátis pendente
+        if ((card.freeCutsPending || 0) > 0) {
+          freeCutUsed  = true;
+          creditUsed   = totalPrice; // deduz o valor total
+          totalPrice   = 0;
+          discountDesc = `Corte grátis usado — ${appt.clientName}`;
+
+          await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
+            freeCutsPending: Math.max(0, (card.freeCutsPending || 0) - 1),
+            updatedAt: new Date().toISOString(),
+          });
+          console.log(`🎁 Corte grátis aplicado para ${appt.clientName} — R$ ${creditUsed} deduzido.`);
+        }
+        // Prioridade 2: Créditos na carteira (somente se não usou corte grátis)
+        else if ((card.credits || 0) > 0) {
+          const available = parseFloat((card.credits || 0).toFixed(2));
+          creditUsed   = Math.min(available, totalPrice);
+          totalPrice   = parseFloat((totalPrice - creditUsed).toFixed(2));
+          discountDesc = `Crédito de fidelidade usado — ${appt.clientName} (R$ ${creditUsed.toFixed(2)})`;
+
+          await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
+            credits: parseFloat((available - creditUsed).toFixed(2)),
+            updatedAt: new Date().toISOString(),
+          });
+          console.log(`💳 Crédito R$ ${creditUsed.toFixed(2)} aplicado para ${appt.clientName}. Novo total: R$ ${totalPrice.toFixed(2)}.`);
+        }
+      }
+    }
+
+    // Salva adicionais + totalPrice (já com desconto) + info de desconto no Firestore
     await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
       additionals,
       totalPrice,
       paymentMethod,
+      ...(creditUsed > 0 ? {
+        creditUsed,
+        freeCutUsed,
+        originalPrice: appt.price + addTotal,
+      } : {}),
     });
+
+    // Se houve desconto, registra no financeiro como DESPESA de desconto
+    if (creditUsed > 0) {
+      await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+        description: discountDesc,
+        amount: creditUsed,
+        type: 'DESPESA',
+        category: freeCutUsed ? 'Corte Grátis' : 'Desconto Fidelidade',
+        date: new Date().toISOString().split('T')[0],
+        appointmentId: id,
+        clientId: appt.clientId,
+      });
+
+      // ── Ajusta comissão do barbeiro proporcionalmente ao desconto ────────
+      if (appt.professionalId) {
+        const professional = professionals.find((p: any) => p.id === appt.professionalId);
+        if (professional && professional.commission > 0) {
+          // Comissão é calculada sobre o valor efetivamente recebido (após desconto)
+          const commissionBase   = totalPrice; // valor que a barbearia realmente recebe
+          const commissionAmount = parseFloat(((commissionBase * professional.commission) / 100).toFixed(2));
+
+          if (commissionAmount >= 0) {
+            const commDesc = `Comissão ajustada — ${professional.name} (${appt.clientName}) — desconto aplicado`;
+            await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+              description: commDesc,
+              amount: commissionAmount,
+              type: 'DESPESA',
+              category: 'Comissões',
+              date: new Date().toISOString().split('T')[0],
+              appointmentId: id,
+              professionalId: professional.id,
+            });
+            console.log(`💈 Comissão ajustada: ${professional.name} recebe R$ ${commissionAmount.toFixed(2)} (base R$ ${commissionBase.toFixed(2)})`);
+          }
+        }
+      }
+    }
 
     // ── DINHEIRO: finaliza na hora, sem Asaas ────────────────
     if (paymentMethod === 'DINHEIRO') {
