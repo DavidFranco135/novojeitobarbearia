@@ -619,11 +619,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   };
 
   if (success) return (
-    <div className={`min-h-screen flex items-center justify-center p-6 animate-in zoom-in ${theme === 'light' ? 'bg-[#F8F9FA]' : 'bg-[#050505]'}`}>
-      <div className={`w-full max-w-lg p-12 rounded-[3rem] text-center space-y-8 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
+    <div className={`min-h-screen flex items-center justify-center p-6 animate-in zoom-in ${theme === 'dark' ? 'bg-[#050505]' : 'bg-[#F8F9FA]'}`}>
+      <div className={`w-full max-w-lg p-12 rounded-[3rem] text-center space-y-8 ${theme === 'dark' ? 'cartao-vidro border-[#C58A4A]/30' : 'bg-white border border-zinc-200'}`}>
         <div className="w-20 h-20 gradiente-ouro rounded-full mx-auto flex items-center justify-center"><Check className="w-10 h-10 text-black" /></div>
         <h2 className="text-3xl font-black font-display italic text-[#C58A4A]">Reserva Confirmada!</h2>
-        <p className={`text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>Aguardamos você para sua melhor experiência da sua vida.</p>
+        <p className={`text-sm ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>Aguardamos você para sua melhor experiência da sua vida.</p>
         {bookingPayLink && (
           <a href={bookingPayLink} target="_blank" rel="noreferrer"
             className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl text-center">
@@ -631,7 +631,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
           </a>
         )}
         <button onClick={() => { setSuccess(false); setBookingPayLink(null); window.location.reload(); }}
-          className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest ${theme === 'light' ? 'bg-zinc-100 text-zinc-700' : 'bg-white/5 text-zinc-400'}`}>
+          className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest ${theme === 'dark' ? 'bg-white/5 text-zinc-400' : 'bg-zinc-100 text-zinc-700'}`}>
           Voltar ao Início
         </button>
       </div>
