@@ -717,6 +717,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           isSubscriptionService: !!clientSub,
           subscriptionId: clientSub?.id || null,
         });
+        
+        console.log(`💰 RECEITA criada: R$ ${revenueAmount.toFixed(2)} - Agendamento #${id.substring(0, 8)}`);
 
         // Registra comissão do barbeiro separadamente
         if (commissionAmount !== null && commissionAmount > 0 && appointment.professionalId) {
@@ -1090,8 +1092,17 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   };
 
   const deleteAppointment = async (id: string) => {
-    const linkedEntry = financialEntries.find(e => e.appointmentId === id);
-    if (linkedEntry) await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, linkedEntry.id));
+    // ✅ CORREÇÃO: Remove TODAS as entradas financeiras relacionadas a este agendamento
+    // Isso inclui: receita, comissões, descontos, cashback, etc.
+    const relatedEntries = financialEntries.filter(e => e.appointmentId === id);
+    
+    if (relatedEntries.length > 0) {
+      console.log(`🗑️ Removendo ${relatedEntries.length} entrada(s) financeira(s) do agendamento ${id}`);
+      for (const entry of relatedEntries) {
+        await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, entry.id));
+      }
+    }
+    
     await deleteDoc(doc(db, COLLECTIONS.APPOINTMENTS, id));
   };
 
