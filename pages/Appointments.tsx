@@ -110,7 +110,7 @@ const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
     addAppointment, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, theme,
-    addFinancialEntry, products, decreaseProductStock, finalizeAppointment
+    addFinancialEntry, products, decreaseProductStock
   } = useBarberStore() as any;
 
   const mountTimeRef = useRef<number>(Date.now());
@@ -149,9 +149,6 @@ const Appointments: React.FC = () => {
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
-  const [showPayModal, setShowPayModal] = useState<Appointment | null>(null);
-  const [payLoading, setPayLoading] = useState(false);
-  const [payResult, setPayResult] = useState<{ paymentLink?: string; _method?: string } | null>(null);
   // Reset product list when opening detail modal
   const openDetailModal = (app: Appointment) => { setUsedProducts([]); setShowDetailModal(app); };
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
@@ -978,181 +975,19 @@ const Appointments: React.FC = () => {
                   <RefreshCw size={12}/> Reagendar
                 </button>
                 <button onClick={async () => {
-                  if (app.status === 'CONCLUIDO_PAGO') {
-                    updateAppointmentStatus(app.id, 'PENDENTE');
-                    setShowDetailModal(null);
-                    return;
-                  }
                   // Desconta estoque dos produtos usados
-                  if (usedProducts.length > 0) {
+                  if (usedProducts.length > 0 && app.status !== 'CONCLUIDO_PAGO') {
                     for (const u of usedProducts) {
                       await decreaseProductStock(u.productId, u.qty);
                     }
                     setUsedProducts([]);
                   }
-                  setPayResult(null);
+                  updateAppointmentStatus(app.id, app.status === 'CONCLUIDO_PAGO' ? 'PENDENTE' : 'CONCLUIDO_PAGO');
                   setShowDetailModal(null);
-                  setShowPayModal(app);
                 }} className={`flex-1 py-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 ${app.status === 'CONCLUIDO_PAGO' ? 'bg-white/10 text-zinc-300 border border-white/10' : 'gradiente-ouro text-black'}`}>
-                  <DollarSign size={12}/> {app.status === 'CONCLUIDO_PAGO' ? 'Voltar a Pendente' : 'Concluir e Pagar'}
+                  <DollarSign size={12}/> {app.status === 'CONCLUIDO_PAGO' ? 'Voltar a Pendente' : 'Marcar Pago'}
                 </button>
               </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── MODAL DE PAGAMENTO ─────────────────────────────────── */}
-      {showPayModal && (() => {
-        const app = showPayModal;
-        const totalBase = app.price || 0;
-        return (
-          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in" onClick={e => { if (e.target === e.currentTarget && !payLoading) { setShowPayModal(null); setPayResult(null); } }}>
-            <div className={`w-full max-w-sm rounded-[2.5rem] border p-8 space-y-6 shadow-2xl ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-[#0a0a0a] border-white/10'}`}>
-
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Forma de Pagamento</h3>
-                  <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>{app.clientName} • R$ {totalBase.toFixed(2)}</p>
-                </div>
-                {!payLoading && !payResult && (
-                  <button onClick={() => { setShowPayModal(null); setPayResult(null); }} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-all">
-                    <X size={18} className="text-zinc-400"/>
-                  </button>
-                )}
-              </div>
-
-              {/* Resultado após gerar link */}
-              {payResult && (
-                <div className="space-y-4">
-                  {payResult._method === 'DINHEIRO' && (
-                    <div className="text-center space-y-3">
-                      <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
-                        <Check size={32} className="text-white"/>
-                      </div>
-                      <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Pagamento em dinheiro registrado!</p>
-                      <p className={`text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>Atendimento concluído com sucesso.</p>
-                    </div>
-                  )}
-                  {payResult._method === 'LINK' && payResult.paymentLink && (
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <p className={`font-black text-sm mb-1 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Link de pagamento gerado!</p>
-                        <p className={`text-xs ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>O cliente pode pagar por PIX, Cartão ou Boleto.</p>
-                      </div>
-                      <a
-                        href={payResult.paymentLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest text-center hover:scale-[1.02] transition-all"
-                      >
-                        🔗 Abrir Link de Pagamento
-                      </a>
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(payResult.paymentLink!); alert('Link copiado!'); }}
-                        className={`w-full py-3 rounded-2xl font-black uppercase text-[10px] border transition-all ${theme === 'light' ? 'border-zinc-200 text-zinc-600 hover:bg-zinc-50' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`}
-                      >
-                        📋 Copiar Link
-                      </button>
-                      <p className={`text-[9px] text-center ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>O agendamento será marcado como pago automaticamente quando o cliente efetuar o pagamento.</p>
-                    </div>
-                  )}
-                  {payResult._method === 'LINK' && !payResult.paymentLink && (
-                    <div className="text-center space-y-2">
-                      <p className="text-amber-400 font-black text-sm">⚠️ Link não gerado</p>
-                      <p className={`text-xs ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Verifique a chave Asaas nas configurações e tente novamente.</p>
-                    </div>
-                  )}
-                  <button onClick={() => { setShowPayModal(null); setPayResult(null); }} className="w-full py-3 rounded-2xl font-black uppercase text-[10px] bg-white/5 text-zinc-400 hover:text-white transition-all">
-                    Fechar
-                  </button>
-                </div>
-              )}
-
-              {/* Opções de pagamento */}
-              {!payResult && !payLoading && (
-                <div className="space-y-3">
-                  {/* DINHEIRO */}
-                  <button
-                    onClick={async () => {
-                      setPayLoading(true);
-                      try {
-                        const res = await finalizeAppointment(app.id, [], 'DINHEIRO');
-                        setPayResult({ _method: 'DINHEIRO', ...res });
-                      } finally {
-                        setPayLoading(false);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-4 p-5 rounded-2xl border transition-all hover:border-emerald-500/50 hover:scale-[1.02] ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
-                      <span className="text-xl">💵</span>
-                    </div>
-                    <div className="text-left">
-                      <p className={`font-black text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Dinheiro</p>
-                      <p className={`text-[10px] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Pagamento em espécie no local</p>
-                    </div>
-                  </button>
-
-                  {/* LINK ASAAS (PIX / Cartão / Boleto) */}
-                  <button
-                    onClick={async () => {
-                      setPayLoading(true);
-                      try {
-                        const res = await finalizeAppointment(app.id, [], 'LINK');
-                        setPayResult({ ...res });
-                      } finally {
-                        setPayLoading(false);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-4 p-5 rounded-2xl border transition-all hover:border-[#C58A4A]/50 hover:scale-[1.02] ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-[#C58A4A]/20 flex items-center justify-center shrink-0">
-                      <span className="text-xl">💳</span>
-                    </div>
-                    <div className="text-left">
-                      <p className={`font-black text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>PIX / Cartão / Boleto</p>
-                      <p className={`text-[10px] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Gera link de pagamento via Asaas</p>
-                    </div>
-                  </button>
-
-                  {/* CARTÃO NA MAQUININHA */}
-                  <button
-                    onClick={async () => {
-                      setPayLoading(true);
-                      try {
-                        await finalizeAppointment(app.id, [], 'DINHEIRO');
-                        setPayResult({ _method: 'DINHEIRO' });
-                      } finally {
-                        setPayLoading(false);
-                      }
-                    }}
-                    className={`w-full flex items-center gap-4 p-5 rounded-2xl border transition-all hover:border-blue-500/50 hover:scale-[1.02] ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
-                      <span className="text-xl">🖱️</span>
-                    </div>
-                    <div className="text-left">
-                      <p className={`font-black text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Cartão na Maquininha</p>
-                      <p className={`text-[10px] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Pagou na maquininha — registrar como pago</p>
-                    </div>
-                  </button>
-
-                  <button onClick={() => { setShowPayModal(null); setPayResult(null); }} className={`w-full py-3 rounded-2xl font-black uppercase text-[10px] border transition-all ${theme === 'light' ? 'border-zinc-200 text-zinc-500' : 'border-white/10 text-zinc-500 hover:text-zinc-300'}`}>
-                    Cancelar
-                  </button>
-                </div>
-              )}
-
-              {/* Loading */}
-              {payLoading && (
-                <div className="flex flex-col items-center gap-4 py-6">
-                  <div className="w-12 h-12 border-4 border-[#C58A4A]/30 border-t-[#C58A4A] rounded-full animate-spin"/>
-                  <p className={`font-black text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>Processando...</p>
-                </div>
-              )}
-
             </div>
           </div>
         );
