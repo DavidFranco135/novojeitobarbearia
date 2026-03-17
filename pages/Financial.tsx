@@ -1,705 +1,475 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  TrendingUp, TrendingDown, Wallet, 
-  ArrowUpCircle, ArrowDownCircle,
-  BarChart3, Download, PieChart as PieChartIcon,
-  Activity, TrendingDown as TrendingDownIcon,
-  Trash2, Eye, X, Calendar, User, MapPin, Clock, CreditCard
-} from 'lucide-react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Legend,
-  PieChart, Pie, Cell,
-  BarChart, Bar,
-  LineChart, Line,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
+
+import React, { useMemo, useState } from 'react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, Download, UserCheck, Trophy, Filter, Calendar } from 'lucide-react';
+import { useBarberStore } from '../store';
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart as RePieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
-// Tipos locais — evita conflito com lucide-react e dependências externas
-interface Rental {
-  id: string;
-  customerName: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  totalValue: number;
-  entryValue: number;
-  paymentMethod?: string;
-  eventAddress?: string;
-  additionalService?: string;
-  additionalServiceValue?: number;
-}
+import { CORES } from '../constants';
 
-interface FinancialTransaction {
-  id: string;
-  description: string;
-  date: string;
-  type: 'EXPENSE' | 'INCOME';
-  value: number;
-  category?: string;
-}
+type PeriodFilter = 'HOJE' | 'SEMANA' | 'MES' | 'ANO' | 'TUDO' | 'CUSTOM';
 
-interface AppUser {
-  id: string;
-  name: string;
-  profilePhotoUrl?: string;
-}
+const Financial: React.FC = () => {
+  const { financialEntries, appointments, professionals, addFinancialEntry, deleteFinancialEntry, theme } = useBarberStore();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [filterType, setFilterType] = useState<'RECEITA' | 'DESPESA' | 'TUDO'>('TUDO');
+  const [filterPeriod, setFilterPeriod] = useState<PeriodFilter>('MES');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [filterProfId, setFilterProfId] = useState<string>('TODOS');
+  const [newEntry, setNewEntry] = useState({ description: '', amount: 0, type: 'RECEITA' as 'RECEITA' | 'DESPESA', category: 'Geral', dueDate: '', isFixed: false });
+  const [expenseTab, setExpenseTab] = useState<'TODAS' | 'FIXAS' | 'VARIAVEIS' | 'PENDENTES'>('TODAS');
 
-interface FinancialProps {
-  rentals: Rental[];
-  transactions: FinancialTransaction[];
-  setTransactions: (action: any) => void;
-}
+  const EXPENSE_CATEGORIES = ['Aluguel', 'Energia', 'Água', 'Internet', 'Folha de pagamento', 'Produto', 'Equipamento', 'Marketing', 'Manutenção', 'Outros'];
 
-const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], setTransactions }) => {
-  const [viewTab, setViewTab] = useState<'Mês' | 'Ano'>('Mês');
-  const [currentDate] = useState(new Date());
-  const [activeFilter, setActiveFilter] = useState<'Receitas' | 'Despesas' | 'Lucro' | 'AReceber'>('Lucro');
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<Rental | FinancialTransaction | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  const isDark = theme !== 'light';
+  const cardClass = isDark ? 'cartao-vidro border-white/5' : 'bg-white border border-zinc-200 shadow-sm';
+  const inputClass = `w-full border p-4 rounded-xl outline-none font-bold transition-all ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`;
 
-  const userStr = localStorage.getItem('susu_user');
-  const user: AppUser | null = userStr ? JSON.parse(userStr) : null;
+  // ── Calcular intervalo de datas para o filtro ─────────────────
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-  // Cores para os gráficos
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
-  // Filtragem e Cálculos com proteção contra valores undefined
-  const stats = useMemo(() => {
-    const month = currentDate.getMonth();
-    const year = currentDate.getFullYear();
-
-    const filteredRentals = (rentals || []).filter(r => {
-      const d = new Date(r.date + 'T00:00:00');
-      return viewTab === 'Mês' ? (d.getMonth() === month && d.getFullYear() === year) : (d.getFullYear() === year);
-    });
-
-    const filteredTrans = (transactions || []).filter(t => {
-      const d = new Date(t.date);
-      return viewTab === 'Mês' ? (d.getMonth() === month && d.getFullYear() === year) : (d.getFullYear() === year);
-    });
-
-    const receitas = filteredRentals.reduce((acc, r) => acc + (Number(r.entryValue) || 0), 0);
-    const despesas = filteredTrans.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.value) || 0), 0);
-    const aReceber = filteredRentals.reduce((acc, r) => acc + ((Number(r.totalValue) || 0) - (Number(r.entryValue) || 0)), 0);
-    const lucro = receitas - despesas;
-
-    return { receitas, despesas, aReceber, lucro, filteredRentals, filteredTrans };
-  }, [rentals, transactions, currentDate, viewTab]);
-
-  // Dados do gráfico de área
-  const chartData = useMemo(() => {
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    return months.map((m, i) => {
-      const r = stats.filteredRentals.filter(rent => new Date(rent.date + 'T00:00:00').getMonth() === i).reduce((acc, rent) => acc + (Number(rent.entryValue) || 0), 0);
-      const d = stats.filteredTrans.filter(t => t.type === 'EXPENSE' && new Date(t.date).getMonth() === i).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
-      const lucro = r - d;
-      return { name: m, Entradas: r, Saídas: d, Lucro: lucro };
-    });
-  }, [stats, viewTab]);
-
-  // Dados para gráfico de pizza (Receitas vs Despesas)
-  const pieData = useMemo(() => [
-    { name: 'Receitas', value: stats.receitas, color: '#10b981' },
-    { name: 'Despesas', value: stats.despesas, color: '#ef4444' },
-    { name: 'A Receber', value: stats.aReceber, color: '#f59e0b' }
-  ], [stats]);
-
-  // Dados para gráfico de barras (Por categoria de despesa)
-  const expensesByCategory = useMemo(() => {
-    const categories: {[key: string]: number} = {};
-    stats.filteredTrans.filter(t => t.type === 'EXPENSE').forEach(t => {
-      const cat = t.category || 'Outros';
-      categories[cat] = (categories[cat] || 0) + (Number(t.value) || 0);
-    });
-    return Object.entries(categories).map(([name, value]) => ({ name, value }));
-  }, [stats]);
-
-  // Dados para gráfico de linha (Evolução do lucro)
-  const profitTrendData = useMemo(() => {
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    return months.map((m, i) => {
-      const r = stats.filteredRentals.filter(rent => new Date(rent.date + 'T00:00:00').getMonth() === i).reduce((acc, rent) => acc + (Number(rent.entryValue) || 0), 0);
-      const d = stats.filteredTrans.filter(t => t.type === 'EXPENSE' && new Date(t.date).getMonth() === i).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
-      return { name: m, Lucro: r - d };
-    });
-  }, [stats]);
-
-  const handleDownloadPDF = async () => {
-    setIsGeneratingPDF(true);
-    
-    try {
-      const element = document.getElementById('financial-report-print');
-      if (!element) {
-        alert('Erro: Elemento não encontrado');
-        return;
-      }
-      
-      element.style.display = 'block';
-      element.style.position = 'absolute';
-      element.style.left = '-9999px';
-      element.style.top = '0';
-      element.style.width = '1200px';
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const canvas = await (window as any).html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: 1200,
-        height: element.scrollHeight
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const { jsPDF } = (window as any).jspdf;
-      
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
-      });
-
-      const pageWidth = 210;
-      const pageHeight = 297;
-      const margin = 10;
-      
-      const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      if (imgHeight <= pageHeight - (margin * 2)) {
-        pdf.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
-      } else {
-        let heightLeft = imgHeight;
-        let position = margin;
-        
-        pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-        heightLeft -= (pageHeight - margin);
-        
-        while (heightLeft > 0) {
-          position = heightLeft - imgHeight + margin;
-          pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
-      }
-
-      const periodName = viewTab === 'Mês' 
-        ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-        : currentDate.getFullYear().toString();
-      
-      pdf.save(`Relatorio-Financeiro-${periodName}.pdf`);
-      
-    } catch (err) {
-      console.error('Erro ao gerar PDF:', err);
-      alert("Erro ao gerar o PDF. Tente novamente.");
-    } finally {
-      const element = document.getElementById('financial-report-print');
-      if (element) {
-        element.style.display = 'none';
-        element.style.position = '';
-        element.style.left = '';
-        element.style.top = '';
-        element.style.width = '';
-      }
-      setIsGeneratingPDF(false);
+    switch (filterPeriod) {
+      case 'HOJE': return { start: todayStr, end: todayStr };
+      case 'SEMANA': return { start: startOfWeek.toISOString().split('T')[0], end: todayStr };
+      case 'MES': return { start: startOfMonth.toISOString().split('T')[0], end: todayStr };
+      case 'ANO': return { start: startOfYear.toISOString().split('T')[0], end: todayStr };
+      case 'CUSTOM': return { start: customStart, end: customEnd };
+      default: return { start: '', end: '' };
     }
+  }, [filterPeriod, customStart, customEnd]);
+
+  // ── Entradas filtradas por período + tipo ─────────────────────
+  const filteredEntries = useMemo(() => {
+    return financialEntries.filter(e => {
+      const matchType = filterType === 'TUDO' || e.type === filterType;
+      const matchPeriod = !dateRange.start || (e.date >= dateRange.start && e.date <= dateRange.end);
+      return matchType && matchPeriod;
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }, [financialEntries, filterType, dateRange]);
+
+  // ── Métricas do período selecionado ───────────────────────────
+  const metrics = useMemo(() => {
+    const periodEntries = financialEntries.filter(e => {
+      return !dateRange.start || (e.date >= dateRange.start && e.date <= dateRange.end);
+    });
+    const receitas = periodEntries.filter(e => e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
+    const despesas = periodEntries.filter(e => e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
+    // Saldo total global
+    const totalReceitas = financialEntries.filter(e => e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
+    const totalDespesas = financialEntries.filter(e => e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
+    const contasPendentes = financialEntries.filter(e => e.type === 'DESPESA' && (e as any).dueDate && !(e as any).paid);
+    const totalPendente = contasPendentes.reduce((acc, e) => acc + e.amount, 0);
+    const despesasFixas = periodEntries.filter(e => e.type === 'DESPESA' && (e as any).isFixed).reduce((acc, e) => acc + e.amount, 0);
+    const despesasVarveis = despesas - despesasFixas;
+    return { receitas, despesas, lucro: receitas - despesas, saldoGlobal: totalReceitas - totalDespesas, totalPendente, contasPendentes: contasPendentes.length, despesasFixas, despesasVarveis };
+  }, [financialEntries, dateRange]);
+
+  // ── Comissões por profissional ────────────────────────────────
+  const barberStats = useMemo(() => {
+    return professionals.map(p => {
+      const pApps = appointments.filter(a =>
+        a.professionalId === p.id &&
+        a.status === 'CONCLUIDO_PAGO' &&
+        (!dateRange.start || (a.date >= dateRange.start && a.date <= dateRange.end))
+      );
+      const totalGenerated = pApps.reduce((acc, curr) => acc + curr.price, 0);
+      const commission = (totalGenerated * (p.commission || 0)) / 100;
+      return { id: p.id, name: p.name, total: totalGenerated, commission, count: pApps.length };
+    }).filter(s => s.total > 0).sort((a, b) => b.total - a.total);
+  }, [appointments, professionals, dateRange]);
+
+  // ── Gráfico por período (últimos dias do filtro) ───────────────
+  const chartData = useMemo(() => {
+    const days: { name: string; receita: number; despesa: number }[] = [];
+    const endDate = dateRange.end ? new Date(dateRange.end + 'T12:00:00') : new Date();
+    const startDate = dateRange.start ? new Date(dateRange.start + 'T12:00:00') : new Date(endDate.getTime() - 6 * 86400000);
+    const diffDays = Math.min(Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1, 30);
+
+    for (let i = Math.max(diffDays - 1, 0); i >= 0; i--) {
+      const d = new Date(endDate);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const receita = financialEntries.filter(e => e.date === dateStr && e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
+      const despesa = financialEntries.filter(e => e.date === dateStr && e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
+      days.push({ name: label, receita, despesa });
+    }
+    return days;
+  }, [financialEntries, dateRange]);
+
+  const pieData = [
+    { name: 'Receitas', value: metrics.receitas, color: '#10b981' },
+    { name: 'Despesas', value: metrics.despesas, color: '#ef4444' },
+  ];
+
+  const tooltipStyle = {
+    backgroundColor: isDark ? '#0A0A0A' : '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    color: isDark ? '#fff' : '#000',
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    if (!confirm('Deseja realmente excluir esta despesa?')) return;
-    setTransactions((prev: FinancialTransaction[]) => prev.filter(t => t.id !== id));
-  };
-
-  const handleViewDetails = (item: Rental | FinancialTransaction) => {
-    setSelectedItem(item);
-    setShowDetailModal(true);
-  };
+  const PERIODS: { key: PeriodFilter; label: string }[] = [
+    { key: 'HOJE', label: 'Hoje' },
+    { key: 'SEMANA', label: 'Semana' },
+    { key: 'MES', label: 'Mês' },
+    { key: 'ANO', label: 'Ano' },
+    { key: 'TUDO', label: 'Tudo' },
+    { key: 'CUSTOM', label: 'Personalizado' },
+  ];
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500 pb-20">
-      {/* Relatório oculto para PDF */}
-      <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-16 text-slate-900">
-        <div className="border-b-4 border-slate-900 pb-10 mb-12 flex justify-between items-end">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 rounded-[32px] overflow-hidden border-2 border-slate-900">
-              {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" /> : <div className="w-full h-full bg-slate-100"/>}
-            </div>
-            <div>
-              <h1 className="text-4xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
-              <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-2">
-                {viewTab === 'Mês' 
-                  ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-                  : `Ano ${currentDate.getFullYear()}`}
-              </p>
-            </div>
-          </div>
-          <div className="text-right text-sm">
-            <p className="font-black opacity-40">GERADO EM</p>
-            <p className="font-black text-xl">{new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
+    <div className="space-y-10 animate-in fade-in duration-500 pb-20 no-print h-full overflow-auto scrollbar-hide">
+
+      {/* ── Cabeçalho ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className={`text-3xl font-black font-display italic tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>Centro de Resultados</h1>
+          <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Controle de caixa e lucratividade.</p>
         </div>
-
-        <div className="grid grid-cols-4 gap-8 mb-12">
-          <div className="bg-emerald-50 p-6 rounded-3xl border-2 border-emerald-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-emerald-600">Receitas</p>
-            <p className="text-3xl font-black text-emerald-700">R$ {stats.receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-red-50 p-6 rounded-3xl border-2 border-red-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-red-600">Despesas</p>
-            <p className="text-3xl font-black text-red-700">R$ {stats.despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-blue-50 p-6 rounded-3xl border-2 border-blue-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-blue-600">Lucro Líquido</p>
-            <p className="text-3xl font-black text-blue-700">R$ {stats.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-amber-50 p-6 rounded-3xl border-2 border-amber-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-amber-600">A Receber</p>
-            <p className="text-3xl font-black text-amber-700">R$ {stats.aReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-        </div>
-
-        <div className="space-y-10">
-          <div>
-            <h2 className="text-2xl font-black uppercase mb-6 pb-3 border-b-2 border-slate-900">Receitas Detalhadas</h2>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b-2 border-slate-900 uppercase font-black">
-                  <th className="py-3 text-left">Data</th>
-                  <th className="py-3 text-left">Cliente</th>
-                  <th className="py-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {stats.filteredRentals.slice(0, 15).map(r => (
-                  <tr key={r.id}>
-                    <td className="py-3 font-bold opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td className="py-3 font-black">{r.customerName}</td>
-                    <td className="py-3 text-right font-black text-emerald-700">R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-black uppercase mb-6 pb-3 border-b-2 border-slate-900">Despesas Detalhadas</h2>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b-2 border-slate-900 uppercase font-black">
-                  <th className="py-3 text-left">Data</th>
-                  <th className="py-3 text-left">Descrição</th>
-                  <th className="py-3 text-left">Categoria</th>
-                  <th className="py-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {stats.filteredTrans.filter(t => t.type === 'EXPENSE').slice(0, 15).map(t => (
-                  <tr key={t.id}>
-                    <td className="py-3 font-bold opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                    <td className="py-3 font-black">{t.description}</td>
-                    <td className="py-3 uppercase text-[10px] opacity-60">{t.category}</td>
-                    <td className="py-3 text-right font-black text-red-700">R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mt-12 border-t-4 border-slate-900 pt-8 text-center">
-          <div className="bg-slate-900 text-white p-8 rounded-3xl">
-            <p className="text-sm font-black uppercase mb-3 opacity-60">Resultado Final do Período</p>
-            <p className="text-5xl font-black">R$ {stats.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-sm font-bold mt-3 uppercase">
-              Margem: {stats.receitas > 0 ? ((stats.lucro / stats.receitas) * 100).toFixed(1) : '0'}%
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-10 border-t pt-4 text-[9px] font-black uppercase opacity-40 text-center">
-          Gerado por {user?.name} em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+        <div className="flex gap-3">
+          <button onClick={() => window.print()} className={`p-3.5 rounded-xl transition-all border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:text-zinc-900'}`}><Download size={20} /></button>
+          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 gradiente-ouro text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl">
+            <Plus size={16} /> LANÇAR NO CAIXA
+          </button>
         </div>
       </div>
 
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 print:hidden">
-        <h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Fluxo de Caixa</h1>
-        <div className="grid grid-cols-2 md:flex gap-3 w-full md:w-auto">
-          <button 
-            onClick={() => setActiveFilter('Receitas')}
-            className="flex items-center justify-center gap-2 bg-emerald-500 text-white px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
-          >
-            <ArrowUpCircle size={18} /> Receitas
-          </button>
-          <button 
-            onClick={() => setActiveFilter('Despesas')}
-            className="flex items-center justify-center gap-2 bg-rose-500 text-white px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg"
-          >
-            <ArrowDownCircle size={18} /> Despesas
-          </button>
-          <button 
-            onClick={handleDownloadPDF}
-            disabled={isGeneratingPDF}
-            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed col-span-2 md:col-span-1"
-          >
-            <Download size={18} /> {isGeneratingPDF ? 'Gerando...' : 'Relatório PDF'}
-          </button>
-          <div className="flex bg-white p-1 rounded-2xl shadow-sm border col-span-2 md:col-span-1">
-            <button onClick={() => setViewTab('Mês')} className={`px-6 py-2 rounded-xl text-xs font-black uppercase ${viewTab === 'Mês' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>Mês</button>
-            <button onClick={() => setViewTab('Ano')} className={`px-6 py-2 rounded-xl text-xs font-black uppercase ${viewTab === 'Ano' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>Ano</button>
-          </div>
+      {/* ── Filtros de Período ── */}
+      <div className={`${cardClass} rounded-[2rem] p-6`}>
+        <div className="flex items-center gap-3 mb-4">
+          <Filter size={14} className="text-[#C58A4A]" />
+          <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Filtrar por Período</span>
         </div>
-      </header>
+        <div className="flex flex-wrap gap-2">
+          {PERIODS.map(p => (
+            <button
+              key={p.key}
+              onClick={() => setFilterPeriod(p.key)}
+              className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
+                filterPeriod === p.key
+                  ? 'bg-[#C58A4A] text-black border-transparent'
+                  : isDark ? 'bg-white/5 text-zinc-500 border-white/5 hover:border-[#C58A4A]/30' : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:border-[#C58A4A]/30'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
 
+        {filterPeriod === 'CUSTOM' && (
+          <div className="flex gap-4 mt-4">
+            <div className="flex-1">
+              <label className={`text-[9px] font-black uppercase tracking-widest mb-1 block ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>De</label>
+              <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className={inputClass} />
+            </div>
+            <div className="flex-1">
+              <label className={`text-[9px] font-black uppercase tracking-widest mb-1 block ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Até</label>
+              <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className={inputClass} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Cards de métricas do período ── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Card Receitas */}
-        <button onClick={() => setActiveFilter('Receitas')} className={`p-6 rounded-[35px] border-2 transition-all text-left ${activeFilter === 'Receitas' ? 'bg-emerald-500 border-emerald-200 text-white shadow-xl' : 'bg-white border-transparent'}`}>
-          <ArrowUpCircle size={32} className={activeFilter === 'Receitas' ? 'text-white' : 'text-emerald-500'} />
-          <p className="mt-4 text-[10px] font-black uppercase opacity-70">Receitas</p>
-          <h3 className="text-2xl font-black">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</h3>
-        </button>
-
-        {/* Card Despesas */}
-        <button onClick={() => setActiveFilter('Despesas')} className={`p-6 rounded-[35px] border-2 transition-all text-left ${activeFilter === 'Despesas' ? 'bg-rose-500 border-rose-200 text-white shadow-xl' : 'bg-white border-transparent'}`}>
-          <ArrowDownCircle size={32} className={activeFilter === 'Despesas' ? 'text-white' : 'text-rose-500'} />
-          <p className="mt-4 text-[10px] font-black uppercase opacity-70">Despesas</p>
-          <h3 className="text-2xl font-black">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</h3>
-        </button>
-
-        {/* Card Lucro */}
-        <button onClick={() => setActiveFilter('Lucro')} className={`p-6 rounded-[35px] border-2 transition-all text-left ${activeFilter === 'Lucro' ? 'bg-blue-600 border-blue-200 text-white shadow-xl' : 'bg-white border-transparent'}`}>
-          <TrendingUp size={32} className={activeFilter === 'Lucro' ? 'text-white' : 'text-blue-600'} />
-          <p className="mt-4 text-[10px] font-black uppercase opacity-70">Lucro</p>
-          <h3 className="text-2xl font-black">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</h3>
-        </button>
-
-        {/* Card A Receber */}
-        <button onClick={() => setActiveFilter('AReceber')} className={`p-6 rounded-[35px] border-2 transition-all text-left ${activeFilter === 'AReceber' ? 'bg-amber-500 border-amber-200 text-white shadow-xl' : 'bg-white border-transparent'}`}>
-          <Wallet size={32} className={activeFilter === 'AReceber' ? 'text-white' : 'text-amber-500'} />
-          <p className="mt-4 text-[10px] font-black uppercase opacity-70">A Receber</p>
-          <h3 className="text-2xl font-black">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</h3>
-        </button>
-      </div>
-
-      {/* Gráficos - Grade 2x2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico 1: Área - Comparativo Financeiro */}
-        <div className="bg-white p-8 rounded-[40px] border shadow-sm h-[400px]">
-          <h3 className="text-sm font-black uppercase text-slate-400 mb-6 flex items-center gap-2">
-            <BarChart3 size={18} /> Comparativo Mensal
-          </h3>
-          <ResponsiveContainer width="100%" height="90%">
-            <AreaChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} tickFormatter={(v) => `R$${v}`} />
-              <Tooltip contentStyle={{borderRadius: '15px', border: 'none', boxShadow: '0 10px 15px rgba(0,0,0,0.1)'}} />
-              <Area type="monotone" dataKey="Entradas" stroke="#10b981" fillOpacity={0.1} fill="#10b981" strokeWidth={3} />
-              <Area type="monotone" dataKey="Saídas" stroke="#f43f5e" fillOpacity={0.1} fill="#f43f5e" strokeWidth={3} />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div
+          onClick={() => setFilterType('RECEITA')}
+          className={`${cardClass} rounded-[2rem] p-8 cursor-pointer hover:border-emerald-500/30 transition-all ${filterType === 'RECEITA' ? (isDark ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-emerald-50 border-emerald-300') : ''}`}
+        >
+          <div className="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center mb-6"><DollarSign size={24} /></div>
+          <h3 className={`text-[10px] uppercase font-black tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Receita do Período</h3>
+          <p className={`text-3xl font-black mt-2 font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>R$ {metrics.receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
 
-        {/* Gráfico 2: Pizza - Distribuição */}
-        <div className="bg-white p-8 rounded-[40px] border shadow-sm h-[400px]">
-          <h3 className="text-sm font-black uppercase text-slate-400 mb-6 flex items-center gap-2">
-            <PieChartIcon size={18} /> Distribuição Financeira
-          </h3>
-          <ResponsiveContainer width="100%" height="90%">
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: any) => `R$ ${value.toLocaleString('pt-BR')}`} />
-            </PieChart>
-          </ResponsiveContainer>
+        <div
+          onClick={() => setFilterType('DESPESA')}
+          className={`${cardClass} rounded-[2rem] p-8 cursor-pointer hover:border-red-500/30 transition-all ${filterType === 'DESPESA' ? (isDark ? 'bg-red-500/5 border-red-500/30' : 'bg-red-50 border-red-300') : ''}`}
+        >
+          <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mb-6"><TrendingDown size={24} /></div>
+          <h3 className={`text-[10px] uppercase font-black tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Despesa do Período</h3>
+          <p className={`text-3xl font-black mt-2 font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>R$ {metrics.despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
 
-        {/* Gráfico 3: Barras - Despesas por Categoria */}
-        <div className="bg-white p-8 rounded-[40px] border shadow-sm h-[400px]">
-          <h3 className="text-sm font-black uppercase text-slate-400 mb-6 flex items-center gap-2">
-            <BarChart3 size={18} /> Despesas por Categoria
-          </h3>
-          <ResponsiveContainer width="100%" height="90%">
-            <BarChart data={expensesByCategory}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} tickFormatter={(v) => `R$${v}`} />
-              <Tooltip formatter={(value: any) => `R$ ${value.toLocaleString('pt-BR')}`} contentStyle={{borderRadius: '15px', border: 'none', boxShadow: '0 10px 15px rgba(0,0,0,0.1)'}} />
-              <Bar dataKey="value" fill="#ef4444" radius={[10, 10, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div
+          onClick={() => setFilterType('TUDO')}
+          className={`${cardClass} rounded-[2rem] p-8 border-[#C58A4A]/20 cursor-pointer hover:border-[#C58A4A]/40 transition-all`}
+        >
+          <div className="w-12 h-12 bg-[#C58A4A]/10 text-[#C58A4A] rounded-2xl flex items-center justify-center mb-6"><TrendingUp size={24} /></div>
+          <h3 className={`text-[10px] uppercase font-black tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Lucro do Período</h3>
+          <p className={`text-3xl font-black mt-2 font-display italic ${metrics.lucro >= 0 ? 'text-[#C58A4A]' : 'text-red-500'}`}>
+            R$ {metrics.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
 
-        {/* Gráfico 4: Linha - Evolução do Lucro */}
-        <div className="bg-white p-8 rounded-[40px] border shadow-sm h-[400px]">
-          <h3 className="text-sm font-black uppercase text-slate-400 mb-6 flex items-center gap-2">
-            <Activity size={18} /> Evolução do Lucro
-          </h3>
-          <ResponsiveContainer width="100%" height="90%">
-            <LineChart data={profitTrendData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} tickFormatter={(v) => `R$${v}`} />
-              <Tooltip formatter={(value: any) => `R$ ${value.toLocaleString('pt-BR')}`} contentStyle={{borderRadius: '15px', border: 'none', boxShadow: '0 10px 15px rgba(0,0,0,0.1)'}} />
-              <Line type="monotone" dataKey="Lucro" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
+        {/* Saldo Atual Global */}
+        <div className={`${cardClass} rounded-[2rem] p-8 border-blue-500/20`}>
+          <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center mb-6"><DollarSign size={24} /></div>
+          <h3 className={`text-[10px] uppercase font-black tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Saldo Atual (Global)</h3>
+          <p className={`text-3xl font-black mt-2 font-display italic ${metrics.saldoGlobal >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
+            R$ {metrics.saldoGlobal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
       </div>
 
-      {/* Listagem com proteção toLocaleString */}
-      <div className="bg-white rounded-[30px] border overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
-            <tr>
-              <th className="px-8 py-4">Descrição</th>
-              <th className="px-8 py-4">Data</th>
-              <th className="px-8 py-4">Valor</th>
-              <th className="px-8 py-4 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y text-sm font-bold">
-            {(activeFilter === 'Receitas' || activeFilter === 'Lucro') && stats.filteredRentals.map(r => (
-              <tr key={r.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleViewDetails(r)}>
-                <td className="px-8 py-4">Entrada: {r.customerName}</td>
-                <td className="px-8 py-4 text-slate-400">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td className="px-8 py-4 text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
-                <td className="px-8 py-4 text-right">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleViewDetails(r); }}
-                    className="p-2 text-blue-500 hover:text-white hover:bg-blue-500 rounded-xl transition-all"
-                    title="Ver detalhes"
-                  >
-                    <Eye size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {(activeFilter === 'Despesas' || activeFilter === 'Lucro') && stats.filteredTrans.map(t => (
-              <tr key={t.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleViewDetails(t)}>
-                <td className="px-8 py-4">{t.description}</td>
-                <td className="px-8 py-4 text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                <td className="px-8 py-4 text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
-                <td className="px-8 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleViewDetails(t); }}
-                      className="p-2 text-blue-500 hover:text-white hover:bg-blue-500 rounded-xl transition-all"
-                      title="Ver detalhes"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(t.id); }}
-                      className="p-2 text-red-400 hover:text-white hover:bg-red-500 rounded-xl transition-all"
-                      title="Excluir despesa"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+      {/* ── Custos Fixos vs Variáveis ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className={`${cardClass} rounded-[2rem] p-6`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>📌 Custos Fixos</p>
+          <p className="text-2xl font-black text-orange-400 font-display italic">R$ {metrics.despesasFixas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Aluguel, salários, contratos</p>
+        </div>
+        <div className={`${cardClass} rounded-[2rem] p-6`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>🔀 Custos Variáveis</p>
+          <p className="text-2xl font-black text-yellow-400 font-display italic">R$ {metrics.despesasVarveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Produtos, manutenção, etc</p>
+        </div>
+        <div className={`${cardClass} rounded-[2rem] p-6 ${metrics.contasPendentes > 0 ? 'border-red-500/30 bg-red-500/5' : ''}`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${metrics.contasPendentes > 0 ? 'text-red-400' : isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>⏰ Contas a Vencer</p>
+          <p className={`text-2xl font-black font-display italic ${metrics.contasPendentes > 0 ? 'text-red-400' : isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            R$ {metrics.totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
+          <p className={`text-[9px] mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>{metrics.contasPendentes} conta(s) pendente(s)</p>
+        </div>
+      </div>
+
+      {/* ── Repasse de Comissões ── */}
+      <div className={`${cardClass} rounded-[2rem] p-8`}>
+        <div className="flex items-center gap-3 mb-8">
+          <UserCheck className="text-[#C58A4A]" />
+          <h3 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-zinc-900'}`}>Repasse de Comissões — {PERIODS.find(p => p.key === filterPeriod)?.label}</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {barberStats.map(stat => (
+            <div key={stat.id} className={`p-6 rounded-2xl border ${isDark ? 'bg-white/5 border-white/10' : 'bg-zinc-50 border-zinc-200'}`}>
+              <p className={`text-sm font-black italic mb-4 ${isDark ? 'text-white' : 'text-zinc-900'}`}>{stat.name}</p>
+              <div className="space-y-2">
+                <div className={`flex justify-between text-[10px] uppercase font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                  <span>Gerado Total:</span>
+                  <span className={isDark ? 'text-white' : 'text-zinc-900'}>R$ {stat.total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] uppercase font-black text-[#C58A4A]">
+                  <span>Comissão:</span>
+                  <span>R$ {stat.commission.toFixed(2)}</span>
+                </div>
+                <p className={`text-[8px] font-black uppercase mt-2 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`}>Baseado em {stat.count} serviços concluídos</p>
+              </div>
+            </div>
+          ))}
+          {barberStats.length === 0 && (
+            <p className={`col-span-full text-center py-6 text-[10px] font-black uppercase italic ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+              Nenhum repasse no período selecionado.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Ranking de Barbeiros ── */}
+      <div className={`${cardClass} rounded-[2rem] p-8`}>
+        <div className="flex items-center gap-3 mb-8">
+          <Trophy className="text-[#C58A4A]" />
+          <h3 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-zinc-900'}`}>Ranking de Barbeiros</h3>
+        </div>
+        <div className="space-y-4">
+          {barberStats.map((stat, idx) => (
+            <div key={stat.id} className={`flex items-center gap-5 p-4 rounded-2xl border ${isDark ? 'bg-white/5 border-white/5' : 'bg-zinc-50 border-zinc-200'}`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg flex-shrink-0 ${
+                idx === 0 ? 'bg-yellow-400 text-black' :
+                idx === 1 ? 'bg-zinc-400 text-black' :
+                idx === 2 ? 'bg-amber-700 text-white' :
+                isDark ? 'bg-white/5 text-zinc-500' : 'bg-zinc-200 text-zinc-500'
+              }`}>
+                {idx + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`font-black italic truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>{stat.name}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className={`flex-1 h-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`}>
+                    <div
+                      className="h-full bg-[#C58A4A] rounded-full transition-all duration-700"
+                      style={{ width: barberStats[0]?.total > 0 ? `${(stat.total / barberStats[0].total) * 100}%` : '0%' }}
+                    />
                   </div>
-                </td>
-              </tr>
-            ))}
-            {activeFilter === 'AReceber' && stats.filteredRentals.map(r => (
-              <tr key={r.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleViewDetails(r)}>
-                <td className="px-8 py-4">Pendente: {r.customerName}</td>
-                <td className="px-8 py-4 text-slate-400">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td className="px-8 py-4 text-amber-500">R$ {((Number(r.totalValue) || 0) - (Number(r.entryValue) || 0)).toLocaleString('pt-BR')}</td>
-                <td className="px-8 py-4 text-right">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleViewDetails(r); }}
-                    className="p-2 text-blue-500 hover:text-white hover:bg-blue-500 rounded-xl transition-all"
-                    title="Ver detalhes"
-                  >
-                    <Eye size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <span className={`text-[9px] font-black uppercase w-16 text-right shrink-0 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{stat.count} serv.</span>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>R$ {stat.total.toFixed(2)}</p>
+                <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5">R$ {stat.commission.toFixed(2)} comissão</p>
+              </div>
+            </div>
+          ))}
+          {barberStats.length === 0 && (
+            <p className={`text-center py-8 text-[10px] font-black uppercase italic ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+              Nenhum serviço concluído no período.
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Modal de Detalhes */}
-      {showDetailModal && selectedItem && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[40px] max-w-2xl w-full shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 flex items-center justify-between">
-              <h2 className="text-2xl font-black text-white">Detalhes da Transação</h2>
+      {/* ── Gráficos ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className={`${cardClass} rounded-[2rem] p-8`}>
+          <h3 className={`text-[10px] font-black uppercase tracking-widest mb-8 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Composição do Caixa</h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RePieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                </Pie>
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`R$ ${Number(v).toFixed(2)}`, '']} />
+                <Legend />
+              </RePieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className={`${cardClass} rounded-[2rem] p-8`}>
+          <h3 className={`text-[10px] font-black uppercase tracking-widest mb-8 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Receitas vs Despesas — Período</h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorR" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorD" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#ffffff05' : '#e5e7eb'} vertical={false} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: isDark ? '#52525b' : '#9ca3af', fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: isDark ? '#52525b' : '#9ca3af', fontSize: 10 }} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`R$ ${Number(v).toFixed(2)}`, '']} />
+                <Area type="monotone" dataKey="receita" name="Receita" stroke="#10b981" strokeWidth={2} fill="url(#colorR)" />
+                <Area type="monotone" dataKey="despesa" name="Despesa" stroke="#ef4444" strokeWidth={2} fill="url(#colorD)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Extrato ── */}
+      <div className={`${cardClass} rounded-[2rem] p-8`}>
+        <div className="flex items-center justify-between mb-8">
+          <h3 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-zinc-900'}`}>Extrato de Fluxo</h3>
+          <div className="flex gap-2">
+            {(['TUDO', 'RECEITA', 'DESPESA'] as const).map(t => (
               <button
-                onClick={() => setShowDetailModal(false)}
-                className="p-2 hover:bg-white/20 rounded-xl transition-all"
+                key={t}
+                onClick={() => setFilterType(t)}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all ${
+                  filterType === t
+                    ? t === 'RECEITA' ? 'bg-emerald-500 text-white border-transparent'
+                    : t === 'DESPESA' ? 'bg-red-500 text-white border-transparent'
+                    : 'bg-[#C58A4A] text-black border-transparent'
+                    : isDark ? 'bg-white/5 text-zinc-500 border-white/5' : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                }`}
               >
-                <X size={24} className="text-white" />
+                {t}
               </button>
+            ))}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className={`border-b text-[9px] font-black uppercase tracking-widest ${isDark ? 'border-white/5 text-zinc-600' : 'border-zinc-200 text-zinc-400'}`}>
+                <th className="pb-4">Descrição</th>
+                <th className="pb-4">Categoria</th>
+                <th className="pb-4">Data</th>
+                <th className="pb-4 text-right">Valor</th>
+                <th className="pb-4 text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-zinc-100'}`}>
+              {filteredEntries.map(e => (
+                <tr key={e.id} className={`group transition-all ${isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-zinc-50'}`}>
+                  <td className={`py-4 text-xs font-bold italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>{e.description}</td>
+                  <td className={`py-4 text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{e.category}</td>
+                  <td className={`py-4 text-[10px] font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                  <td className={`py-4 text-xs font-black text-right ${e.type === 'RECEITA' ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {e.type === 'RECEITA' ? '+' : '-'} R$ {e.amount.toFixed(2)}
+                  </td>
+                  <td className="py-4 text-right">
+                    <button onClick={() => deleteFinancialEntry(e.id)} className={`p-2 opacity-0 group-hover:opacity-100 transition-all ${isDark ? 'text-zinc-700 hover:text-red-500' : 'text-zinc-400 hover:text-red-500'}`}><Trash2 size={14} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredEntries.length === 0 && (
+            <p className={`text-center py-10 text-[10px] font-black uppercase italic ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+              Nenhum movimento no período selecionado.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Modal Lançamento ── */}
+      {showAddModal && (
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 ${isDark ? 'bg-black/95' : 'bg-black/70'}`}>
+          <div className={`w-full max-w-md rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] ${isDark ? 'cartao-vidro border-[#C58A4A]/20' : 'bg-white border border-zinc-200'}`}>
+            <div className="p-8 pb-4 shrink-0">
+              <h2 className={`text-2xl font-black font-display italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>Novo Lançamento</h2>
             </div>
-
-            {/* Content */}
-            <div className="p-8 space-y-6">
-              {/* Verifica se é uma Reserva (Rental) */}
-              {('customerName' in selectedItem) && (
-                <>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        <User size={14} />
-                        Cliente
-                      </div>
-                      <p className="text-lg font-black text-slate-800">{selectedItem.customerName}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        <Calendar size={14} />
-                        Data do Evento
-                      </div>
-                      <p className="text-lg font-bold text-slate-700">
-                        {new Date(selectedItem.date + 'T00:00:00').toLocaleDateString('pt-BR', { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        <Clock size={14} />
-                        Horário
-                      </div>
-                      <p className="text-lg font-bold text-slate-700">{selectedItem.startTime} - {selectedItem.endTime}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        <CreditCard size={14} />
-                        Forma de Pagamento
-                      </div>
-                      <p className="text-lg font-bold text-slate-700">{selectedItem.paymentMethod}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                      <MapPin size={14} />
-                      Local do Evento
-                    </div>
-                    <p className="text-base font-bold text-slate-700">{selectedItem.eventAddress || 'Não informado'}</p>
-                  </div>
-
-                  {selectedItem.additionalService && (
-                    <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100">
-                      <p className="text-xs font-black text-purple-400 uppercase mb-2">Serviço Adicional</p>
-                      <p className="font-bold text-purple-700 mb-1">{selectedItem.additionalService}</p>
-                      <p className="text-lg font-black text-purple-600">R$ {(selectedItem.additionalServiceValue || 0).toLocaleString('pt-BR')}</p>
-                    </div>
-                  )}
-
-                  <div className="border-t pt-6 mt-6">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-slate-50 p-4 rounded-2xl">
-                        <p className="text-xs font-black text-slate-400 uppercase mb-1">Valor Total</p>
-                        <p className="text-2xl font-black text-slate-800">R$ {(selectedItem.totalValue || 0).toLocaleString('pt-BR')}</p>
-                      </div>
-                      <div className="bg-emerald-50 p-4 rounded-2xl">
-                        <p className="text-xs font-black text-emerald-600 uppercase mb-1">Sinal Pago</p>
-                        <p className="text-2xl font-black text-emerald-700">R$ {(selectedItem.entryValue || 0).toLocaleString('pt-BR')}</p>
-                      </div>
-                      <div className="bg-amber-50 p-4 rounded-2xl">
-                        <p className="text-xs font-black text-amber-600 uppercase mb-1">Saldo Restante</p>
-                        <p className="text-2xl font-black text-amber-700">
-                          R$ {((selectedItem.totalValue || 0) - (selectedItem.entryValue || 0)).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </>
+            <div className="overflow-y-auto flex-1 px-8 pb-4 space-y-4">
+              {/* Tipo */}
+              <div className="grid grid-cols-2 gap-3">
+                {(['RECEITA', 'DESPESA'] as const).map(t => (
+                  <button key={t} type="button"
+                    onClick={() => setNewEntry({ ...newEntry, type: t })}
+                    className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 transition-all ${newEntry.type === t ? (t === 'RECEITA' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-red-500 text-white border-red-500') : isDark ? 'bg-white/5 border-white/10 text-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-400'}`}>
+                    {t === 'RECEITA' ? '📈 Receita' : '📉 Despesa'}
+                  </button>
+                ))}
+              </div>
+              <input type="text" placeholder="Descrição" value={newEntry.description} onChange={e => setNewEntry({ ...newEntry, description: e.target.value })} className={inputClass} />
+              <input type="number" placeholder="Valor R$" value={newEntry.amount || ''} onChange={e => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })} className={inputClass} />
+              {/* Categoria */}
+              {newEntry.type === 'DESPESA' ? (
+                <select value={newEntry.category} onChange={e => setNewEntry({ ...newEntry, category: e.target.value })} className={inputClass}>
+                  {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-zinc-950">{cat}</option>)}
+                </select>
+              ) : (
+                <input type="text" placeholder="Categoria (ex: Corte, Barba...)" value={newEntry.category} onChange={e => setNewEntry({ ...newEntry, category: e.target.value })} className={inputClass} />
               )}
-
-              {/* Verifica se é uma Despesa (FinancialTransaction) */}
-              {('type' in selectedItem) && (
+              {/* Opções extras para despesa */}
+              {newEntry.type === 'DESPESA' && (
                 <>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        Descrição
-                      </div>
-                      <p className="text-lg font-black text-slate-800">{selectedItem.description}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        <Calendar size={14} />
-                        Data
-                      </div>
-                      <p className="text-lg font-bold text-slate-700">
-                        {new Date(selectedItem.date).toLocaleDateString('pt-BR', { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        Categoria
-                      </div>
-                      <p className="text-lg font-bold text-slate-700">{selectedItem.category || 'Não categorizado'}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase">
-                        Tipo
-                      </div>
-                      <span className={`inline-block px-4 py-2 rounded-full text-sm font-black ${
-                        selectedItem.type === 'EXPENSE' 
-                          ? 'bg-red-100 text-red-700' 
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {selectedItem.type === 'EXPENSE' ? 'Despesa' : 'Receita'}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10">
+                    <input type="checkbox" id="isFixed" checked={newEntry.isFixed} onChange={e => setNewEntry({ ...newEntry, isFixed: e.target.checked })} className="w-5 h-5 rounded accent-amber-500"/>
+                    <label htmlFor="isFixed" className={`text-sm font-black cursor-pointer ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                      Custo Fixo <span className={`text-[9px] font-bold ml-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>(aluguel, salário, etc)</span>
+                    </label>
                   </div>
-
-                  <div className="border-t pt-6 mt-6">
-                    <div className="bg-slate-900 p-6 rounded-2xl">
-                      <p className="text-xs font-black text-slate-400 uppercase mb-2">Valor</p>
-                      <p className="text-4xl font-black text-white">
-                        {selectedItem.type === 'EXPENSE' ? '- ' : '+ '}
-                        R$ {(Number(selectedItem.value) || 0).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
+                  <div className="space-y-1">
+                    <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Data de vencimento (opcional)</label>
+                    <input type="date" value={newEntry.dueDate} onChange={e => setNewEntry({ ...newEntry, dueDate: e.target.value })} className={inputClass} />
                   </div>
                 </>
               )}
             </div>
-
-            {/* Footer */}
-            <div className="px-8 pb-8">
+            <div className="p-8 pt-4 flex gap-3 shrink-0 border-t border-white/5">
+              <button onClick={() => setShowAddModal(false)} className={`flex-1 py-4 rounded-xl font-black text-[9px] uppercase ${isDark ? 'bg-white/5 text-zinc-500' : 'bg-zinc-100 text-zinc-500'}`}>Cancelar</button>
               <button
-                onClick={() => setShowDetailModal(false)}
-                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                onClick={() => {
+                  addFinancialEntry({ ...newEntry, date: new Date().toISOString().split('T')[0] } as any);
+                  setShowAddModal(false);
+                  setNewEntry({ description: '', amount: 0, type: 'RECEITA', category: 'Geral', dueDate: '', isFixed: false });
+                }}
+                className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black text-[9px] uppercase"
               >
-                Fechar
+                Lançar Agora
               </button>
             </div>
           </div>
