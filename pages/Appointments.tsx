@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, Check, X, CreditCard,
-  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote
+  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, UserX
 } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Appointment, Client } from '../types';
+import { wppClienteInativo } from '../whatsapp';
 
 const NOTIFICATION_SOUND_URL = 'https://raw.githubusercontent.com/DavidFranco135/iphone/main/iphone.mp3';
 
@@ -224,6 +225,33 @@ const Appointments: React.FC = () => {
     setQuickClient({ name: '', phone: '', email: '' });
   };
 
+  // ── Cancelar por ausência: lista negra + WhatsApp ─────────────
+  const handleNoShowCancel = async (app: Appointment) => {
+    const msg = `Cancelar agendamento de ${app.clientName} por ausência?\n\n⚠️ O cliente será adicionado à lista negra e precisará pagar antecipadamente nos próximos agendamentos.\n\nUma mensagem WhatsApp será enviada ao cliente.`;
+    if (!window.confirm(msg)) return;
+    try {
+      await markNoShow(app.id);
+      // Envia mensagem WhatsApp de cancelamento por ausência
+      const phone = app.clientPhone || '';
+      if (phone) {
+        // Reutiliza template de cliente inativo com msg de ausência
+        await wppClienteInativo(
+          phone,
+          app.clientName,
+          0,
+          'https://novojeitobarbearia.pages.dev'
+        ).catch(() => {});
+        // Abre WhatsApp direto como fallback garantido
+        const texto = encodeURIComponent(
+          `Olá ${app.clientName}! 😔\n\nSeu agendamento de *${app.serviceName}* no dia *${app.date.split('-').reverse().join('/')}* às *${app.startTime}* foi cancelado por ausência.\n\nAtensiosamente,\n*Barbearia Novo Jeito* ✂️`
+        );
+        window.open(`https://wa.me/55${phone.replace(/\D/g,'')}?text=${texto}`, '_blank');
+      }
+    } catch (e) {
+      alert('Erro ao processar cancelamento.');
+    }
+  };
+
   // NOVA FUNÇÃO: Criar agendamento ao clicar em um horário vazio
   const handleClickEmptySlot = (professionalId: string, timeSlot: string) => {
     setNewApp({
@@ -413,6 +441,9 @@ const Appointments: React.FC = () => {
                                  title={app.status === 'CONCLUIDO_PAGO' ? 'Marcar como Pendente' : 'Finalizar e Pagar'}
                                ><DollarSign size={compactView ? 9 : 11}/></button>
                                <button onClick={(e) => { e.stopPropagation(); setShowRescheduleModal(app); }} className={`bg-white/10 text-zinc-500 hover:text-white rounded-lg transition-all ${compactView ? 'p-0.5' : 'p-1'}`} title="Reagendar"><RefreshCw size={compactView ? 9 : 11}/></button>
+                               {app.status !== 'CONCLUIDO_PAGO' && app.status !== 'NAO_COMPARECEU' && app.status !== 'CANCELADO' && (
+                                 <button onClick={(e) => { e.stopPropagation(); handleNoShowCancel(app); }} className={`rounded-lg transition-all bg-red-500/10 text-red-400 hover:bg-red-500/30 ${compactView ? 'p-0.5' : 'p-1'}`} title="🚫 Cancelar por ausência — Lista Negra"><UserX size={compactView ? 9 : 11}/></button>
+                               )}
                                <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Excluir agendamento de ${app.clientName}?`)) deleteAppointment(app.id); }} className={`bg-white/10 text-zinc-500 hover:text-red-500 rounded-lg transition-all ${compactView ? 'p-0.5' : 'p-1'}`} title="Excluir agendamento"><X size={compactView ? 9 : 11}/></button>
                             </div>
                           </div>
@@ -457,6 +488,9 @@ const Appointments: React.FC = () => {
                        title={app.status === 'CONCLUIDO_PAGO' ? 'Marcar como Pendente' : 'Finalizar e Pagar'}
                      ><DollarSign size={16}/></button>
                      <button onClick={() => setShowRescheduleModal(app)} className="p-2 bg-white/5 border border-white/10 text-zinc-500 hover:text-white rounded-xl transition-all" title="Reagendar"><RefreshCw size={16}/></button>
+                     {app.status !== 'CONCLUIDO_PAGO' && app.status !== 'NAO_COMPARECEU' && app.status !== 'CANCELADO' && (
+                       <button onClick={() => handleNoShowCancel(app)} className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded-xl transition-all" title="🚫 Cancelar por ausência — Lista Negra"><UserX size={16}/></button>
+                     )}
                      <button onClick={() => { if (window.confirm(`Excluir agendamento de ${app.clientName}?`)) deleteAppointment(app.id); }} className="p-2 bg-white/5 border border-white/10 text-zinc-500 hover:text-red-500 hover:border-red-500/30 rounded-xl transition-all" title="Excluir agendamento"><X size={16}/></button>
                   </div>
                </div>
