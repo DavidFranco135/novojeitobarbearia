@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Appointment, Client } from '../types';
-import { wppClienteInativo } from '../whatsapp';
 
 const NOTIFICATION_SOUND_URL = 'https://raw.githubusercontent.com/DavidFranco135/iphone/main/iphone.mp3';
 
@@ -231,19 +230,10 @@ const Appointments: React.FC = () => {
     if (!window.confirm(msg)) return;
     try {
       await markNoShow(app.id);
-      // Envia mensagem WhatsApp de cancelamento por ausência
       const phone = app.clientPhone || '';
       if (phone) {
-        // Reutiliza template de cliente inativo com msg de ausência
-        await wppClienteInativo(
-          phone,
-          app.clientName,
-          0,
-          'https://novojeitobarbearia.pages.dev'
-        ).catch(() => {});
-        // Abre WhatsApp direto como fallback garantido
         const texto = encodeURIComponent(
-          `Olá ${app.clientName}! 😔\n\nSeu agendamento de *${app.serviceName}* no dia *${app.date.split('-').reverse().join('/')}* às *${app.startTime}* foi cancelado por ausência.\n\nAtensiosamente,\n*Barbearia Novo Jeito* ✂️`
+          `Olá ${app.clientName}! 😔\n\nSeu agendamento de *${app.serviceName}* no dia *${app.date.split('-').reverse().join('/')}* às *${app.startTime}* foi cancelado por ausência.\n\nNo próximo agendamento, será necessário realizar o pagamento antecipado.\n\nAtenciosamente,\n*Barbearia Novo Jeito* ✂️`
         );
         window.open(`https://wa.me/55${phone.replace(/\D/g,'')}?text=${texto}`, '_blank');
       }
