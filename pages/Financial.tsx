@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, Download, UserCheck, Trophy, Filter, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, Download, UserCheck, Trophy, Filter, Calendar, X, Scissors, User, Clock, CreditCard, Banknote, Phone } from 'lucide-react';
 import { useBarberStore } from '../store';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,8 +10,9 @@ import { CORES } from '../constants';
 type PeriodFilter = 'HOJE' | 'SEMANA' | 'MES' | 'ANO' | 'TUDO' | 'CUSTOM';
 
 const Financial: React.FC = () => {
-  const { financialEntries, appointments, professionals, addFinancialEntry, deleteFinancialEntry, theme } = useBarberStore();
+  const { financialEntries, appointments, professionals, clients, addFinancialEntry, deleteFinancialEntry, theme } = useBarberStore();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [filterType, setFilterType] = useState<'RECEITA' | 'DESPESA' | 'TUDO'>('TUDO');
   const [filterPeriod, setFilterPeriod] = useState<PeriodFilter>('MES');
   const [customStart, setCustomStart] = useState('');
@@ -393,7 +393,7 @@ const Financial: React.FC = () => {
             </thead>
             <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-zinc-100'}`}>
               {filteredEntries.map(e => (
-                <tr key={e.id} className={`group transition-all ${isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-zinc-50'}`}>
+                <tr key={e.id} onClick={() => setSelectedEntry(e)} className={`group transition-all cursor-pointer ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-zinc-50'}`}>
                   <td className={`py-4 text-xs font-bold italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>{e.description}</td>
                   <td className={`py-4 text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{e.category}</td>
                   <td className={`py-4 text-[10px] font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
@@ -475,6 +475,196 @@ const Financial: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── MODAL: Detalhes do Lançamento ───────────────────────────────── */}
+      {selectedEntry && (() => {
+        const e = selectedEntry;
+        const linkedApp = e.appointmentId ? appointments.find((a: any) => a.id === e.appointmentId) : null;
+        const linkedClient = linkedApp
+          ? clients.find((c: any) => c.id === linkedApp.clientId || c.phone === linkedApp.clientPhone)
+          : null;
+        const linkedProf = linkedApp
+          ? professionals.find((p: any) => p.id === linkedApp.professionalId)
+          : null;
+        const payMethodLabel: Record<string, string> = {
+          PIX: '📲 PIX', CARTAO: '💳 Cartão', DINHEIRO: '💵 Dinheiro', LINK: '🔗 Link de Pagamento'
+        };
+        return (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl animate-in zoom-in-95" onClick={e2 => { if (e2.target === e2.currentTarget) setSelectedEntry(null); }}>
+            <div className={`w-full max-w-md rounded-[2.5rem] shadow-2xl border flex flex-col max-h-[90vh] ${isDark ? 'cartao-vidro border-[#C58A4A]/20' : 'bg-white border-zinc-200'}`}>
+              {/* Header */}
+              <div className="p-8 pb-4 flex items-start justify-between shrink-0">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#C58A4A] mb-1">
+                    Detalhes do Lançamento
+                  </p>
+                  <h2 className={`text-xl font-black font-display italic leading-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                    {e.description}
+                  </h2>
+                </div>
+                <button onClick={() => setSelectedEntry(null)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-all ml-4 shrink-0">
+                  <X size={20} className="text-zinc-400" />
+                </button>
+              </div>
+
+              {/* Value badge */}
+              <div className="px-8 pb-4 shrink-0">
+                <div className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-lg ${e.type === 'RECEITA' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                  {e.type === 'RECEITA' ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
+                  {e.type === 'RECEITA' ? '+' : '-'} R$ {Number(e.amount).toFixed(2)}
+                </div>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 px-8 pb-4 space-y-3">
+                {/* Base info */}
+                <div className={`p-4 rounded-2xl space-y-3 ${isDark ? 'bg-white/5' : 'bg-zinc-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Categoria</span>
+                    <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{e.category}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Tipo</span>
+                    <span className={`text-xs font-black uppercase ${e.type === 'RECEITA' ? 'text-emerald-400' : 'text-red-400'}`}>{e.type}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Data</span>
+                    <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                      {new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </span>
+                  </div>
+                  {(e as any).isFixed !== undefined && (
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Custo</span>
+                      <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{(e as any).isFixed ? '📌 Fixo' : '🔀 Variável'}</span>
+                    </div>
+                  )}
+                  {(e as any).dueDate && (
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Vencimento</span>
+                      <span className="text-xs font-black text-orange-400">
+                        {new Date((e as any).dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Linked appointment details */}
+                {linkedApp && (
+                  <>
+                    <p className={`text-[9px] font-black uppercase tracking-widest px-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      📅 Agendamento Vinculado
+                    </p>
+                    <div className={`p-4 rounded-2xl space-y-3 border ${isDark ? 'bg-[#C58A4A]/5 border-[#C58A4A]/20' : 'bg-amber-50 border-amber-200'}`}>
+                      {/* Client */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[#C58A4A]/10 flex items-center justify-center shrink-0">
+                          <User size={16} className="text-[#C58A4A]"/>
+                        </div>
+                        <div>
+                          <p className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{linkedApp.clientName}</p>
+                          {linkedClient?.phone && (
+                            <a href={`https://wa.me/55${linkedClient.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-[9px] font-bold text-[#C58A4A] hover:underline">
+                              📞 {linkedClient.phone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      {/* Service */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[#C58A4A]/10 flex items-center justify-center shrink-0">
+                          <Scissors size={16} className="text-[#C58A4A]"/>
+                        </div>
+                        <div>
+                          <p className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{linkedApp.serviceName}</p>
+                          <p className={`text-[9px] font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>R$ {Number(linkedApp.price).toFixed(2)}</p>
+                        </div>
+                      </div>
+                      {/* Professional */}
+                      {linkedProf && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-[#C58A4A]/10 flex items-center justify-center shrink-0">
+                            <User size={16} className="text-[#C58A4A]"/>
+                          </div>
+                          <div>
+                            <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Barbeiro</p>
+                            <p className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>{linkedApp.professionalName}</p>
+                          </div>
+                        </div>
+                      )}
+                      {/* Date/Time */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[#C58A4A]/10 flex items-center justify-center shrink-0">
+                          <Clock size={16} className="text-[#C58A4A]"/>
+                        </div>
+                        <div>
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Data e Horário</p>
+                          <p className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                            {linkedApp.date?.split('-').reverse().join('/')} • {linkedApp.startTime} – {linkedApp.endTime}
+                          </p>
+                        </div>
+                      </div>
+                      {/* Payment method */}
+                      {linkedApp.paymentMethod && (
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Forma de Pagamento</span>
+                          <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                            {payMethodLabel[linkedApp.paymentMethod] || linkedApp.paymentMethod}
+                          </span>
+                        </div>
+                      )}
+                      {/* Additionals */}
+                      {linkedApp.additionals && linkedApp.additionals.length > 0 && (
+                        <div className="pt-2 border-t border-white/5 space-y-1">
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Adicionais</p>
+                          {linkedApp.additionals.map((ad: any) => (
+                            <div key={ad.id} className="flex items-center justify-between">
+                              <span className={`text-[10px] font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{ad.qty}x {ad.name}</span>
+                              <span className="text-[10px] font-black text-[#C58A4A]">R$ {(ad.price * ad.qty).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Total */}
+                      {linkedApp.totalPrice && (
+                        <div className={`flex items-center justify-between pt-2 border-t ${isDark ? 'border-[#C58A4A]/20' : 'border-amber-200'}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Total Cobrado</span>
+                          <span className="text-sm font-black text-[#C58A4A]">R$ {Number(linkedApp.totalPrice).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {/* Status */}
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Status</span>
+                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${linkedApp.status === 'CONCLUIDO_PAGO' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                          {linkedApp.status === 'CONCLUIDO_PAGO' ? '✅ Pago' : linkedApp.status}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className={`px-8 py-6 shrink-0 border-t ${isDark ? 'border-white/5' : 'border-zinc-100'}`}>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { if (window.confirm('Excluir este lançamento?')) { deleteFinancialEntry(e.id); setSelectedEntry(null); } }}
+                    className="flex-1 py-3 rounded-xl font-black text-[9px] uppercase bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={12}/> Excluir
+                  </button>
+                  <button
+                    onClick={() => setSelectedEntry(null)}
+                    className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-500 hover:text-zinc-900'}`}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
