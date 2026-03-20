@@ -170,11 +170,11 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-[#C58A4A]/20 flex items-center justify-center font-black text-[#C58A4A] text-sm italic group-hover:bg-[#C58A4A] group-hover:text-black transition-all">
-                        {client.name.charAt(0)}
+                        {(client.name || "?").charAt(0)}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-white group-hover:text-[#C58A4A] transition-all">{client.name}</p>
-                        <p className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mt-0.5">Desde: {new Date(client.createdAt).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mt-0.5">Desde: {client.createdAt ? new Date(client.createdAt).toLocaleDateString('pt-BR') : '—'}</p>
                       </div>
                     </div>
                   </td>
@@ -186,8 +186,8 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex flex-col">
-                      <span className="text-xs font-black text-white italic">R$ {client.totalSpent.toFixed(2)}</span>
-                      <span className="text-[9px] text-zinc-500 font-bold">Último: {client.lastVisit ? new Date(client.lastVisit).toLocaleDateString('pt-BR') : 'Nunca'}</span>
+                      <span className="text-xs font-black text-white italic">R$ {(client.totalSpent || 0).toFixed(2)}</span>
+                      <span className="text-[9px] text-zinc-500 font-bold">Último: {client.lastVisit ? new Date(client.lastVisit + (client.lastVisit.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR') : 'Nunca'}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
@@ -214,7 +214,7 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
           <div className="cartao-vidro w-full max-w-2xl rounded-[3rem] p-8 md:p-12 space-y-8 border-[#C58A4A]/10 relative shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
             <div className="flex justify-between items-start">
                <div className="flex items-center gap-5">
-                  <div className="w-16 h-16 rounded-[1.5rem] bg-[#C58A4A] text-black flex items-center justify-center text-3xl font-black italic">{selectedClient.name.charAt(0)}</div>
+                  <div className="w-16 h-16 rounded-[1.5rem] bg-[#C58A4A] text-black flex items-center justify-center text-3xl font-black italic">{(selectedClient.name || "?").charAt(0)}</div>
                   <div>
                     <h2 className="text-2xl font-black font-display italic text-white tracking-tight">{selectedClient.name}</h2>
                     <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">{selectedClient.phone}</p>
@@ -227,7 +227,7 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                      <p className="text-[8px] text-zinc-500 font-black uppercase tracking-widest mb-1">Total Investido</p>
-                     <p className="text-xl font-black text-[#C58A4A] italic font-display">R$ {selectedClient.totalSpent.toFixed(2)}</p>
+                     <p className="text-xl font-black text-[#C58A4A] italic font-display">R$ {(selectedClient.totalSpent || 0).toFixed(2)}</p>
                   </div>
                   <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                      <p className="text-[8px] text-zinc-500 font-black uppercase tracking-widest mb-1">Serviços Concluídos</p>
@@ -244,11 +244,11 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                           <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-center text-[#C58A4A]"><Calendar size={18}/></div>
                           <div>
                              <p className="text-sm font-bold text-white">{app.serviceName}</p>
-                             <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{new Date(app.date).toLocaleDateString('pt-BR')} • {app.startTime}</p>
+                             <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{new Date(app.date + 'T12:00:00').toLocaleDateString('pt-BR')} • {app.startTime}</p>
                           </div>
                        </div>
                        <div className="text-right">
-                          <p className="text-xs font-black text-white">R$ {app.price}</p>
+                          <p className="text-xs font-black text-white">R$ {(+app.price || 0).toFixed(2)}</p>
                           <p className="text-[8px] font-black uppercase tracking-widest mt-1 text-blue-400">AGENDADO</p>
                        </div>
                     </div>
@@ -265,11 +265,11 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                           <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-center text-zinc-400"><Scissors size={18}/></div>
                           <div>
                              <p className="text-sm font-bold text-white">{app.serviceName}</p>
-                             <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{new Date(app.date).toLocaleDateString('pt-BR')} • {app.startTime}</p>
+                             <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{new Date(app.date + 'T12:00:00').toLocaleDateString('pt-BR')} • {app.startTime}</p>
                           </div>
                        </div>
                        <div className="text-right">
-                          <p className="text-xs font-black text-white">R$ {app.price}</p>
+                          <p className="text-xs font-black text-white">R$ {(+app.price || 0).toFixed(2)}</p>
                           <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${app.status === 'CONCLUIDO_PAGO' ? 'text-emerald-500' : 'text-zinc-500'}`}>{app.status.replace('_', ' ')}</p>
                        </div>
                     </div>
