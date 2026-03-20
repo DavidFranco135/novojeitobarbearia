@@ -287,6 +287,22 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
   const handleVerifyPassword = () => {
     if (!lookupClientFound) return;
+
+    // Cliente sem senha (cadastrado pelo admin) → aceita qualquer entrada e define a senha
+    if (!lookupClientFound.password) {
+      if (!lookupPassword || lookupPassword.length < 4) {
+        setLookupPasswordError("Sua conta ainda não tem senha. Digite uma senha com pelo menos 4 caracteres para criar agora.");
+        return;
+      }
+      // Salva a senha e libera o agendamento
+      updateClient(lookupClientFound.id, { password: lookupPassword });
+      setLookupClientFound({ ...lookupClientFound, password: lookupPassword });
+      setSelecao(prev => ({ ...prev, clientName: lookupClientFound.name, clientPhone: lookupClientFound.phone, clientEmail: lookupClientFound.email || '' }));
+      setClientVerified(true);
+      setLookupPasswordError(null);
+      return;
+    }
+
     if (!lookupPassword) {
       setLookupPasswordError("Digite sua senha.");
       return;
@@ -533,8 +549,12 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     }
 
     // 3º — Cliente existe mas não tem senha definida (cadastrado pelo admin sem senha)
+    // → Redireciona automaticamente para a tela de definir senha
     if (!client.password) {
-      alert("Sua conta ainda não possui senha. Peça ao estabelecimento para definir uma ou crie uma nova conta no portal.");
+      setNoPasswordClient(client);
+      setSetPasswordData({ password: '', confirmPassword: '' });
+      setRegisterError(null);
+      setLoginMode('setpassword');
       return;
     }
 
@@ -2297,13 +2317,18 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                             </div>
                           </div>
                           <p className={`text-xs font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                            Digite sua senha para confirmar
+                            {lookupClientFound.password ? 'Digite sua senha para confirmar' : '🔑 Primeiro acesso — crie sua senha'}
                           </p>
+                          {!lookupClientFound.password && (
+                            <p className="text-[10px] text-amber-400 font-bold text-center">
+                              Sua conta foi criada pela barbearia. Defina uma senha de acesso agora.
+                            </p>
+                          )}
                           <div className="relative">
                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C58A4A]" size={18}/>
                             <input 
                               type="password" 
-                              placeholder="Senha" 
+                              placeholder={lookupClientFound.password ? "Senha" : "Crie uma senha (mín. 4 caracteres)"} 
                               value={lookupPassword} 
                               onChange={e => { setLookupPassword(e.target.value); setLookupPasswordError(null); }}
                               onKeyDown={e => e.key === 'Enter' && handleVerifyPassword()}
