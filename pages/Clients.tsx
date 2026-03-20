@@ -20,10 +20,11 @@ const Clients: React.FC = () => {
   const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
 
   const filteredClients = useMemo(() => {
-    return clients.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      c.phone.includes(searchTerm) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase())
+    const term = searchTerm.toLowerCase();
+    return (clients || []).filter(c => 
+      (c.name || '').toLowerCase().includes(term) || 
+      (c.phone || '').includes(searchTerm) ||
+      (c.email || '').toLowerCase().includes(term)
     );
   }, [clients, searchTerm]);
 
