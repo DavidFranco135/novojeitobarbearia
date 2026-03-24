@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, Check, X, CreditCard,
-  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, UserX
+  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, UserX, Camera, ImagePlus, Trash2
 } from 'lucide-react';
+
+const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
 import { useBarberStore } from '../store';
 import { Appointment, Client } from '../types';
 
@@ -93,7 +95,7 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, markNoShow, updateAppointmentStatus, deleteAppointment, addClient, rescheduleAppointment, finalizeAppointment, theme
+    addAppointment, markNoShow, updateAppointmentStatus, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme
   } = useBarberStore() as any;
   const isDark = theme !== 'light';
 
@@ -162,6 +164,36 @@ const Appointments: React.FC = () => {
   const [finAdditionals, setFinAdditionals] = useState<{id:string;name:string;price:number;qty:number}[]>([]);
   const [finPayMethod, setFinPayMethod] = useState<'PIX'|'LINK'|'DINHEIRO'|'CARTAO'>('PIX');
   const [finNewItem, setFinNewItem] = useState({ name: '', price: '' });
+  // ── Fotos do corte ─────────────────────────────────────────
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const handleUploadCutPhoto = async (clientId: string, file: File) => {
+    if (!clientId) return;
+    setPhotoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: formData });
+      const data = await res.json();
+      const url: string = data?.data?.url;
+      if (!url) throw new Error('Upload falhou');
+      const client = clients.find((c: any) => c.id === clientId || c.phone === showDetailModal?.clientPhone);
+      const existing: string[] = client?.photos || [];
+      await updateClient(clientId, { photos: [url, ...existing] });
+    } catch {
+      alert('Erro ao enviar foto. Tente novamente.');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleDeleteCutPhoto = async (clientId: string, photoUrl: string) => {
+    if (!window.confirm('Remover esta foto?')) return;
+    const client = clients.find((c: any) => c.id === clientId);
+    if (!client) return;
+    await updateClient(clientId, { photos: (client.photos || []).filter((p: string) => p !== photoUrl) });
+  };
+
   const [finLoading, setFinLoading] = useState(false);
   const [finResult, setFinResult] = useState<{pixCode?:string;pixQrCode?:string;paymentLink?:string}|null>(null);
 
@@ -628,6 +660,51 @@ const Appointments: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* ── Fotos do Corte ─────────────────────────────── */}
+              {client && (() => {
+                const photos: string[] = client.photos || [];
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                        <Camera size={12} className="text-[#C58A4A]"/> Fotos do Corte
+                      </p>
+                      <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl cursor-pointer text-[9px] font-black uppercase transition-all ${photoUploading ? 'opacity-50 pointer-events-none' : 'bg-[#C58A4A]/10 text-[#C58A4A] hover:bg-[#C58A4A]/20'}`}>
+                        <ImagePlus size={12}/>
+                        {photoUploading ? 'Enviando…' : 'Adicionar'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadCutPhoto(client.id, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {photos.length === 0 ? (
+                      <p className="text-[10px] text-zinc-600 italic">Nenhuma foto adicionada ainda.</p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        {photos.map((url: string, i: number) => (
+                          <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden border border-white/10">
+                            <img src={url} alt={`Corte ${i+1}`} className="w-full h-full object-cover"/>
+                            <button
+                              onClick={() => handleDeleteCutPhoto(client.id, url)}
+                              className="absolute top-1 right-1 bg-black/70 text-red-400 rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 size={10}/>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               </div>{/* end scrollable body */}
               {/* Actions — fixo no rodapé */}
