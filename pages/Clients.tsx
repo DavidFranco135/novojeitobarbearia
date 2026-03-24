@@ -19,13 +19,35 @@ const Clients: React.FC = () => {
 
   const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  // Comprime a imagem via canvas antes de enviar (muito mais rápido no upload)
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.82): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = e => { img.src = e.target?.result as string; };
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => blob ? resolve(blob) : reject('Falha ao comprimir'), 'image/jpeg', quality);
+      };
+      img.onerror = reject;
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleUploadPhoto = async (file: File) => {
     if (!selectedClient) return;
     setPhotoUploading(true);
     try {
+      const compressed = await compressImage(file);
       const fd = new FormData();
-      fd.append('image', file);
+      fd.append('image', compressed, 'photo.jpg');
       const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: fd });
       const data = await res.json();
       const url: string = data?.data?.url;
@@ -35,7 +57,7 @@ const Clients: React.FC = () => {
       await updateClient(selectedClient.id, { photos: updated });
       setSelectedClient({ ...selectedClient, photos: updated });
     } catch {
-      alert('Erro ao enviar foto.');
+      alert('Erro ao enviar foto. Verifique sua conexão e tente novamente.');
     } finally {
       setPhotoUploading(false);
     }
@@ -336,15 +358,19 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                    <div className="grid grid-cols-3 gap-2">
                      {(selectedClient.photos || []).map((url: string, i: number) => (
                        <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden border border-white/10">
-                         <img src={url} alt={`Corte ${i + 1}`} className="w-full h-full object-cover"/>
-                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                           <button
-                             onClick={() => handleDeletePhoto(url)}
-                             className="bg-red-500/80 text-white rounded-xl p-2 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                           >
-                             <Trash2 size={12}/>
-                           </button>
-                         </div>
+                         <img
+                           src={url}
+                           alt={`Corte ${i + 1}`}
+                           className="w-full h-full object-cover cursor-pointer"
+                           onClick={() => setLightboxUrl(url)}
+                         />
+                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all pointer-events-none"/>
+                         <button
+                           onClick={e => { e.stopPropagation(); handleDeletePhoto(url); }}
+                           className="absolute top-1.5 right-1.5 bg-black/70 text-red-400 rounded-xl p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 hover:text-white"
+                         >
+                           <Trash2 size={11}/>
+                         </button>
                        </div>
                      ))}
                    </div>
@@ -450,6 +476,25 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[500] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all"
+          >
+            <X size={22}/>
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Foto do corte"
+            className="max-w-[92vw] max-h-[88vh] rounded-3xl shadow-2xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
