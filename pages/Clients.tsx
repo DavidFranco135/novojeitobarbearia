@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, UserPlus, Phone, Mail, Trash2, Edit2, X, Clock, Calendar, Scissors, CheckCircle2, History, Camera, NotebookPen, Instagram, MapPin, Briefcase, Heart, Trophy, Users, Check } from 'lucide-react';
+import { Search, UserPlus, Phone, Mail, Trash2, Edit2, X, Clock, Calendar, Scissors, CheckCircle2, History, Camera, NotebookPen, Instagram, MapPin, Briefcase, Heart, Trophy, Users, Check, ImagePlus } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Client, Appointment } from '../types';
 
@@ -18,6 +18,35 @@ const Clients: React.FC = () => {
   });
 
   const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const handleUploadPhoto = async (file: File) => {
+    if (!selectedClient) return;
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: fd });
+      const data = await res.json();
+      const url: string = data?.data?.url;
+      if (!url) throw new Error('Upload falhou');
+      const existing: string[] = selectedClient.photos || [];
+      const updated = [url, ...existing];
+      await updateClient(selectedClient.id, { photos: updated });
+      setSelectedClient({ ...selectedClient, photos: updated });
+    } catch {
+      alert('Erro ao enviar foto.');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photoUrl: string) => {
+    if (!selectedClient || !window.confirm('Remover esta foto?')) return;
+    const updated = (selectedClient.photos || []).filter((p: string) => p !== photoUrl);
+    await updateClient(selectedClient.id, { photos: updated });
+    setSelectedClient({ ...selectedClient, photos: updated });
+  };
 
   const filteredClients = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -275,6 +304,51 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                     </div>
                   ))}
                   {clientAppointments.past.length === 0 && <p className="text-[10px] text-zinc-600 py-2 italic">Nenhum histórico encontrado.</p>}
+               </div>
+
+               {/* ── Galeria de Fotos do Corte ── */}
+               <div className="space-y-4">
+                 <div className="flex items-center justify-between">
+                   <h3 className="text-[10px] font-black text-[#C58A4A] uppercase tracking-[0.2em] flex items-center gap-2">
+                     <Camera size={14}/> Galeria de Fotos
+                   </h3>
+                   <label className={`flex items-center gap-1.5 px-3 py-2 rounded-xl cursor-pointer text-[9px] font-black uppercase transition-all border ${photoUploading ? 'opacity-50 pointer-events-none border-white/5 text-zinc-600' : 'border-[#C58A4A]/30 text-[#C58A4A] hover:bg-[#C58A4A]/10'}`}>
+                     <ImagePlus size={12}/>
+                     {photoUploading ? 'Enviando…' : 'Adicionar Foto'}
+                     <input
+                       type="file"
+                       accept="image/*"
+                       className="hidden"
+                       onChange={e => {
+                         const file = e.target.files?.[0];
+                         if (file) handleUploadPhoto(file);
+                         e.target.value = '';
+                       }}
+                     />
+                   </label>
+                 </div>
+                 {(selectedClient.photos || []).length === 0 ? (
+                   <div className="flex flex-col items-center justify-center py-8 rounded-2xl border border-white/5 bg-white/[0.02]">
+                     <Camera size={32} className="text-zinc-700 mb-2"/>
+                     <p className="text-[10px] text-zinc-600 italic">Nenhuma foto de corte registrada.</p>
+                   </div>
+                 ) : (
+                   <div className="grid grid-cols-3 gap-2">
+                     {(selectedClient.photos || []).map((url: string, i: number) => (
+                       <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden border border-white/10">
+                         <img src={url} alt={`Corte ${i + 1}`} className="w-full h-full object-cover"/>
+                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                           <button
+                             onClick={() => handleDeletePhoto(url)}
+                             className="bg-red-500/80 text-white rounded-xl p-2 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                           >
+                             <Trash2 size={12}/>
+                           </button>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 )}
                </div>
             </div>
           </div>
