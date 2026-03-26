@@ -100,10 +100,10 @@ async function send(
     const result = await res.json() as any;
 
     if (!res.ok) {
-      console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result?.error || result));
+      console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result));
       return false;
     } else {
-      console.log(`✅ Enviado [${template}] → ${number}`);
+      console.log(`✅ Enviado [${template}] → ${number} | resposta Meta:`, JSON.stringify(result));
       return true;
     }
   } catch (err) {
