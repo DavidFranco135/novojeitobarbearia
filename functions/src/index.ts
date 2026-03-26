@@ -164,8 +164,9 @@ export const onAppointmentCompleted = onDocumentUpdated(
     if (before.status === "CONCLUIDO_PAGO") return;
     if (after.status  !== "CONCLUIDO_PAGO") return;
     if (!after.clientPhone) return;
-    // Só envia pós-atendimento quando o barbeiro clica em Concluir (não quando cliente paga online)
-    if (!after.completedByBarber) return;
+    // Envia pós-atendimento quando barbeiro conclui OU quando fiado é pago
+    // Exceção: pagamento online via Asaas (tratado no webhook asaasWebhook)
+    if (!after.completedByBarber && !after.fiadoPaidAt) return;
 
     await send(after.clientPhone, T.posAtendimento, [
       { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
@@ -274,7 +275,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] }, // ← mude para "0 7 * * *" em produção
+  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] }
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
