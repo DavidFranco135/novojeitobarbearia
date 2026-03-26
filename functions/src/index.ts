@@ -275,7 +275,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] }
+  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
