@@ -162,7 +162,7 @@ const Appointments: React.FC = () => {
   // ── Modal Finalização ──────────────────────────────────────
   const [finModal, setFinModal] = useState<any>(null);
   const [finAdditionals, setFinAdditionals] = useState<{id:string;name:string;price:number;qty:number}[]>([]);
-  const [finPayMethod, setFinPayMethod] = useState<'PIX'|'LINK'|'DINHEIRO'|'CARTAO'>('PIX');
+  const [finPayMethod, setFinPayMethod] = useState<'PIX'|'DEBITO'|'CREDITO'|'FIADO'|'DINHEIRO'>('PIX');
   const [finNewItem, setFinNewItem] = useState({ name: '', price: '' });
   // ── Fotos do corte ─────────────────────────────────────────
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -797,48 +797,21 @@ const Appointments: React.FC = () => {
               {finResult ? (
                 /* ── Resultado do pagamento ── */
                 <div className="space-y-4 text-center">
-                  <div className="text-4xl">{(finResult as any)._method === 'DINHEIRO' ? '💵' : '✅'}</div>
+                  <div className="text-4xl">
+                    {(finResult as any)._method === 'PIX' ? '📱' :
+                     (finResult as any)._method === 'DEBITO' ? '💳' :
+                     (finResult as any)._method === 'CREDITO' ? '💳' :
+                     (finResult as any)._method === 'FIADO' ? '📒' : '💵'}
+                  </div>
                   <p className={`font-black text-lg ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-                    {(finResult as any)._method === 'DINHEIRO' ? 'Pago em dinheiro!' : 'Cobrança gerada!'}
+                    {(finResult as any)._method === 'FIADO' ? 'Registrado como fiado!' : 'Pagamento registrado!'}
                   </p>
                   <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>R$ {finTotal.toFixed(2)}</p>
-                  {(finResult as any)._method === 'DINHEIRO' ? (
-                    <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      Atendimento concluído e registrado com sucesso.
-                    </p>
-                  ) : finResult.paymentLink ? (
-                    <div className="space-y-3 pt-2 w-full">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
-                        ⏳ Aguardando pagamento do cliente
-                      </p>
-                      <a
-                        href={finResult.paymentLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="block w-full gradiente-ouro text-black py-5 rounded-2xl font-black text-sm uppercase tracking-widest text-center shadow-xl hover:scale-105 transition-all"
-                      >
-                        🔗 Abrir link de pagamento
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(finResult!.paymentLink!);
-                          alert('Link copiado!');
-                        }}
-                        className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-900'}`}
-                      >
-                        📋 Copiar link
-                      </button>
-                      <p className={`text-[9px] text-center ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                        {finResult.paymentLink}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      Cobrança registrada. Verifique a API do Asaas em Ajustes.
-                    </p>
-                  )}
+                  <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {(finResult as any)._method === 'FIADO'
+                      ? 'Atendimento registrado. Combine o acerto com o cliente.'
+                      : 'Atendimento concluído e registrado com sucesso.'}
+                  </p>
                   <button onClick={() => setFinModal(null)} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase border ${isDark ? 'border-white/10 text-zinc-400' : 'border-zinc-200 text-zinc-500'}`}>Fechar</button>
                 </div>
               ) : (
@@ -899,25 +872,54 @@ const Appointments: React.FC = () => {
 
                   {/* ── Forma de pagamento ── */}
                   <div className="space-y-2">
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Forma de pagamento</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Forma de pagamento — recebido na barbearia</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* PIX */}
+                      <button
+                        onClick={() => setFinPayMethod('PIX')}
+                        className={`flex flex-col items-center gap-1.5 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'PIX' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                      >
+                        <span className="text-2xl">📱</span>
+                        PIX
+                        {finPayMethod === 'PIX' && <span className="text-[8px] text-emerald-400">Recebido na conta</span>}
+                      </button>
+                      {/* Dinheiro */}
                       <button
                         onClick={() => setFinPayMethod('DINHEIRO')}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'DINHEIRO' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                        className={`flex flex-col items-center gap-1.5 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'DINHEIRO' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
                       >
                         <span className="text-2xl">💵</span>
                         Dinheiro
-                        {finPayMethod === 'DINHEIRO' && <span className="text-[8px] text-emerald-400">Conclui na hora</span>}
+                        {finPayMethod === 'DINHEIRO' && <span className="text-[8px] text-yellow-400">Recebido na conta</span>}
                       </button>
+                      {/* Débito */}
                       <button
-                        onClick={() => setFinPayMethod('LINK')}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'LINK' ? 'border-blue-400 bg-blue-400/10 text-blue-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                        onClick={() => setFinPayMethod('DEBITO')}
+                        className={`flex flex-col items-center gap-1.5 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'DEBITO' ? 'border-blue-500 bg-blue-500/10 text-blue-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
                       >
-                        <span className="text-2xl">🔗</span>
-                        Link / PIX / Cartão
-                        {finPayMethod === 'LINK' && <span className="text-[8px] text-blue-400">Aguarda confirmação</span>}
+                        <span className="text-2xl">💳</span>
+                        Débito
+                        {finPayMethod === 'DEBITO' && <span className="text-[8px] text-blue-400">Recebido na conta</span>}
+                      </button>
+                      {/* Crédito */}
+                      <button
+                        onClick={() => setFinPayMethod('CREDITO')}
+                        className={`flex flex-col items-center gap-1.5 p-4 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'CREDITO' ? 'border-purple-500 bg-purple-500/10 text-purple-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                      >
+                        <span className="text-2xl">💳</span>
+                        Crédito
+                        {finPayMethod === 'CREDITO' && <span className="text-[8px] text-purple-400">Recebido na conta</span>}
                       </button>
                     </div>
+                    {/* Fiado — linha separada */}
+                    <button
+                      onClick={() => setFinPayMethod('FIADO')}
+                      className={`w-full flex items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all font-black text-[10px] uppercase tracking-widest ${finPayMethod === 'FIADO' ? 'border-orange-500 bg-orange-500/10 text-orange-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500 hover:border-white/20' : 'border-zinc-200 bg-zinc-50 text-zinc-400 hover:border-zinc-300'}`}
+                    >
+                      <span className="text-lg">📒</span>
+                      Fiado — acertar depois
+                      {finPayMethod === 'FIADO' && <span className="text-[8px] text-orange-400 ml-1">Registrado sem cobrança</span>}
+                    </button>
                   </div>
                 </>
               )}
@@ -927,8 +929,20 @@ const Appointments: React.FC = () => {
             {!finResult && (
               <div className={`p-6 border-t ${isDark ? 'border-white/5' : 'border-zinc-100'}`}>
                 <button onClick={handleFinalize} disabled={finLoading}
-                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100 ${finPayMethod === 'DINHEIRO' ? 'bg-emerald-500 text-white' : 'gradiente-ouro text-black'}`}>
-                  {finLoading ? '⟳ Processando...' : finPayMethod === 'DINHEIRO' ? `💵 Receber R$ ${finTotal.toFixed(2)} em Dinheiro` : `🔗 Gerar cobrança · R$ ${finTotal.toFixed(2)}`}
+                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100 ${
+                    finPayMethod === 'FIADO' ? 'bg-orange-500/20 border border-orange-500/40 text-orange-400' :
+                    finPayMethod === 'PIX' ? 'bg-emerald-500 text-white' :
+                    finPayMethod === 'DINHEIRO' ? 'bg-yellow-500 text-black' :
+                    finPayMethod === 'DEBITO' ? 'bg-blue-500 text-white' :
+                    finPayMethod === 'CREDITO' ? 'bg-purple-500 text-white' :
+                    'gradiente-ouro text-black'
+                  }`}>
+                  {finLoading ? '⟳ Processando...' :
+                   finPayMethod === 'PIX' ? `📱 Receber R$ ${finTotal.toFixed(2)} via PIX` :
+                   finPayMethod === 'DINHEIRO' ? `💵 Receber R$ ${finTotal.toFixed(2)} em Dinheiro` :
+                   finPayMethod === 'DEBITO' ? `💳 Receber R$ ${finTotal.toFixed(2)} no Débito` :
+                   finPayMethod === 'CREDITO' ? `💳 Receber R$ ${finTotal.toFixed(2)} no Crédito` :
+                   `📒 Registrar R$ ${finTotal.toFixed(2)} como Fiado`}
                 </button>
               </div>
             )}
