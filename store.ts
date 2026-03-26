@@ -990,10 +990,14 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
 
     // ── DINHEIRO: finaliza na hora, sem Asaas ────────────────
-    if (paymentMethod === 'DINHEIRO') {
+    // Pagamentos locais: finalizam na hora, SEM Asaas.
+    // PIX direto, Débito, Crédito e Fiado são recebidos na conta da barbearia.
+    // Asaas é reservado APENAS para cobranças de planos e parcerias (método LINK).
+    const localMethods = ['DINHEIRO', 'PIX', 'DEBITO', 'CREDITO', 'FIADO'];
+    if (localMethods.includes(paymentMethod)) {
       await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { completedByBarber: true });
       await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
-      return { _method: 'DINHEIRO' };
+      return { _method: paymentMethod };
     }
 
     // ── LINK: gera cobrança no Asaas mas NÃO finaliza ────────
