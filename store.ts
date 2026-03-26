@@ -33,6 +33,7 @@ import {
   wppAssinaturaVencendo,
   wppReagendamento,
   wppNovoAgendamento,
+  wppNovoAgendamentoBarbeiro,
   wppLembreteAgendamento,
   wppLembrete15min,
 } from './services/whatsapp';
@@ -594,7 +595,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       });
     }
 
-    // ── WhatsApp: confirmação de agendamento ──────────────────
+    // ── WhatsApp: confirmação para o CLIENTE ──────────────────
     try {
       await wppNovoAgendamento(
         data.clientPhone,
@@ -605,7 +606,24 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         data.professionalName
       );
     } catch (e) {
-      console.warn('WhatsApp confirmação falhou (não crítico):', e);
+      console.warn('WhatsApp confirmação cliente falhou (não crítico):', e);
+    }
+
+    // ── WhatsApp: aviso para o BARBEIRO ────────────────────────
+    try {
+      const profData = professionals.find((p: any) => p.id === data.professionalId);
+      if (profData && (profData as any).phone) {
+        await wppNovoAgendamentoBarbeiro(
+          (profData as any).phone,
+          profData.name,
+          data.clientName,
+          data.serviceName,
+          data.startTime,
+          data.date
+        );
+      }
+    } catch (e) {
+      console.warn('WhatsApp confirmação barbeiro falhou (não crítico):', e);
     }
   };
 
@@ -860,6 +878,19 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         }
       }
       }
+
+      // ── WhatsApp: pós-atendimento para o CLIENTE ─────────────
+      try {
+        if (appointment.clientPhone) {
+          await wppPosAtendimento(
+            appointment.clientPhone,
+            appointment.clientName,
+            'https://novojeitobarbearia.pages.dev'
+          );
+        }
+      } catch (e) {
+        console.warn('WhatsApp pós-atendimento falhou (não crítico):', e);
+      }
     }
   };
 
@@ -1108,27 +1139,23 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     const appt = appointments.find(a => a.id === appointmentId);
     if (!appt) return;
 
-    // 1. Muda status para CONCLUIDO_PAGO
+    // 1. Salva forma de pagamento e data do recebimento no agendamento
     await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, appointmentId), {
-      status: 'CONCLUIDO_PAGO',
       fiadoPaidAt: new Date().toISOString(),
       fiadoPaidMethod: paymentMethod,
+      paymentMethod,
     });
 
-    // 2. Remove entrada de fiado pendente e cria receita efetiva
+    // 2. REMOVE a entrada financeira pendente de fiado ANTES de chamar updateAppointmentStatus
+    //    Isso evita duplicidade: updateAppointmentStatus cria a RECEITA correta sozinho.
     const fiadoEntry = financialEntries.find(e =>
       e.appointmentId === appointmentId && (e as any).fiadoPending === true
     );
     if (fiadoEntry) {
-      await updateDoc(doc(db, COLLECTIONS.FINANCIAL, fiadoEntry.id), {
-        fiadoPending: false,
-        paid: true,
-        description: fiadoEntry.description.replace('Fiado — ', 'Recebido (fiado) — '),
-        paidAt: new Date().toISOString(),
-      });
+      await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, fiadoEntry.id));
     }
 
-    // 3. Dispara a lógica de fidelidade / benefícios via updateAppointmentStatus
+    // 3. Dispara updateAppointmentStatus → cria RECEITA + fidelidade + benefícios + WhatsApp pós
     await updateAppointmentStatus(appointmentId, 'CONCLUIDO_PAGO');
   };
 
