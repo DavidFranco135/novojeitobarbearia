@@ -164,9 +164,9 @@ export const onAppointmentCompleted = onDocumentUpdated(
     if (before.status === "CONCLUIDO_PAGO") return;
     if (after.status  !== "CONCLUIDO_PAGO") return;
     if (!after.clientPhone) return;
-    // Envia pós-atendimento quando barbeiro conclui OU quando fiado é pago
-    // Exceção: pagamento online via Asaas (tratado no webhook asaasWebhook)
-    if (!after.completedByBarber && !after.fiadoPaidAt) return;
+    // Dispara para QUALQUER forma de pagamento ao mudar para CONCLUIDO_PAGO
+    // Exceção: pagamento online via Asaas (já tratado no webhook asaasWebhook)
+    if (after.awaitingOnlinePayment) return;
 
     await send(after.clientPhone, T.posAtendimento, [
       { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
@@ -672,6 +672,64 @@ export const asaasProxy = onRequest(
     } catch (err: any) {
       console.error("asaasProxy error:", err);
       res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED 10 — Verifica saúde do webhook Meta (todo dia 06:50)
+// Se o webhook estiver com problema, avisa o admin no WhatsApp
+// ─────────────────────────────────────────────────────────────
+export const checkWebhookHealth = onSchedule(
+  { schedule: "50 6 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
+  async () => {
+    const phoneId = SECRET_PHONE_ID.value();
+    const token   = SECRET_TOKEN.value();
+
+    if (!phoneId || !token) {
+      console.warn("⚠️ Secrets não configurados — pulando verificação.");
+      return;
+    }
+
+    try {
+      // Verifica se a API do WhatsApp responde com o token atual
+      const res = await fetch(
+        `https://graph.facebook.com/v20.0/${phoneId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const data = await res.json() as any;
+
+      if (!res.ok) {
+        console.error("❌ Webhook/API com problema:", JSON.stringify(data));
+
+        // Avisa o admin pessoalmente
+        await sendTextMessage(ADMIN_PERSONAL_PHONE,
+          `⚠️ *ALERTA — Sistema Novo Jeito*
+
+A API do WhatsApp está com problema e as mensagens automáticas podem não estar chegando.
+
+Erro: ${data?.error?.message || JSON.stringify(data)}
+
+Acesse: https://developers.facebook.com/apps/ e verifique o webhook.
+
+_Verificação automática — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}_`
+        );
+      } else {
+        console.log(`✅ API WhatsApp OK — phone: ${data.display_phone_number || phoneId}`);
+      }
+    } catch (err) {
+      console.error("❌ Erro ao verificar webhook:", err);
+      await sendTextMessage(ADMIN_PERSONAL_PHONE,
+        `⚠️ *ALERTA — Sistema Novo Jeito*
+
+Não foi possível verificar a API do WhatsApp.
+
+Verifique: https://developers.facebook.com/apps/
+
+_${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}_`
+      );
     }
   }
 );
