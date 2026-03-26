@@ -72,6 +72,7 @@ interface BarberContextType {
   resetAllLikes: () => Promise<void>;
   addAppointment: (data: Omit<Appointment, 'id' | 'status'>, isPublic?: boolean) => Promise<void>;
   markNoShow: (appointmentId: string) => Promise<void>;
+  markFiadoPago: (appointmentId: string, paymentMethod?: string) => Promise<void>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<void>;
   rescheduleAppointment: (id: string, date: string, startTime: string, endTime: string) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
@@ -993,11 +994,34 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     // Pagamentos locais: finalizam na hora, SEM Asaas.
     // PIX direto, Débito, Crédito e Fiado são recebidos na conta da barbearia.
     // Asaas é reservado APENAS para cobranças de planos e parcerias (método LINK).
-    const localMethods = ['DINHEIRO', 'PIX', 'DEBITO', 'CREDITO', 'FIADO'];
+    const localMethods = ['DINHEIRO', 'PIX', 'DEBITO', 'CREDITO'];
     if (localMethods.includes(paymentMethod)) {
       await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { completedByBarber: true });
       await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
       return { _method: paymentMethod };
+    }
+
+    // ── FIADO: registra como pendente — NÃO marca como CONCLUIDO_PAGO ────
+    if (paymentMethod === 'FIADO') {
+      // Atualiza status para FIADO (distinto de CONCLUIDO_PAGO)
+      await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+        status: 'FIADO',
+        completedByBarber: true,
+        fiadoAt: new Date().toISOString(),
+      });
+      // Registra receita pendente no financeiro (categoria especial)
+      await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+        description: `Fiado — ${appt.clientName} — ${appt.serviceName}`,
+        amount: totalPrice,
+        type: 'RECEITA',
+        category: 'Fiado',
+        date: new Date().toISOString().split('T')[0],
+        appointmentId: id,
+        clientId: appt.clientId,
+        paid: false,
+        fiadoPending: true,
+      });
+      return { _method: 'FIADO' };
     }
 
     // ── LINK: gera cobrança no Asaas mas NÃO finaliza ────────
@@ -1077,6 +1101,35 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
 
     // NÃO chama updateAppointmentStatus aqui — o webhook fará isso ao receber PAYMENT_RECEIVED
     return result;
+  };
+
+  // ── FIADO: marca como pago ──────────────────────────────────
+  const markFiadoPago = async (appointmentId: string, paymentMethod: string = 'DINHEIRO') => {
+    const appt = appointments.find(a => a.id === appointmentId);
+    if (!appt) return;
+
+    // 1. Muda status para CONCLUIDO_PAGO
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, appointmentId), {
+      status: 'CONCLUIDO_PAGO',
+      fiadoPaidAt: new Date().toISOString(),
+      fiadoPaidMethod: paymentMethod,
+    });
+
+    // 2. Remove entrada de fiado pendente e cria receita efetiva
+    const fiadoEntry = financialEntries.find(e =>
+      e.appointmentId === appointmentId && (e as any).fiadoPending === true
+    );
+    if (fiadoEntry) {
+      await updateDoc(doc(db, COLLECTIONS.FINANCIAL, fiadoEntry.id), {
+        fiadoPending: false,
+        paid: true,
+        description: fiadoEntry.description.replace('Fiado — ', 'Recebido (fiado) — '),
+        paidAt: new Date().toISOString(),
+      });
+    }
+
+    // 3. Dispara a lógica de fidelidade / benefícios via updateAppointmentStatus
+    await updateAppointmentStatus(appointmentId, 'CONCLUIDO_PAGO');
   };
 
   const rescheduleAppointment = async (id: string, date: string, startTime: string, endTime: string) => {
@@ -1398,7 +1451,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
-      addAppointment, markNoShow, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
+      addAppointment, markNoShow, markFiadoPago, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
       addFinancialEntry, deleteFinancialEntry,
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,
