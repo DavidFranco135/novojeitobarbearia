@@ -90,7 +90,7 @@ async function send(
             language: { code: "pt_BR" },
             components: [{
               type: "body",
-              parameters: params.map(({ value }) => ({ type: "text", text: value })),
+              parameters: params.map(({ name, value }) => ({ type: "text", parameter_name: name, text: value })),
             }],
           },
         }),
