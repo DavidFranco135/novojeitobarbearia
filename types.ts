@@ -105,12 +105,12 @@ export interface Appointment {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'AGENDADO' | 'CONCLUIDO_PAGO' | 'PENDENTE_PAGAMENTO' | 'REAGENDADO' | 'CANCELADO' | 'PENDENTE';
+  status: 'AGENDADO' | 'CONCLUIDO_PAGO' | 'PENDENTE_PAGAMENTO' | 'REAGENDADO' | 'CANCELADO' | 'PENDENTE' | 'FIADO';
   price: number;
   // ── Adicionais e Asaas ─────────────────────────────────
   additionals?: AppointmentAdditional[];
   totalPrice?: number;
-  paymentMethod?: 'PIX' | 'CARTAO' | 'DINHEIRO' | 'LINK';
+  paymentMethod?: 'PIX' | 'CARTAO' | 'DINHEIRO' | 'LINK' | 'DEBITO' | 'CREDITO' | 'FIADO';
   asaasPaymentId?: string;
   awaitingOnlinePayment?: boolean;
   asaasPaymentLink?: string;
