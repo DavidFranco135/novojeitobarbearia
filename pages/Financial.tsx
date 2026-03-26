@@ -47,24 +47,30 @@ const Financial: React.FC = () => {
   }, [filterPeriod, customStart, customEnd]);
 
   // ── Entradas filtradas por período + tipo ─────────────────────
+  // Exclui entradas de fiado pendente (ainda não recebidas) de todo o extrato e métricas
+  const paidEntries = useMemo(() =>
+    financialEntries.filter(e => !(e as any).fiadoPending),
+    [financialEntries]
+  );
+
   const filteredEntries = useMemo(() => {
-    return financialEntries.filter(e => {
+    return paidEntries.filter(e => {
       const matchType = filterType === 'TUDO' || e.type === filterType;
       const matchPeriod = !dateRange.start || (e.date >= dateRange.start && e.date <= dateRange.end);
       return matchType && matchPeriod;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [financialEntries, filterType, dateRange]);
+  }, [paidEntries, filterType, dateRange]);
 
   // ── Métricas do período selecionado ───────────────────────────
   const metrics = useMemo(() => {
-    const periodEntries = financialEntries.filter(e => {
+    const periodEntries = paidEntries.filter(e => {
       return !dateRange.start || (e.date >= dateRange.start && e.date <= dateRange.end);
     });
     const receitas = periodEntries.filter(e => e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
     const despesas = periodEntries.filter(e => e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
     // Saldo total global
-    const totalReceitas = financialEntries.filter(e => e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
-    const totalDespesas = financialEntries.filter(e => e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
+    const totalReceitas = paidEntries.filter(e => e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
+    const totalDespesas = paidEntries.filter(e => e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
     const contasPendentes = financialEntries.filter(e => e.type === 'DESPESA' && (e as any).dueDate && !(e as any).paid);
     const totalPendente = contasPendentes.reduce((acc, e) => acc + e.amount, 0);
     const despesasFixas = periodEntries.filter(e => e.type === 'DESPESA' && (e as any).isFixed).reduce((acc, e) => acc + e.amount, 0);
@@ -98,8 +104,8 @@ const Financial: React.FC = () => {
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
       const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      const receita = financialEntries.filter(e => e.date === dateStr && e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
-      const despesa = financialEntries.filter(e => e.date === dateStr && e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
+      const receita = paidEntries.filter(e => e.date === dateStr && e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
+      const despesa = paidEntries.filter(e => e.date === dateStr && e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
       days.push({ name: label, receita, despesa });
     }
     return days;
