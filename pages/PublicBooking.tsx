@@ -227,7 +227,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     const hasConflict = appointments.some(a => {
       if (a.professionalId !== profId) return false;
       if (a.date !== date) return false;
-      if (a.status === 'CANCELADO') return false;
+      // Libera horário quando serviço foi concluído/cancelado/não compareceu
+      if (['CANCELADO', 'CONCLUIDO_PAGO', 'NAO_COMPARECEU', 'FIADO'].includes(a.status)) return false;
       const [aH, aM] = a.startTime.split(':').map(Number);
       const aStart = aH * 60 + aM;
       // Duração do agendamento existente
