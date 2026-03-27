@@ -47,7 +47,9 @@ const Partners: React.FC = () => {
   const { theme, partners, addPartner, updatePartner, deletePartner, clientBenefits } = store;
 
   // ── abas do painel ───────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'parceiros' | 'beneficios'>('parceiros');
+  const [activeTab, setActiveTab] = useState<'parceiros' | 'beneficios' | 'cobrancas'>('parceiros');
+  const [cobrancaPayingId, setCobrancaPayingId] = useState<string | null>(null);
+  const [cobrancaPayMethod, setCobrancaPayMethod] = useState('PIX');
 
   const [showModal, setShowModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState<Partner | null>(null);
@@ -196,7 +198,15 @@ const Partners: React.FC = () => {
   const tabs = [
     { id: 'parceiros', label: 'Parceiros', icon: QrCode },
     { id: 'beneficios', label: 'Clube de Benefícios', icon: Gift },
+    { id: 'cobrancas', label: 'Cobranças', icon: DollarSign },
   ];
+
+  // ── Cobranças mensais ─────────────────────────────────────────
+  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const parceirosComMensalidade = (partners || []).filter((p: any) => p.monthlyFee && p.monthlyFee > 0 && p.status === 'ATIVO');
+  const totalMensalidades = parceirosComMensalidade.reduce((s: number, p: any) => s + (p.monthlyFee || 0), 0);
+  const totalPagos = parceirosComMensalidade.filter((p: any) => (p.lastPaymentMonth || '') === currentMonth).reduce((s: number, p: any) => s + (p.monthlyFee || 0), 0);
+  const totalEmAberto = totalMensalidades - totalPagos;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20 h-full overflow-auto scrollbar-hide">
@@ -361,6 +371,144 @@ const Partners: React.FC = () => {
             ))}
           </div>
         </>
+      )}
+
+      {/* ═══════════════ ABA COBRANÇAS ═══════════════ */}
+      {activeTab === 'cobrancas' && (
+        <div className="space-y-6">
+
+          {/* Cards de resumo */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className={`rounded-[2rem] p-6 border ${themeCard}`}>
+              <DollarSign size={20} className="text-[#C58A4A] mb-3"/>
+              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Total Mensal</p>
+              <p className="text-2xl font-black text-[#C58A4A] font-display italic">R$ {totalMensalidades.toFixed(2)}</p>
+            </div>
+            <div className={`rounded-[2rem] p-6 border ${themeCard}`}>
+              <Check size={20} className="text-emerald-500 mb-3"/>
+              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Recebido</p>
+              <p className="text-2xl font-black text-emerald-500 font-display italic">R$ {totalPagos.toFixed(2)}</p>
+            </div>
+            <div className={`rounded-[2rem] p-6 border ${themeCard} ${totalEmAberto > 0 ? 'border-red-500/30' : ''}`}>
+              <AlertCircle size={20} className={`mb-3 ${totalEmAberto > 0 ? 'text-red-400' : 'text-zinc-500'}`}/>
+              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Em Aberto</p>
+              <p className={`text-2xl font-black font-display italic ${totalEmAberto > 0 ? 'text-red-400' : 'text-zinc-500'}`}>R$ {totalEmAberto.toFixed(2)}</p>
+            </div>
+          </div>
+
+          {/* Lista de parceiros com mensalidade */}
+          {parceirosComMensalidade.length === 0 ? (
+            <div className={`text-center py-16 rounded-3xl border-2 border-dashed ${theme === 'light' ? 'border-zinc-200 text-zinc-400' : 'border-white/10 text-zinc-600'}`}>
+              <DollarSign size={32} className="mx-auto mb-3 opacity-30"/>
+              <p className="font-black uppercase text-[10px] tracking-widest">Nenhum parceiro com mensalidade cadastrada</p>
+              <p className="text-[9px] mt-2 opacity-50">Cadastre parceiros com valor de mensalidade para controlar aqui</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                Mês de referência: {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              </p>
+              {parceirosComMensalidade.map((p: any) => {
+                const isPago = (p.lastPaymentMonth || '') === currentMonth;
+                return (
+                  <div key={p.id} className={`rounded-[2rem] border p-6 transition-all ${isPago ? (theme === 'light' ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-500/5 border-emerald-500/20') : (theme === 'light' ? 'bg-red-50 border-red-200' : 'bg-red-500/5 border-red-500/20')}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        {p.logo ? (
+                          <img src={p.logo} className="w-12 h-12 rounded-2xl object-cover border border-white/10" alt=""/>
+                        ) : (
+                          <div className="w-12 h-12 rounded-2xl bg-[#C58A4A]/10 flex items-center justify-center text-[#C58A4A] font-black text-lg">
+                            {(p.businessName || p.name || '?').charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <p className={`font-black text-sm ${txt}`}>{p.businessName || p.name}</p>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{p.category}</p>
+                          {p.phone && (
+                            <p className="text-[9px] text-zinc-500 mt-0.5">{p.phone}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xl font-black text-[#C58A4A]">R$ {(p.monthlyFee || 0).toFixed(2)}</p>
+                        <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${isPago ? 'text-emerald-500' : 'text-red-400'}`}>
+                          {isPago ? '✅ Pago' : '⚠️ Em Aberto'}
+                        </p>
+                        {isPago && p.lastPaymentDate && (
+                          <p className="text-[8px] text-zinc-500 mt-0.5">
+                            Recebido em {new Date(p.lastPaymentDate).toLocaleDateString('pt-BR')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Botão de receber */}
+                    {!isPago && (
+                      <div className="mt-4 pt-4 border-t border-red-500/10">
+                        {cobrancaPayingId === p.id ? (
+                          <div className="space-y-3 animate-in fade-in">
+                            <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>Forma de recebimento:</p>
+                            <div className="grid grid-cols-4 gap-2">
+                              {(['PIX','DINHEIRO','DEBITO','CREDITO']).map(m => (
+                                <button key={m} onClick={() => setCobrancaPayMethod(m)}
+                                  className={`py-2 rounded-xl text-[8px] font-black uppercase border-2 transition-all ${cobrancaPayMethod === m ? 'border-[#C58A4A] bg-[#C58A4A]/20 text-[#C58A4A]' : theme === 'light' ? 'border-zinc-200 bg-zinc-50 text-zinc-400' : 'border-white/10 bg-white/5 text-zinc-500'}`}>
+                                  {m === 'DINHEIRO' ? '💵' : m === 'PIX' ? '📱 PIX' : m === 'DEBITO' ? '💳 Déb' : '💳 Cré'}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => setCobrancaPayingId(null)}
+                                className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${theme === 'light' ? 'bg-zinc-100 border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-400'}`}>
+                                Cancelar
+                              </button>
+                              <button onClick={async () => {
+                                  const now = new Date();
+                                  await (store.updatePartner)(p.id, {
+                                    lastPaymentMonth: currentMonth,
+                                    lastPaymentDate: now.toISOString(),
+                                    lastPaymentMethod: cobrancaPayMethod,
+                                  });
+                                  // Lança no financeiro
+                                  await (store.addFinancialEntry)({
+                                    description: `Mensalidade Parceiro — ${p.businessName || p.name}`,
+                                    amount: p.monthlyFee,
+                                    type: 'RECEITA',
+                                    category: 'Mensalidade Parceiro',
+                                    date: now.toISOString().split('T')[0],
+                                  });
+                                  setCobrancaPayingId(null);
+                                }}
+                                className="flex-1 py-3 rounded-xl font-black text-[9px] uppercase bg-emerald-500 text-white hover:bg-emerald-400 transition-all">
+                                ✅ Confirmar Recebimento
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setCobrancaPayingId(p.id); setCobrancaPayMethod('PIX'); }}
+                            className="w-full py-3 rounded-xl font-black text-[9px] uppercase bg-[#C58A4A] text-black hover:bg-[#E5A86A] transition-all">
+                            💰 Registrar Pagamento da Mensalidade
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Já pago — botão de estornar */}
+                    {isPago && (
+                      <div className="mt-4 pt-4 border-t border-emerald-500/10 flex justify-end">
+                        <button
+                          onClick={() => { if (window.confirm('Estornar pagamento deste mês?')) { (store.updatePartner)(p.id, { lastPaymentMonth: '', lastPaymentDate: '', lastPaymentMethod: '' }); } }}
+                          className="text-[8px] font-black text-zinc-500 hover:text-red-400 transition-colors uppercase tracking-widest"
+                        >
+                          Estornar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ═══════════════ ABA CLUBE DE BENEFÍCIOS ═══════════════ */}
