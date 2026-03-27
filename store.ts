@@ -33,7 +33,6 @@ import {
   wppAssinaturaVencendo,
   wppReagendamento,
   wppNovoAgendamento,
-  wppNovoAgendamentoBarbeiro,
   wppLembreteAgendamento,
   wppLembrete15min,
 } from './services/whatsapp';
@@ -73,7 +72,6 @@ interface BarberContextType {
   resetAllLikes: () => Promise<void>;
   addAppointment: (data: Omit<Appointment, 'id' | 'status'>, isPublic?: boolean) => Promise<void>;
   markNoShow: (appointmentId: string) => Promise<void>;
-  markFiadoPago: (appointmentId: string, paymentMethod?: string) => Promise<void>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<void>;
   rescheduleAppointment: (id: string, date: string, startTime: string, endTime: string) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
@@ -595,36 +593,9 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       });
     }
 
-    // ── WhatsApp: confirmação para o CLIENTE ──────────────────
-    try {
-      await wppNovoAgendamento(
-        data.clientPhone,
-        data.clientName,
-        data.serviceName,
-        data.date,
-        data.startTime,
-        data.professionalName
-      );
-    } catch (e) {
-      console.warn('WhatsApp confirmação cliente falhou (não crítico):', e);
-    }
-
-    // ── WhatsApp: aviso para o BARBEIRO ────────────────────────
-    try {
-      const profData = professionals.find((p: any) => p.id === data.professionalId);
-      if (profData && (profData as any).phone) {
-        await wppNovoAgendamentoBarbeiro(
-          (profData as any).phone,
-          profData.name,
-          data.clientName,
-          data.serviceName,
-          data.startTime,
-          data.date
-        );
-      }
-    } catch (e) {
-      console.warn('WhatsApp confirmação barbeiro falhou (não crítico):', e);
-    }
+    // ── WhatsApp: enviado pela Cloud Function onAppointmentCreated ──────
+    // Não enviar aqui para evitar mensagem duplicada.
+    // A Cloud Function dispara automaticamente para qualquer agendamento criado.
   };
 
   // ── LISTA NEGRA: marca cliente como não compareceu ────────
@@ -878,19 +849,6 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         }
       }
       }
-
-      // ── WhatsApp: pós-atendimento para o CLIENTE ─────────────
-      try {
-        if (appointment.clientPhone) {
-          await wppPosAtendimento(
-            appointment.clientPhone,
-            appointment.clientName,
-            'https://novojeitobarbearia.pages.dev'
-          );
-        }
-      } catch (e) {
-        console.warn('WhatsApp pós-atendimento falhou (não crítico):', e);
-      }
     }
   };
 
@@ -1025,34 +983,11 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     // Pagamentos locais: finalizam na hora, SEM Asaas.
     // PIX direto, Débito, Crédito e Fiado são recebidos na conta da barbearia.
     // Asaas é reservado APENAS para cobranças de planos e parcerias (método LINK).
-    const localMethods = ['DINHEIRO', 'PIX', 'DEBITO', 'CREDITO'];
+    const localMethods = ['DINHEIRO', 'PIX', 'DEBITO', 'CREDITO', 'FIADO'];
     if (localMethods.includes(paymentMethod)) {
       await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), { completedByBarber: true });
       await updateAppointmentStatus(id, 'CONCLUIDO_PAGO');
       return { _method: paymentMethod };
-    }
-
-    // ── FIADO: registra como pendente — NÃO marca como CONCLUIDO_PAGO ────
-    if (paymentMethod === 'FIADO') {
-      // Atualiza status para FIADO (distinto de CONCLUIDO_PAGO)
-      await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
-        status: 'FIADO',
-        completedByBarber: true,
-        fiadoAt: new Date().toISOString(),
-      });
-      // Registra receita pendente no financeiro (categoria especial)
-      await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
-        description: `Fiado — ${appt.clientName} — ${appt.serviceName}`,
-        amount: totalPrice,
-        type: 'RECEITA',
-        category: 'Fiado',
-        date: new Date().toISOString().split('T')[0],
-        appointmentId: id,
-        clientId: appt.clientId,
-        paid: false,
-        fiadoPending: true,
-      });
-      return { _method: 'FIADO' };
     }
 
     // ── LINK: gera cobrança no Asaas mas NÃO finaliza ────────
@@ -1132,31 +1067,6 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
 
     // NÃO chama updateAppointmentStatus aqui — o webhook fará isso ao receber PAYMENT_RECEIVED
     return result;
-  };
-
-  // ── FIADO: marca como pago ──────────────────────────────────
-  const markFiadoPago = async (appointmentId: string, paymentMethod: string = 'DINHEIRO') => {
-    const appt = appointments.find(a => a.id === appointmentId);
-    if (!appt) return;
-
-    // 1. Salva forma de pagamento e data do recebimento no agendamento
-    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, appointmentId), {
-      fiadoPaidAt: new Date().toISOString(),
-      fiadoPaidMethod: paymentMethod,
-      paymentMethod,
-    });
-
-    // 2. REMOVE a entrada financeira pendente de fiado ANTES de chamar updateAppointmentStatus
-    //    Isso evita duplicidade: updateAppointmentStatus cria a RECEITA correta sozinho.
-    const fiadoEntry = financialEntries.find(e =>
-      e.appointmentId === appointmentId && (e as any).fiadoPending === true
-    );
-    if (fiadoEntry) {
-      await deleteDoc(doc(db, COLLECTIONS.FINANCIAL, fiadoEntry.id));
-    }
-
-    // 3. Dispara updateAppointmentStatus → cria RECEITA + fidelidade + benefícios + WhatsApp pós
-    await updateAppointmentStatus(appointmentId, 'CONCLUIDO_PAGO');
   };
 
   const rescheduleAppointment = async (id: string, date: string, startTime: string, endTime: string) => {
@@ -1478,7 +1388,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
-      addAppointment, markNoShow, markFiadoPago, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
+      addAppointment, markNoShow, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
       addFinancialEntry, deleteFinancialEntry,
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,
