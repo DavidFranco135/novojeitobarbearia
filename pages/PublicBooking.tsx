@@ -215,21 +215,58 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   };
 
   const checkAvailability = (date: string, time: string, profId: string) => {
-    // Horário já agendado
-    const hasAppointment = appointments.some(a => a.date === date && a.startTime === time && a.professionalId === profId && a.status !== 'CANCELADO');
-    // Horário bloqueado pelo admin (almoço, reunião, folga parcial etc.)
+    // ── 1. Horário já passou (data ou hora no passado) ────────────────
+    const now = new Date();
+    const [slotH, slotM] = time.split(':').map(Number);
+    const [dateY, dateM, dateD] = date.split('-').map(Number);
+    const slotDateTime = new Date(dateY, dateM - 1, dateD, slotH, slotM, 0);
+    if (slotDateTime <= now) return true; // bloqueia horários passados
+
+    // ── 2. Conflito de horário com sobreposição de duração ───────────
+    const slotStart = slotH * 60 + slotM;
+    const hasConflict = appointments.some(a => {
+      if (a.professionalId !== profId) return false;
+      if (a.date !== date) return false;
+      if (a.status === 'CANCELADO') return false;
+      const [aH, aM] = a.startTime.split(':').map(Number);
+      const aStart = aH * 60 + aM;
+      // Duração do agendamento existente
+      const service = services.find((s: any) => s.id === a.serviceId);
+      const dur = service?.durationMinutes || 30;
+      const aEnd = aStart + dur;
+      // Bloqueia se o novo slot cai dentro do intervalo do agendamento existente
+      return slotStart >= aStart && slotStart < aEnd;
+    });
+
+    // ── 3. Horário bloqueado pelo admin ──────────────────────────────
     const isBlocked = isSlotBlocked ? isSlotBlocked(profId, date, time) : false;
-    return hasAppointment || isBlocked;
+
+    return hasConflict || isBlocked;
   };
 
   const turnos = useMemo(() => {
-    const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+    const allTimes = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+
+    // Filtra horários passados quando a data selecionada é hoje
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const isToday = selecao.date === todayStr;
+
+    const times = isToday
+      ? allTimes.filter(t => {
+          const [h, m] = t.split(':').map(Number);
+          // Adiciona margem de 30 minutos para preparação
+          const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+          return slotDate > new Date(now.getTime() + 30 * 60 * 1000);
+        })
+      : allTimes;
+
     return {
       manha: times.filter(t => parseInt(t.split(':')[0]) < 12),
       tarde: times.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
       noite: times.filter(t => parseInt(t.split(':')[0]) >= 18)
     };
-  }, []);
+  }, [selecao.date]);
 
   const categories = useMemo(() => ['Todos', ...Array.from(new Set(services.map(s => s.category)))], [services]);
   const filteredServices = useMemo(() => selectedCategory === 'Todos' ? services : services.filter(s => s.category === selectedCategory), [services, selectedCategory]);
@@ -391,6 +428,17 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       alert("Por favor, verifique seu cadastro antes de confirmar.");
       return;
     }
+    // ── Última verificação: horário já passou ou conflito ─────────────
+    const now = new Date();
+    const [slotH2, slotM2] = selecao.time.split(':').map(Number);
+    const [dY, dM, dD] = selecao.date.split('-').map(Number);
+    const slotDT = new Date(dY, dM - 1, dD, slotH2, slotM2, 0);
+    if (slotDT <= now) {
+      setBookingError("Este horário já passou. Por favor, escolha outro horário.");
+      setLoading(false);
+      return;
+    }
+
     if (checkAvailability(selecao.date, selecao.time, selecao.professionalId)) {
       setBookingError("Este horário acabou de ser ocupado. Por favor, escolha outro.");
       return;
@@ -2199,6 +2247,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x">
                      {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => {
                        const d = new Date();
+                       // i=0 é hoje — nunca mostra datas passadas
                        d.setDate(d.getDate() + i);
                        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                        const selProf = professionals.find((p: any) => p.id === selecao.professionalId);
