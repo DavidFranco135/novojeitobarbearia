@@ -2003,7 +2003,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           </div>
                           <div>
                              <p className={`text-lg font-black italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.serviceName}</p>
-                             <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>{new Date(app.date).toLocaleDateString('pt-BR')} • {app.startTime} com {app.professionalName}</p>
+                             <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>{new Date(app.date + 'T12:00:00').toLocaleDateString('pt-BR')} • {app.startTime} com {app.professionalName}</p>
                           </div>
                        </div>
                        <div className={`px-4 py-2 rounded-full text-[8px] font-black uppercase ${app.status === 'CONCLUIDO_PAGO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-400'}`}>
