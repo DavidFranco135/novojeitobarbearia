@@ -321,6 +321,7 @@ const Appointments: React.FC = () => {
       const service = services.find(s => s.id === newApp.serviceId);
       if (!service) return;
       if (!newApp.professionalId) return alert('Selecione o barbeiro.');
+      if (!newApp.serviceId) return alert('Selecione o serviço.');
       // Avulso: só precisa de nome; cadastrado: precisa de clientId
       if (modoAvulso && !avulsoNome.trim()) return alert('Digite o nome do cliente avulso.');
       if (!modoAvulso && !newApp.clientId) return alert('Selecione o cliente.');
@@ -502,11 +503,11 @@ const Appointments: React.FC = () => {
                               </div>
                               {!compactView && (
                                 <>
-                                  <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName}</p>
+                                  <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName || 'Serviço não informado'}</p>
                                   <p className="text-[7px] text-zinc-500 font-bold mt-0.5">{app.startTime}{app.endTime ? ` – ${app.endTime}` : ''}</p>
                                 </>
                               )}
-                              {compactView && <p className="text-[7px] text-[#C58A4A]/70 truncate">{app.serviceName}</p>}
+                              {compactView && <p className="text-[7px] text-[#C58A4A]/70 truncate">{app.serviceName || '—'}</p>}
                             </div>
                             <div className={`flex items-center justify-end gap-1 ${compactView ? 'mt-0.5' : 'mt-1'}`}>
                                <button 
