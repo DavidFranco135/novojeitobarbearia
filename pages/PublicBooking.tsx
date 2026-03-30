@@ -457,13 +457,34 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       const serv = services.find(s => s.id === selecao.serviceId);
       const prof = professionals.find(p => p.id === selecao.professionalId);
       const surcharge = (prof?.isMaster && prof?.masterSurcharge) ? prof.masterSurcharge : 0;
-      const finalPrice = (serv?.price || 0) + surcharge;
+
+      // ── Verifica assinatura VIP ativa do cliente ─────────────────────────
+      // Se o cliente tem plano ativo, o serviço está incluso — preço = 0
+      const clientSub = (loyaltyCards ? subscriptions : [])?.find?.((s: any) =>
+        s.clientId === client.id && s.status === 'ATIVA'
+      );
+      const activePlan = clientSub
+        ? ((config as any).vipPlans || []).find((p: any) => p.id === clientSub.planId)
+        : null;
+
+      // Verifica se ainda tem cortes disponíveis no período
+      const cutsUsed = clientSub?.cutsThisPeriod || 0;
+      const cutsLimit = activePlan?.maxCuts;
+      const hasVipCutsAvailable = clientSub && (!cutsLimit || cutsUsed < cutsLimit);
+
+      // Se VIP com cortes disponíveis: preço = R$ 0 e não exige pagamento online
+      const finalPrice = hasVipCutsAvailable ? 0 : (serv?.price || 0) + surcharge;
+      const isVipBooking = hasVipCutsAvailable;
+
+      // Se é VIP, nunca redireciona para pagamento online
+      const shouldPayOnline = wantsPayNow && !isVipBooking;
+
       const [h, m] = selecao.time.split(':').map(Number);
       const endTime = `${Math.floor((h * 60 + m + (serv?.durationMinutes || 30)) / 60).toString().padStart(2, '0')}:${((h * 60 + m + (serv?.durationMinutes || 30)) % 60).toString().padStart(2, '0')}`;
-      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice, ...(wantsPayNow ? { awaitingOnlinePayment: true } : {}) }, true);
+      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice, isVipBooking, subscriptionId: clientSub?.id, ...(shouldPayOnline ? { awaitingOnlinePayment: true } : {}) }, true);
       setSuccess(true);
       // Gera link de pagamento Asaas apenas se cliente escolheu pagar online
-      if (wantsPayNow) {
+      if (shouldPayOnline) {
         try {
           const asaasKey = (config as any).asaasKey || '';
           const asaasEnv = (config as any).asaasEnv || 'sandbox';
@@ -2133,9 +2154,22 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 const selServ     = services.find(s => s.id === selecao.serviceId);
 
                 const ProfBtn: React.FC<{ p: typeof professionals[0] }> = ({ p }) => {
-                  const finalPrice = selServ
-                    ? (selServ.price + (p.isMaster && p.masterSurcharge ? p.masterSurcharge : 0))
+                  // Verifica se o cliente logado tem plano VIP ativo com cortes disponíveis
+                  const clientSubLocal = loggedClient
+                    ? (subscriptions || []).find((s: any) => s.clientId === loggedClient.id && s.status === 'ATIVA')
                     : null;
+                  const activePlanLocal = clientSubLocal
+                    ? ((config as any).vipPlans || []).find((pl: any) => pl.id === clientSubLocal.planId)
+                    : null;
+                  const cutsUsedLocal = clientSubLocal?.cutsThisPeriod || 0;
+                  const cutsLimitLocal = activePlanLocal?.maxCuts;
+                  const isVipClient = clientSubLocal && (!cutsLimitLocal || cutsUsedLocal < cutsLimitLocal);
+
+                  const finalPrice = isVipClient
+                    ? 0
+                    : selServ
+                      ? (selServ.price + (p.isMaster && p.masterSurcharge ? p.masterSurcharge : 0))
+                      : null;
                   return (
                     <button
                       onClick={() => { setSelecao({ ...selecao, professionalId: p.id }); setPasso(3); }}
@@ -2187,13 +2221,19 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           )}
                         </div>
 
-                        {/* Preço final com acréscimo Master */}
+                        {/* Preço final com acréscimo Master / VIP grátis */}
                         {finalPrice !== null && (
                           <div className="space-y-0.5">
+                            {isVipClient ? (
+                              <p className="text-[10px] font-black text-emerald-400">
+                                👑 Incluído no plano
+                              </p>
+                            ) : (
                             <p className={`text-[10px] font-black ${p.isMaster ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
                               R$ {finalPrice.toFixed(2)}
                             </p>
-                            {p.isMaster && p.masterSurcharge && p.masterSurcharge > 0 && (
+                            )}
+                            {!isVipClient && p.isMaster && p.masterSurcharge && p.masterSurcharge > 0 && (
                               <p className={`text-[8px] font-bold ${theme === 'light' ? 'text-[#8B5E2A]' : 'text-[#C58A4A]/70'}`}>
                                 + R$ {p.masterSurcharge.toFixed(2)} Master
                               </p>
