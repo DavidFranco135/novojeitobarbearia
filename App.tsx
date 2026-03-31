@@ -18,7 +18,6 @@ import Automacoes from './pages/Automacoes';
 import Staff from './pages/Staff';
 import Products from './pages/Products';
 import Inbox from './pages/Inbox';
-import GaleriaCortes from './pages/GaleriaCortes';
 import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
@@ -40,7 +39,23 @@ const App: React.FC = () => {
   }, [activeTab, user]);
   // Sempre começa na página pública — o admin acessa pelo botão de cadeado
   // Isso evita tela preta quando o PWA é salvo com #dashboard na URL
-  const [isPublicView, setIsPublicView] = useState(true);
+  const [isPublicView, setIsPublicView] = useState(() => {
+    try {
+      // Se tem sessão admin ativa, não mostra página pública
+      const adminSession = localStorage.getItem('nj_admin_session');
+      if (adminSession === 'true') return false;
+      return true;
+    } catch { return true; }
+  });
+
+  // Salva estado da view no localStorage
+  const handleSetPublicView = (val: boolean) => {
+    try {
+      if (!val) localStorage.setItem('nj_admin_session', 'true');
+      else localStorage.removeItem('nj_admin_session');
+    } catch {}
+    setIsPublicView(val);
+  };
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   // ── Esqueci senha ADM ──────────────────────────────────────
@@ -130,8 +145,15 @@ const App: React.FC = () => {
   // CORREÇÃO: Função para ir para visão do cliente (faz logout e vai para público)
   const handleGoToClientView = () => {
     logout();
-    setIsPublicView(true);
+    handleSetPublicView(true);
   };
+
+  // Limpa sessão admin quando user vai a null (logout pelo menu lateral)
+  React.useEffect(() => {
+    if (!user) {
+      try { localStorage.removeItem('nj_admin_session'); } catch {}
+    }
+  }, [user]);
 
   // Se o usuário logado for um CLIENTE, ele deve ver apenas o Portal do Membro
   if (user && user.role === 'CLIENTE') {
@@ -155,7 +177,7 @@ const App: React.FC = () => {
           <button onClick={toggleTheme} className={`p-4 rounded-2xl border shadow-2xl transition-all ${theme === 'light' ? 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900' : 'bg-[#66360f] text-black border-transparent'}`}>
             {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
           </button>
-          <button onClick={() => setIsPublicView(false)} className={`p-4 rounded-2xl border shadow-2xl transition-all ${theme === 'light' ? 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'}`}>
+          <button onClick={() => handleSetPublicView(false)} className={`p-4 rounded-2xl border shadow-2xl transition-all ${theme === 'light' ? 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'}`}>
             <LogOut size={24} />
           </button>
         </div>
@@ -223,7 +245,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          <button onClick={() => setIsPublicView(true)} className={`w-full text-[10px] font-black uppercase tracking-[0.3em] transition-all ${theme === 'light' ? 'text-zinc-600 hover:text-blue-600' : 'opacity-40 hover:opacity-100 hover:text-[#C58A4A]'}`}>Visualizar Site (Site Público)</button>
+          <button onClick={() => handleSetPublicView(true)} className={`w-full text-[10px] font-black uppercase tracking-[0.3em] transition-all ${theme === 'light' ? 'text-zinc-600 hover:text-blue-600' : 'opacity-40 hover:opacity-100 hover:text-[#C58A4A]'}`}>Visualizar Site (Site Público)</button>
 
       {/* ── MODAL ESQUECI SENHA ADM ── */}
       {showForgotAdm && (
@@ -283,7 +305,6 @@ const App: React.FC = () => {
         case 'settings':      return <Settings />;
         case 'products':      return <Products />;
         case 'inbox':         return <Inbox />;
-        case 'galeria':       return <GaleriaCortes />;
         default:              return <Appointments />;
       }
     };
@@ -316,7 +337,6 @@ const App: React.FC = () => {
       case 'staff':         return <Staff />;
       case 'inbox':         return <Inbox />;
       case 'products':      return <Products />;
-      case 'galeria':       return <GaleriaCortes />;
       default:              return <Dashboard onNavigate={setActiveTab} />;
     }
   };
