@@ -95,7 +95,8 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, markNoShow, markFiadoPago, updateAppointmentStatus, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme
+    addAppointment, markNoShow, updateAppointmentStatus, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme,
+    subscriptions, config,
   } = useBarberStore() as any;
   const isDark = theme !== 'light';
 
@@ -157,8 +158,6 @@ const Appointments: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
   const [showQuickClient, setShowQuickClient] = useState(false);
-  const [modoAvulso, setModoAvulso] = useState(false);
-  const [avulsoNome, setAvulsoNome] = useState('');
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
   const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '', cpfCnpj: '' });
   // ── Modal Finalização ──────────────────────────────────────
@@ -228,6 +227,17 @@ const Appointments: React.FC = () => {
     setFinResult(null);
   };
 
+  // ── Desconto VIP do cliente sendo finalizado ──────────────────────────
+  const clientVipDiscount = useMemo(() => {
+    if (!finModal) return 0;
+    const sub = (subscriptions || []).find((s: any) =>
+      s.clientId === finModal.clientId && s.status === 'ATIVA'
+    );
+    if (!sub) return 0;
+    const plan = ((config as any)?.vipPlans || []).find((p: any) => p.id === sub.planId);
+    return plan?.discount || 0; // % de desconto em produtos
+  }, [finModal, subscriptions, config]);
+
   const handleFinalize = async () => {
     if (!finModal) return;
     setFinLoading(true);
@@ -242,19 +252,25 @@ const Appointments: React.FC = () => {
 
   const addFinItem = () => {
     if (!finNewItem.name || !finNewItem.price) return;
+    const rawPrice = parseFloat(finNewItem.price) || 0;
+    // Aplica desconto VIP no produto se cliente tiver plano ativo
+    const discountedPrice = clientVipDiscount > 0
+      ? parseFloat((rawPrice * (1 - clientVipDiscount / 100)).toFixed(2))
+      : rawPrice;
+    const itemName = clientVipDiscount > 0
+      ? `${finNewItem.name} (${clientVipDiscount}% VIP)`
+      : finNewItem.name;
     setFinAdditionals(prev => [...prev, {
       id: Date.now().toString(),
-      name: finNewItem.name,
-      price: parseFloat(finNewItem.price) || 0,
+      name: itemName,
+      price: discountedPrice,
       qty: 1,
     }]);
     setFinNewItem({ name: '', price: '' });
   };
 
   const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
-  const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all' | 'fiados'>('day');
-  const [fiadoPayMethod, setFiadoPayMethod] = useState<string>('DINHEIRO');
-  const [fiadoPayingId, setFiadoPayingId] = useState<string | null>(null);
+  const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all'>('day');
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
   const hoursNormal = useMemo(() => Array.from({ length: 14 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`), []);
@@ -263,9 +279,7 @@ const Appointments: React.FC = () => {
   const appointmentsToday = useMemo(() => appointments.filter(a => a.date === currentDate), [appointments, currentDate]);
   
   const appointmentsFiltered = useMemo(() => {
-    if (filterPeriod === 'fiados') {
-      return appointments.filter(a => a.status === 'FIADO');
-    } else if (filterPeriod === 'day') {
+    if (filterPeriod === 'day') {
       return appointments.filter(a => a.date === currentDate);
     } else if (filterPeriod === 'month') {
       return appointments.filter(a => a.date.startsWith(selectedMonth));
@@ -273,12 +287,6 @@ const Appointments: React.FC = () => {
       return appointments;
     }
   }, [appointments, currentDate, selectedMonth, filterPeriod]);
-
-  const fiadosTotal = useMemo(() =>
-    appointments.filter(a => a.status === 'FIADO').reduce((s, a) => s + ((a as any).totalPrice ?? a.price ?? 0), 0),
-    [appointments]
-  );
-  const fiadosCount = useMemo(() => appointments.filter(a => a.status === 'FIADO').length, [appointments]);
 
   const handleQuickClient = async () => {
     if(!quickClient.name || !quickClient.phone) return alert("Preencha nome e telefone");
@@ -320,21 +328,11 @@ const Appointments: React.FC = () => {
     try {
       const service = services.find(s => s.id === newApp.serviceId);
       if (!service) return;
-      if (!newApp.professionalId) return alert('Selecione o barbeiro.');
-      if (!newApp.serviceId) return alert('Selecione o serviço.');
-      // Avulso: só precisa de nome; cadastrado: precisa de clientId
-      if (modoAvulso && !avulsoNome.trim()) return alert('Digite o nome do cliente avulso.');
-      if (!modoAvulso && !newApp.clientId) return alert('Selecione o cliente.');
       const [h, m] = newApp.startTime.split(':').map(Number);
       const totalMinutes = h * 60 + m + service.durationMinutes;
       const endTime = `${Math.floor(totalMinutes / 60).toString().padStart(2, '0')}:${(totalMinutes % 60).toString().padStart(2, '0')}`;
-      const clientName = modoAvulso ? avulsoNome.trim() : (clients.find(c => c.id === newApp.clientId)?.name || '');
-      const clientPhone = modoAvulso ? '' : (clients.find(c => c.id === newApp.clientId)?.phone || '');
-      const clientId = modoAvulso ? '' : newApp.clientId;
-      await addAppointment({ ...newApp, clientId, clientName, clientPhone, serviceName: service.name, professionalName: professionals.find(p => p.id === newApp.professionalId)?.name || '', date: currentDate, endTime, price: service.price });
+      await addAppointment({ ...newApp, clientName: clients.find(c => c.id === newApp.clientId)?.name || '', clientPhone: clients.find(c => c.id === newApp.clientId)?.phone || '', serviceName: service.name, professionalName: professionals.find(p => p.id === newApp.professionalId)?.name || '', date: currentDate, endTime, price: service.price });
       setShowAddModal(false);
-      setModoAvulso(false);
-      setAvulsoNome('');
     } catch (err) { alert("Erro ao agendar."); }
   };
 
@@ -394,17 +392,6 @@ const Appointments: React.FC = () => {
             >
               Todos
             </button>
-            <button 
-              onClick={() => { setFilterPeriod('fiados'); setViewMode('list'); }} 
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1.5 relative ${filterPeriod === 'fiados' ? 'bg-orange-500 text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
-            >
-              📒 Fiados
-              {fiadosCount > 0 && (
-                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${filterPeriod === 'fiados' ? 'bg-black/20 text-black' : 'bg-orange-500 text-black'}`}>
-                  {fiadosCount}
-                </span>
-              )}
-            </button>
           </div>
           
           {filterPeriod === 'day' && (
@@ -449,8 +436,8 @@ const Appointments: React.FC = () => {
 
       <div className={`flex-1 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
         {viewMode === 'grid' ? (
-          <div className="overflow-auto h-full scrollbar-hide" style={{WebkitOverflowScrolling: 'touch'}}>
-            <div style={{minWidth: compactView ? `${Math.max(280, 60 + professionals.length * 90)}px` : `${Math.max(400, 80 + professionals.length * 150)}px`, width: 'max-content', minHeight: '100%'}}>
+          <div className={`overflow-auto h-full scrollbar-hide ${compactView ? '' : ''}`}>
+            <div className={compactView ? 'min-w-[320px]' : 'min-w-[500px]'} style={{minWidth: compactView ? `${60 + professionals.length * 100}px` : `${80 + professionals.length * 160}px`}}>
               {/* CABEÇALHO: Reduzido padding vertical */}
               <div className={`border-b sticky top-0 z-10 ${theme === 'light' ? 'border-zinc-200 bg-zinc-50' : 'border-white/5 bg-white/[0.02]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 1fr)` : `80px repeat(${professionals.length}, 1fr)`}}>
                 <div className={`flex items-center justify-center text-zinc-500 ${compactView ? 'p-2' : 'p-3'}`}><Clock size={compactView ? 14 : 18} /></div>
@@ -503,11 +490,11 @@ const Appointments: React.FC = () => {
                               </div>
                               {!compactView && (
                                 <>
-                                  <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName || 'Serviço não informado'}</p>
+                                  <p className="text-[8px] font-black text-[#C58A4A] uppercase mt-0.5 truncate">{app.serviceName}</p>
                                   <p className="text-[7px] text-zinc-500 font-bold mt-0.5">{app.startTime}{app.endTime ? ` – ${app.endTime}` : ''}</p>
                                 </>
                               )}
-                              {compactView && <p className="text-[7px] text-[#C58A4A]/70 truncate">{app.serviceName || '—'}</p>}
+                              {compactView && <p className="text-[7px] text-[#C58A4A]/70 truncate">{app.serviceName}</p>}
                             </div>
                             <div className={`flex items-center justify-end gap-1 ${compactView ? 'mt-0.5' : 'mt-1'}`}>
                                <button 
@@ -536,92 +523,13 @@ const Appointments: React.FC = () => {
           </div>
         ) : (
           <div className="p-6 space-y-3 overflow-y-auto h-full scrollbar-hide">
-
-            {/* ── ABA FIADOS ─────────────────────────────────────────── */}
-            {filterPeriod === 'fiados' && (
-              <div className="space-y-4">
-                <div className={`flex items-center justify-between p-4 rounded-2xl border ${isDark ? 'bg-orange-500/10 border-orange-500/30' : 'bg-orange-50 border-orange-200'}`}>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-orange-400">📒 Total em Fiados</p>
-                    <p className="text-2xl font-black text-orange-400 font-display italic">R$ {fiadosTotal.toFixed(2)}</p>
-                  </div>
-                  <div className={`text-right text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                    {fiadosCount} pendente{fiadosCount !== 1 ? 's' : ''}
-                  </div>
-                </div>
-                {appointmentsFiltered.length === 0 && (
-                  <div className={`text-center py-16 rounded-2xl border-2 border-dashed ${isDark ? 'border-white/10 text-zinc-600' : 'border-zinc-200 text-zinc-400'}`}>
-                    <p className="text-4xl mb-3">📒</p>
-                    <p className="font-black uppercase text-[10px] tracking-widest">Nenhum fiado pendente</p>
-                  </div>
-                )}
-                {appointmentsFiltered.map(app => (
-                  <div key={app.id} className={`rounded-2xl border p-4 transition-all ${isDark ? 'bg-orange-500/5 border-orange-500/25 hover:border-orange-500/50' : 'bg-orange-50 border-orange-200 hover:border-orange-400'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-11 h-11 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400 shrink-0 text-xl">📒</div>
-                        <div className="min-w-0">
-                          <p className={`text-sm font-black cursor-pointer hover:text-orange-400 transition-colors truncate ${isDark ? 'text-white' : 'text-zinc-900'}`} onClick={() => setShowDetailModal(app)}>
-                            {app.clientName}
-                          </p>
-                          <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                            {app.serviceName} • {app.date.split('-').reverse().join('/')} {app.startTime}
-                          </p>
-                          <p className={`text-[9px] font-bold mt-0.5 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>{app.professionalName}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-lg font-black text-orange-400">R$ {((app as any).totalPrice ?? app.price ?? 0).toFixed(2)}</p>
-                        <p className={`text-[8px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>a receber</p>
-                      </div>
-                    </div>
-                    <div className={`mt-3 pt-3 border-t border-orange-500/20`}>
-                      {fiadoPayingId === app.id ? (
-                        <div className="space-y-3 animate-in fade-in">
-                          <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Forma de recebimento:</p>
-                          <div className="grid grid-cols-4 gap-2">
-                            {(['DINHEIRO','PIX','DEBITO','CREDITO'] as const).map(m => (
-                              <button key={m} onClick={() => setFiadoPayMethod(m)}
-                                className={`py-2 rounded-xl text-[8px] font-black uppercase tracking-widest border-2 transition-all ${fiadoPayMethod === m ? 'border-orange-500 bg-orange-500/20 text-orange-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500' : 'border-zinc-200 bg-zinc-50 text-zinc-400'}`}>
-                                {m === 'DINHEIRO' ? '💵' : m === 'PIX' ? '📱' : m === 'DEBITO' ? '💳 Déb' : '💳 Cré'}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => setFiadoPayingId(null)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-100 border-zinc-200 text-zinc-500'}`}>Cancelar</button>
-                            <button onClick={async () => { await (markFiadoPago as any)(app.id, fiadoPayMethod); setFiadoPayingId(null); }}
-                              className="flex-1 py-3 rounded-xl font-black text-[9px] uppercase bg-orange-500 text-black hover:bg-orange-400 transition-all">
-                              ✅ Confirmar Recebimento
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button onClick={() => { setFiadoPayingId(app.id); setFiadoPayMethod('DINHEIRO'); }}
-                            className="flex-1 py-3 rounded-xl font-black text-[9px] uppercase bg-orange-500 text-black hover:bg-orange-400 transition-all">
-                            💰 Marcar como Recebido
-                          </button>
-                          <button onClick={() => setShowDetailModal(app)} className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase border transition-all ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-500'}`}>
-                            Detalhes
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── LISTA NORMAL ─────────────────────────────────────────── */}
-            {filterPeriod !== 'fiados' && (
-              <>
              {appointmentsFiltered.length === 0 && (
                <p className={`text-center py-20 font-black uppercase text-[10px] italic ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-600'}`}>
                  Nenhum agendamento {filterPeriod === 'day' ? 'para hoje' : filterPeriod === 'month' ? 'neste mês' : 'encontrado'}.
                </p>
              )}
              {appointmentsFiltered.map(app => (
-               <div key={app.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${(app as any).status === 'FIADO' ? (isDark ? 'bg-orange-500/5 border-orange-500/30 hover:border-orange-500/50' : 'bg-orange-50 border-orange-200') : 'bg-white/5 border-white/5 hover:border-[#C58A4A]/30'}`}>
+               <div key={app.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-[#C58A4A]/30 transition-all">
                   <div className="flex items-center gap-4">
                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${app.status === 'CONCLUIDO_PAGO' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : app.awaitingOnlinePayment ? 'border-blue-400 text-blue-400 bg-blue-400/10' : 'border-amber-400 text-amber-400 bg-amber-400/10'}`}>
                         {app.status === 'CONCLUIDO_PAGO' ? <Check size={20}/> : app.awaitingOnlinePayment ? <CreditCard size={20} className="text-blue-400 animate-pulse"/> : <Banknote size={20} className="text-amber-400 animate-pulse"/>}
@@ -649,8 +557,6 @@ const Appointments: React.FC = () => {
                   </div>
                </div>
              ))}
-              </>
-            )}
           </div>
         )}
       </div>
@@ -678,40 +584,6 @@ const Appointments: React.FC = () => {
             <h2 className="text-2xl font-black font-display italic">Novo Agendamento</h2>
             <div className="space-y-6">
                <div className="space-y-4">
-
-                  {/* ── Toggle Cadastrado / Avulso ── */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button"
-                      onClick={() => { setModoAvulso(false); setAvulsoNome(''); }}
-                      className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 transition-all ${!modoAvulso ? 'border-[#C58A4A] bg-[#C58A4A]/10 text-[#C58A4A]' : 'border-white/10 bg-white/5 text-zinc-500'}`}
-                    >
-                      👤 Cliente Cadastrado
-                    </button>
-                    <button type="button"
-                      onClick={() => { setModoAvulso(true); setShowQuickClient(false); setNewApp({...newApp, clientId: ''}); }}
-                      className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 transition-all ${modoAvulso ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-white/10 bg-white/5 text-zinc-500'}`}
-                    >
-                      ✂️ Cliente Avulso
-                    </button>
-                  </div>
-
-                  {/* ── Modo AVULSO: só nome ── */}
-                  {modoAvulso ? (
-                    <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3 animate-in slide-in-from-top-2">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">✂️ Cliente sem cadastro — apenas nome</p>
-                      <input
-                        type="text"
-                        placeholder="Nome do cliente avulso *"
-                        value={avulsoNome}
-                        onChange={e => setAvulsoNome(e.target.value)}
-                        autoFocus
-                        className="w-full bg-black/20 border border-amber-500/30 text-white p-4 rounded-xl text-xs font-bold outline-none focus:border-amber-400"
-                      />
-                      <p className="text-[9px] text-zinc-600">Sem fidelidade, sem WhatsApp automático. Ideal para clientes de passagem.</p>
-                    </div>
-                  ) : (
-                    /* ── Modo CADASTRADO: select + cadastro rápido ── */
-                    <>
                   <div className="flex gap-2">
                     <select required value={newApp.clientId} onChange={e => setNewApp({...newApp, clientId: e.target.value})} className="flex-1 bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
                       <option value="" className="bg-zinc-950">Selecione o Cliente</option>
@@ -732,8 +604,6 @@ const Appointments: React.FC = () => {
                       </div>
                     </div>
                   )}
-                    </>
-                  )}
                   <select required value={newApp.professionalId} onChange={e => setNewApp({...newApp, professionalId: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
                     <option value="" className="bg-zinc-950">Barbeiro</option>
                     {professionals.map(p => <option key={p.id} value={p.id} className="bg-zinc-950">{p.name}</option>)}
@@ -745,7 +615,7 @@ const Appointments: React.FC = () => {
                   <input required type="time" value={newApp.startTime} onChange={e => setNewApp({...newApp, startTime: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black" />
                </div>
                <div className="flex gap-3">
-                  <button type="button" onClick={() => { setShowAddModal(false); setModoAvulso(false); setAvulsoNome(''); }} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
+                  <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
                   <button type="button" onClick={handleCreateAppointment} onTouchEnd={e => { e.preventDefault(); handleCreateAppointment(); }} className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px]">Agendar Agora</button>
                </div>
             </div>
@@ -993,7 +863,14 @@ const Appointments: React.FC = () => {
 
                   {/* ── Adicionar item ── */}
                   <div className={`p-4 rounded-2xl space-y-3 ${isDark ? 'border border-white/5 bg-white/2' : 'border border-zinc-100 bg-zinc-50'}`}>
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>+ Adicionar produto ou serviço extra</p>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>+ Adicionar produto ou serviço extra</p>
+                      {clientVipDiscount > 0 && (
+                        <span className="text-[9px] font-black px-2 py-1 rounded-full bg-[#C58A4A]/20 text-[#C58A4A] uppercase tracking-widest">
+                          👑 {clientVipDiscount}% VIP aplicado
+                        </span>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <input
                         placeholder="Nome (ex: Pomada, Cerveja...)"
