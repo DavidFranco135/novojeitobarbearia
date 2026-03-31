@@ -12,6 +12,113 @@ interface PublicBookingProps {
   initialView?: 'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD';
 }
 
+// ── Componente de galeria pública com pastas deslizáveis ─────────────────
+interface GaleriaPublicaProps {
+  albums: {id:string;name:string;photos:{url:string;desc:string}[]}[];
+  theme: string;
+}
+const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme }) => {
+  const isDark = theme !== 'light';
+  const [openAlbum, setOpenAlbum] = React.useState<{id:string;name:string;photos:{url:string;desc:string}[]}|null>(null);
+  const [lightboxIdx, setLightboxIdx] = React.useState<number|null>(null);
+  const [dragStartX, setDragStartX] = React.useState<number|null>(null);
+  const photos = openAlbum?.photos || [];
+
+  const goNext = () => lightboxIdx !== null && lightboxIdx < photos.length-1 && setLightboxIdx(lightboxIdx+1);
+  const goPrev = () => lightboxIdx !== null && lightboxIdx > 0 && setLightboxIdx(lightboxIdx-1);
+  const onDS = (x:number) => setDragStartX(x);
+  const onDE = (x:number) => { if(dragStartX===null) return; const d=dragStartX-x; if(d>50) goNext(); else if(d<-50) goPrev(); setDragStartX(null); };
+
+  return (
+    <>
+      <section className="mb-16">
+        <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-4 ${isDark?'text-white':'text-zinc-900'}`}>
+          📸 Galeria de Cortes <div className="h-1 flex-1 gradiente-ouro opacity-10 min-w-[40px]"></div>
+        </h2>
+
+        {/* Pastas deslizando para o lado */}
+        <div className="flex gap-5 overflow-x-auto pb-4 snap-x scrollbar-hide" style={{WebkitOverflowScrolling:'touch'}}>
+          {albums.map(album => (
+            <div key={album.id}
+              className={`snap-center flex-shrink-0 w-52 rounded-[2rem] overflow-hidden cursor-pointer border transition-all hover:scale-[1.02] hover:border-[#C58A4A]/40 ${isDark?'cartao-vidro border-white/5':'bg-white border-zinc-200 shadow-sm'}`}
+              onClick={() => setOpenAlbum(album)}
+            >
+              <div className="aspect-square bg-zinc-900 relative">
+                {album.photos.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-700 text-4xl">📁</div>
+                ) : album.photos.length === 1 ? (
+                  <img src={album.photos[0].url} className="w-full h-full object-cover" alt=""/>
+                ) : (
+                  <div className="grid grid-cols-2 h-full">
+                    {album.photos.slice(0,4).map((p,i) => <img key={i} src={p.url} className="w-full h-full object-cover" alt=""/>)}
+                  </div>
+                )}
+                <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-black/70 to-transparent"/>
+              </div>
+              <div className="p-4">
+                <p className={`font-black text-sm ${isDark?'text-white':'text-zinc-900'}`}>{album.name}</p>
+                <p className={`text-[9px] font-bold mt-0.5 ${isDark?'text-zinc-500':'text-zinc-400'}`}>{album.photos.length} foto{album.photos.length!==1?'s':''}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Modal pasta aberta */}
+      {openAlbum && (
+        <div className="fixed inset-0 z-[400] flex flex-col bg-black/98 backdrop-blur-xl animate-in fade-in" onClick={() => { setOpenAlbum(null); setLightboxIdx(null); }}>
+          <div className="flex items-center gap-4 p-6 border-b border-white/10" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setOpenAlbum(null)} className="p-2 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div>
+              <p className="text-white font-black text-lg font-display italic">{openAlbum.name}</p>
+              <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">{openAlbum.photos.length} fotos</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4" onClick={e => e.stopPropagation()}>
+            <div className="grid grid-cols-3 gap-2">
+              {openAlbum.photos.map((photo, idx) => (
+                <div key={idx} className="aspect-square rounded-xl overflow-hidden cursor-pointer" onClick={() => setLightboxIdx(idx)}>
+                  <img src={photo.url} alt={photo.desc||''} className="w-full h-full object-cover hover:scale-110 transition-all duration-500"/>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox com swipe */}
+      {lightboxIdx !== null && openAlbum && (
+        <div
+          className="fixed inset-0 z-[500] flex items-center justify-center bg-black/99 select-none"
+          onClick={() => setLightboxIdx(null)}
+          onTouchStart={e => onDS(e.touches[0].clientX)}
+          onTouchEnd={e => onDE(e.changedTouches[0].clientX)}
+          onMouseDown={e => onDS(e.clientX)}
+          onMouseUp={e => onDE(e.clientX)}
+        >
+          <div className="relative w-full max-w-lg px-4" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-3">
+              <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">{lightboxIdx+1} / {photos.length}</span>
+            </div>
+            <img src={photos[lightboxIdx].url} alt={photos[lightboxIdx].desc} className="w-full rounded-3xl object-contain max-h-[70vh] shadow-2xl" draggable={false}/>
+            {photos[lightboxIdx].desc && <p className="text-white font-black text-base font-display italic text-center mt-3">{photos[lightboxIdx].desc}</p>}
+            {lightboxIdx > 0 && <button onClick={e => {e.stopPropagation();goPrev();}} className="absolute left-0 top-[40%] p-3 bg-black/60 text-white rounded-xl"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg></button>}
+            {lightboxIdx < photos.length-1 && <button onClick={e => {e.stopPropagation();goNext();}} className="absolute right-0 top-[40%] p-3 bg-black/60 text-white rounded-xl rotate-180"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg></button>}
+            {photos.length > 1 && (
+              <div className="flex justify-center gap-1.5 mt-4">
+                {photos.map((_,i) => <button key={i} onClick={e=>{e.stopPropagation();setLightboxIdx(i);}} className={`rounded-full transition-all ${i===lightboxIdx?'w-4 h-2 bg-[#C58A4A]':'w-2 h-2 bg-white/30'}`}/>)}
+              </div>
+            )}
+            <button onClick={() => setLightboxIdx(null)} className="mt-4 w-full py-3 rounded-2xl bg-white/5 border border-white/10 text-zinc-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all">Fechar</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
   const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
@@ -943,115 +1050,16 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </section>
              )}
 
-             {/* ── GALERIA DE FOTOS DE CORTES ──────────────────────────── */}
+             {/* ── GALERIA DE CORTES — Pastas deslizáveis ───────────── */}
              {(() => {
-               const cutGallery: {url:string;desc:string}[] = (config as any).cutGallery || [];
-               // Admin é quem está logado no store como ADMIN (acessa a página pública com o painel aberto)
-               const isAdmin = user?.role === 'ADMIN';
-               // Mostra a seção sempre que tiver fotos, ou para admin mesmo vazia
-               if (cutGallery.length === 0 && !isAdmin) return null;
+               const cutAlbums: {id:string;name:string;photos:{url:string;desc:string}[]}[] = (config as any).cutAlbums || [];
+               if (!cutAlbums || cutAlbums.length === 0) return null;
                return (
-                 <section className="mb-16">
-                   <div className="flex items-center justify-between mb-8">
-                     <h2 className={`text-2xl font-black font-display italic flex items-center gap-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                       📸 Galeria de Cortes
-                       <div className="h-1 flex-1 gradiente-ouro opacity-10 min-w-[40px]"></div>
-                     </h2>
-                     {isAdmin && (
-                       <button
-                         onClick={() => setShowGalleryUpload(v => !v)}
-                         className="flex items-center gap-2 gradiente-ouro text-black px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
-                       >
-                         + Adicionar Foto
-                       </button>
-                     )}
-                   </div>
-
-                   {/* Upload form — admin only */}
-                   {isAdmin && showGalleryUpload && (
-                     <div className={`mb-6 p-6 rounded-2xl border animate-in slide-in-from-top-2 space-y-4 ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-[#C58A4A]">Nova foto de corte</p>
-                       <input
-                         type="text"
-                         placeholder="Descrição do corte (ex: Degradê com barba delineada)"
-                         value={galleryUploadDesc}
-                         onChange={e => setGalleryUploadDesc(e.target.value)}
-                         className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-white/5 border-white/10 text-white'}`}
-                       />
-                       <label className={`flex items-center justify-center gap-3 w-full py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all font-black text-[10px] uppercase tracking-widest ${galleryUploading ? 'opacity-60 pointer-events-none border-zinc-600 text-zinc-500' : 'border-[#C58A4A]/40 text-[#C58A4A] hover:border-[#C58A4A] hover:bg-[#C58A4A]/5'}`}>
-                         {galleryUploading ? '⟳ Enviando...' : '📷 Escolher foto do dispositivo'}
-                         <input type="file" accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={galleryUploading} />
-                       </label>
-                       <button onClick={() => setShowGalleryUpload(false)} className={`text-[9px] font-black text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest`}>Cancelar</button>
-                     </div>
-                   )}
-
-                   {/* Photo grid */}
-                   {cutGallery.length === 0 ? (
-                     <div className={`text-center py-14 rounded-3xl border-2 border-dashed ${theme === 'light' ? 'border-zinc-200 text-zinc-400' : 'border-white/10 text-zinc-600'}`}>
-                       <p className="text-4xl mb-3">📸</p>
-                       <p className="font-black uppercase text-[10px] tracking-widest">
-                         {isAdmin ? 'Clique em "+ Adicionar Foto" para começar a galeria' : 'Nenhuma foto cadastrada ainda'}
-                       </p>
-                     </div>
-                   ) : (
-                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                       {cutGallery.map((photo, idx) => (
-                         <div
-                           key={idx}
-                           className="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-lg"
-                           onClick={() => setGalleryLightbox(photo)}
-                         >
-                           <img src={photo.url} alt={photo.desc || `Corte ${idx+1}`} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500" />
-                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all flex items-end p-3">
-                             {photo.desc && <p className="text-white text-[10px] font-bold leading-tight line-clamp-2">{photo.desc}</p>}
-                           </div>
-                         </div>
-                       ))}
-                     </div>
-                   )}
-                 </section>
+                 <GaleriaPublica albums={cutAlbums} theme={theme} />
                );
              })()}
 
-             {/* Lightbox galeria */}
-             {galleryLightbox && (
-               <div
-                 className="fixed inset-0 z-[500] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 animate-in fade-in"
-                 onClick={() => setGalleryLightbox(null)}
-               >
-                 <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
-                   <img src={galleryLightbox.url} alt={galleryLightbox.desc} className="w-full rounded-3xl object-contain max-h-[70vh] shadow-2xl" />
-                   {galleryLightbox.desc && (
-                     <div className="mt-4 px-2">
-                       <p className="text-white font-black text-lg font-display italic">{galleryLightbox.desc}</p>
-                     </div>
-                   )}
-                   <div className="flex gap-3 mt-4">
-                     {user?.role === 'ADMIN' && (
-                       <button
-                         onClick={() => {
-                           const photos: {url:string;desc:string}[] = (config as any).cutGallery || [];
-                           const idx = photos.findIndex(p => p.url === galleryLightbox.url);
-                           if (idx > -1) handleGalleryDelete(idx);
-                         }}
-                         className="flex-1 py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-black text-[10px] uppercase tracking-widest hover:bg-red-500/30 transition-all"
-                       >
-                         🗑 Excluir
-                       </button>
-                     )}
-                     <button
-                       onClick={() => setGalleryLightbox(null)}
-                       className="flex-1 py-3 rounded-2xl bg-white/5 border border-white/10 text-zinc-300 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all"
-                     >
-                       Fechar
-                     </button>
-                   </div>
-                 </div>
-               </div>
-             )}
-
-             {/* 2. Nossos Rituais */}
+                          {/* 2. Nossos Rituais */}
              <section className="mb-6" id="catalogo">
                 <AccordionHeader sectionKey="servicos" label="Todos os Serviços" icon={<Scissors size={18}/>} />
                 {openSections.has('servicos') && (
