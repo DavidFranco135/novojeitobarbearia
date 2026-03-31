@@ -254,7 +254,7 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme, isAdmin,
 };
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, updateConfig, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription, subscriptions, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
