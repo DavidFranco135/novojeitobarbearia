@@ -946,7 +946,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              {/* ── GALERIA DE FOTOS DE CORTES ──────────────────────────── */}
              {(() => {
                const cutGallery: {url:string;desc:string}[] = (config as any).cutGallery || [];
+               // Admin é quem está logado no store como ADMIN (acessa a página pública com o painel aberto)
                const isAdmin = user?.role === 'ADMIN';
+               // Mostra a seção sempre que tiver fotos, ou para admin mesmo vazia
                if (cutGallery.length === 0 && !isAdmin) return null;
                return (
                  <section className="mb-16">
@@ -988,7 +990,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    {cutGallery.length === 0 ? (
                      <div className={`text-center py-14 rounded-3xl border-2 border-dashed ${theme === 'light' ? 'border-zinc-200 text-zinc-400' : 'border-white/10 text-zinc-600'}`}>
                        <p className="text-4xl mb-3">📸</p>
-                       <p className="font-black uppercase text-[10px] tracking-widest">Nenhuma foto cadastrada ainda</p>
+                       <p className="font-black uppercase text-[10px] tracking-widest">
+                         {isAdmin ? 'Clique em "+ Adicionar Foto" para começar a galeria' : 'Nenhuma foto cadastrada ainda'}
+                       </p>
                      </div>
                    ) : (
                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
