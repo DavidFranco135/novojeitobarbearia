@@ -582,10 +582,22 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       );
       if (clientSub) {
         const plan = ((config as any).vipPlans || []).find((p: any) => p.id === clientSub.planId);
-        if (plan && plan.maxCuts) {
-          const cutsUsed = clientSub.cutsThisPeriod || 0;
-          if (cutsUsed >= plan.maxCuts) {
-            throw new Error(`Limite de ${plan.maxCuts} cortes do plano "${plan.name}" atingido neste período. Próximo corte disponível na renovação.`);
+        if (plan) {
+          // Plano com membros individuais
+          if (plan.members && plan.members.length > 0 && data.activeMember) {
+            const memberDef = plan.members.find((m: any) => m.label === data.activeMember);
+            const memberCuts = (clientSub.memberCuts || []).find((mc: any) => mc.label === data.activeMember);
+            const cutsUsed = memberCuts?.cutsUsed || 0;
+            const cutsLimit = memberDef?.cuts || 0;
+            if (cutsLimit > 0 && cutsUsed >= cutsLimit) {
+              throw new Error(`Limite de ${cutsLimit} cortes para "${data.activeMember}" atingido neste período.`);
+            }
+          } else if (plan.maxCuts) {
+            // Plano individual simples
+            const cutsUsed = clientSub.cutsThisPeriod || 0;
+            if (cutsUsed >= plan.maxCuts) {
+              throw new Error(`Limite de ${plan.maxCuts} cortes do plano "${plan.name}" atingido neste período. Próximo corte disponível na renovação.`);
+            }
           }
         }
       }
@@ -840,12 +852,28 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             }
           }
 
-          // Incrementa cutsThisPeriod na assinatura
+          // Incrementa cutsThisPeriod e memberCuts na assinatura
           const today   = new Date().toISOString().split('T')[0];
           const subRef  = doc(db, COLLECTIONS.SUBSCRIPTIONS, clientSub.id);
           const newCuts = (clientSub.cutsThisPeriod || 0) + 1;
+
+          // Atualiza cortes do membro específico se plano com membros
+          const activeMemberLabel = (appointment as any).activeMember;
+          let updatedMemberCuts = clientSub.memberCuts || [];
+          if (activeMemberLabel && plan.members?.length > 0) {
+            const existing = updatedMemberCuts.find((mc: any) => mc.label === activeMemberLabel);
+            if (existing) {
+              updatedMemberCuts = updatedMemberCuts.map((mc: any) =>
+                mc.label === activeMemberLabel ? { ...mc, cutsUsed: (mc.cutsUsed || 0) + 1 } : mc
+              );
+            } else {
+              updatedMemberCuts = [...updatedMemberCuts, { label: activeMemberLabel, cutsUsed: 1 }];
+            }
+          }
+
           await updateDoc(subRef, {
             cutsThisPeriod: newCuts,
+            memberCuts: updatedMemberCuts,
             usageCount: (clientSub.usageCount || 0) + 1,
             periodStartDate: clientSub.periodStartDate || clientSub.startDate,
           });
