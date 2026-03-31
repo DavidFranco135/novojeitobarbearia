@@ -392,7 +392,37 @@ const Subscriptions: React.FC = () => {
                     <p className="font-black text-xl text-[#C58A4A]">R$ {sub.price.toFixed(2)}</p>
                 {(() => {
                   const plan = (config as any).vipPlans?.find((p: any) => p.id === sub.planId);
-                  if (!plan?.maxCuts) return null;
+                  if (!plan) return null;
+
+                  // Plano com membros individuais
+                  if (plan.members && plan.members.length > 0) {
+                    return (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-[8px] font-black uppercase text-zinc-500">Cortes por Membro</p>
+                        {plan.members.map((member: any) => {
+                          const mc = (sub.memberCuts || []).find((m: any) => m.label === member.label);
+                          const used = mc?.cutsUsed || 0;
+                          const max = member.cuts || 0;
+                          const pct = Math.min((used / max) * 100, 100);
+                          return (
+                            <div key={member.label}>
+                              <div className="flex justify-between text-[9px] font-black uppercase mb-1">
+                                <span className={isDark ? 'text-zinc-400' : 'text-zinc-600'}>{member.label}</span>
+                                <span className={used >= max ? 'text-red-400' : 'text-[#C58A4A]'}>{used}/{max}</span>
+                              </div>
+                              <div className={`w-full h-1.5 rounded-full ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`}>
+                                <div className={`h-full rounded-full transition-all ${used >= max ? 'bg-red-500' : 'bg-[#C58A4A]'}`} style={{width: `${pct}%`}}/>
+                              </div>
+                              {used >= max && <p className="text-[9px] text-red-400 font-black">⛔ {member.label} atingiu o limite</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
+                  // Plano individual simples
+                  if (!plan.maxCuts) return null;
                   const used = sub.cutsThisPeriod || 0;
                   const max = plan.maxCuts;
                   const pct = Math.min((used / max) * 100, 100);
