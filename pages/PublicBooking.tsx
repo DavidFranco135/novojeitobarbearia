@@ -64,6 +64,55 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [bookingPayLink, setBookingPayLink] = useState<string | null>(null);
   const [wantsPayNow, setWantsPayNow] = useState(false);
   const [vipModal, setVipModal] = useState<any>(null);
+  // ── Galeria de fotos de cortes ──────────────────────────────
+  const [galleryLightbox, setGalleryLightbox] = useState<{url:string;desc:string}|null>(null);
+  const [showGalleryUpload, setShowGalleryUpload] = useState(false);
+  const [galleryUploadDesc, setGalleryUploadDesc] = useState('');
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const IMGBB_KEY_GALLERY = 'da736db48f154b9108b23a36d4393848';
+
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGalleryUploading(true);
+    try {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = async () => {
+        const MAX = 1200;
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * ratio; canvas.height = img.height * ratio;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/jpeg', 0.85));
+        const formData = new FormData();
+        formData.append('image', blob, 'photo.jpg');
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY_GALLERY}`, { method: 'POST', body: formData });
+        const json = await res.json();
+        if (!json.success) throw new Error('Falha no upload');
+        const imgUrl = json.data.url;
+        const currentPhotos: {url:string;desc:string}[] = (config as any).cutGallery || [];
+        await updateConfig({ cutGallery: [...currentPhotos, { url: imgUrl, desc: galleryUploadDesc.trim() }] } as any);
+        setGalleryUploadDesc('');
+        setShowGalleryUpload(false);
+        setGalleryUploading(false);
+      };
+      img.onerror = () => { setGalleryUploading(false); alert('Erro ao processar imagem.'); };
+      img.src = url;
+    } catch(err) {
+      alert('Erro ao enviar foto.');
+      setGalleryUploading(false);
+    }
+    e.target.value = '';
+  };
+
+  const handleGalleryDelete = async (idx: number) => {
+    if (!window.confirm('Excluir esta foto da galeria?')) return;
+    const currentPhotos: {url:string;desc:string}[] = (config as any).cutGallery || [];
+    await updateConfig({ cutGallery: currentPhotos.filter((_,i) => i !== idx) } as any);
+    setGalleryLightbox(null);
+  };
   const [vipForm, setVipForm] = useState({ name: '', phone: '', cpf: '' });
   const [vipLoading, setVipLoading] = useState(false);
   const [vipPayLink, setVipPayLink] = useState<string | null>(null);
@@ -215,59 +264,21 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   };
 
   const checkAvailability = (date: string, time: string, profId: string) => {
-    // ── 1. Horário já passou (data ou hora no passado) ────────────────
-    const now = new Date();
-    const [slotH, slotM] = time.split(':').map(Number);
-    const [dateY, dateM, dateD] = date.split('-').map(Number);
-    const slotDateTime = new Date(dateY, dateM - 1, dateD, slotH, slotM, 0);
-    if (slotDateTime <= now) return true; // bloqueia horários passados
-
-    // ── 2. Conflito de horário com sobreposição de duração ───────────
-    const slotStart = slotH * 60 + slotM;
-    const hasConflict = appointments.some(a => {
-      if (a.professionalId !== profId) return false;
-      if (a.date !== date) return false;
-      // Libera horário quando serviço foi concluído/cancelado/não compareceu
-      if (['CANCELADO', 'CONCLUIDO_PAGO', 'NAO_COMPARECEU', 'FIADO'].includes(a.status)) return false;
-      const [aH, aM] = a.startTime.split(':').map(Number);
-      const aStart = aH * 60 + aM;
-      // Duração do agendamento existente
-      const service = services.find((s: any) => s.id === a.serviceId);
-      const dur = service?.durationMinutes || 30;
-      const aEnd = aStart + dur;
-      // Bloqueia se o novo slot cai dentro do intervalo do agendamento existente
-      return slotStart >= aStart && slotStart < aEnd;
-    });
-
-    // ── 3. Horário bloqueado pelo admin ──────────────────────────────
+    // Horário já agendado
+    const hasAppointment = appointments.some(a => a.date === date && a.startTime === time && a.professionalId === profId && a.status !== 'CANCELADO');
+    // Horário bloqueado pelo admin (almoço, reunião, folga parcial etc.)
     const isBlocked = isSlotBlocked ? isSlotBlocked(profId, date, time) : false;
-
-    return hasConflict || isBlocked;
+    return hasAppointment || isBlocked;
   };
 
   const turnos = useMemo(() => {
-    const allTimes = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
-
-    // Filtra horários passados quando a data selecionada é hoje
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const isToday = selecao.date === todayStr;
-
-    const times = isToday
-      ? allTimes.filter(t => {
-          const [h, m] = t.split(':').map(Number);
-          // Adiciona margem de 30 minutos para preparação
-          const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
-          return slotDate > new Date(now.getTime() + 30 * 60 * 1000);
-        })
-      : allTimes;
-
+    const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
     return {
       manha: times.filter(t => parseInt(t.split(':')[0]) < 12),
       tarde: times.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
       noite: times.filter(t => parseInt(t.split(':')[0]) >= 18)
     };
-  }, [selecao.date]);
+  }, []);
 
   const categories = useMemo(() => ['Todos', ...Array.from(new Set(services.map(s => s.category)))], [services]);
   const filteredServices = useMemo(() => selectedCategory === 'Todos' ? services : services.filter(s => s.category === selectedCategory), [services, selectedCategory]);
@@ -429,17 +440,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       alert("Por favor, verifique seu cadastro antes de confirmar.");
       return;
     }
-    // ── Última verificação: horário já passou ou conflito ─────────────
-    const now = new Date();
-    const [slotH2, slotM2] = selecao.time.split(':').map(Number);
-    const [dY, dM, dD] = selecao.date.split('-').map(Number);
-    const slotDT = new Date(dY, dM - 1, dD, slotH2, slotM2, 0);
-    if (slotDT <= now) {
-      setBookingError("Este horário já passou. Por favor, escolha outro horário.");
-      setLoading(false);
-      return;
-    }
-
     if (checkAvailability(selecao.date, selecao.time, selecao.professionalId)) {
       setBookingError("Este horário acabou de ser ocupado. Por favor, escolha outro.");
       return;
@@ -457,34 +457,13 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       const serv = services.find(s => s.id === selecao.serviceId);
       const prof = professionals.find(p => p.id === selecao.professionalId);
       const surcharge = (prof?.isMaster && prof?.masterSurcharge) ? prof.masterSurcharge : 0;
-
-      // ── Verifica assinatura VIP ativa do cliente ─────────────────────────
-      // Se o cliente tem plano ativo, o serviço está incluso — preço = 0
-      const clientSub = (loyaltyCards ? subscriptions : [])?.find?.((s: any) =>
-        s.clientId === client.id && s.status === 'ATIVA'
-      );
-      const activePlan = clientSub
-        ? ((config as any).vipPlans || []).find((p: any) => p.id === clientSub.planId)
-        : null;
-
-      // Verifica se ainda tem cortes disponíveis no período
-      const cutsUsed = clientSub?.cutsThisPeriod || 0;
-      const cutsLimit = activePlan?.maxCuts;
-      const hasVipCutsAvailable = clientSub && (!cutsLimit || cutsUsed < cutsLimit);
-
-      // Se VIP com cortes disponíveis: preço = R$ 0 e não exige pagamento online
-      const finalPrice = hasVipCutsAvailable ? 0 : (serv?.price || 0) + surcharge;
-      const isVipBooking = hasVipCutsAvailable;
-
-      // Se é VIP, nunca redireciona para pagamento online
-      const shouldPayOnline = wantsPayNow && !isVipBooking;
-
+      const finalPrice = (serv?.price || 0) + surcharge;
       const [h, m] = selecao.time.split(':').map(Number);
       const endTime = `${Math.floor((h * 60 + m + (serv?.durationMinutes || 30)) / 60).toString().padStart(2, '0')}:${((h * 60 + m + (serv?.durationMinutes || 30)) % 60).toString().padStart(2, '0')}`;
-      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice, isVipBooking, subscriptionId: clientSub?.id, ...(shouldPayOnline ? { awaitingOnlinePayment: true } : {}) }, true);
+      await addAppointment({ clientId: client.id, clientName: client.name, clientPhone: client.phone, serviceId: selecao.serviceId, serviceName: serv?.name || '', professionalId: selecao.professionalId, professionalName: prof?.name || '', date: selecao.date, startTime: selecao.time, endTime, price: finalPrice, ...(wantsPayNow ? { awaitingOnlinePayment: true } : {}) }, true);
       setSuccess(true);
       // Gera link de pagamento Asaas apenas se cliente escolheu pagar online
-      if (shouldPayOnline) {
+      if (wantsPayNow) {
         try {
           const asaasKey = (config as any).asaasKey || '';
           const asaasEnv = (config as any).asaasEnv || 'sandbox';
@@ -915,6 +894,159 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
              </section>
 
+             {/* ── PLANOS VIP — logo após Destaques ───────────────────── */}
+             {config.vipPlans && config.vipPlans.filter(p => p.status === 'ATIVO').length > 0 && (
+               <section className="mb-16">
+                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                   Planos VIP <Crown size={22} className="text-[#C58A4A]" />
+                   <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
+                 </h2>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan) => (
+                     <div key={plan.id} className={`rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
+                       {!!plan.featured && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
+                       <div className="flex items-center gap-3 mb-6">
+                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
+                           <Crown size={18} className={!!plan.featured ? 'text-black' : 'text-[#C58A4A]'} />
+                         </div>
+                         <div>
+                           <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
+                           {plan.discount && plan.discount > 0 ? <span className="text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full">{plan.discount}% OFF</span> : null}
+                         </div>
+                       </div>
+                       <p className={`text-4xl font-black mb-1 ${!!plan.featured ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                         R$ {plan.price.toFixed(2)}
+                         <span className={`text-sm font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>/{plan.period === 'MENSAL' ? 'mês' : plan.period === 'ANUAL' ? 'ano' : plan.period === 'SEMANAL' ? 'sem' : 'período'}</span>
+                       </p>
+                       {plan.maxCuts && (
+                         <p className="text-[10px] font-black text-[#C58A4A] uppercase tracking-widest mt-1">
+                           ✂️ {plan.maxCuts} cortes incluídos
+                         </p>
+                       )}
+                       <div className="mt-6 space-y-3">
+                         {plan.benefits.map((benefit, bi) => (
+                           <div key={bi} className="flex items-start gap-3">
+                             <CheckCircle2 size={16} className="text-[#C58A4A] shrink-0 mt-0.5" />
+                             <p className={`text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
+                           </div>
+                         ))}
+                       </div>
+                       <button
+                         onClick={() => { setVipModal(plan); setVipForm({ name: loggedClient?.name||'', phone: loggedClient?.phone||'', cpf: (loggedClient as any)?.cpfCnpj||'' }); setVipPayLink(null); setVipError(null); }}
+                         className={`w-full mt-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
+                       >
+                         Quero esse plano
+                       </button>
+                     </div>
+                   ))}
+                 </div>
+               </section>
+             )}
+
+             {/* ── GALERIA DE FOTOS DE CORTES ──────────────────────────── */}
+             {(() => {
+               const cutGallery: {url:string;desc:string}[] = (config as any).cutGallery || [];
+               const isAdmin = user?.role === 'ADMIN';
+               if (cutGallery.length === 0 && !isAdmin) return null;
+               return (
+                 <section className="mb-16">
+                   <div className="flex items-center justify-between mb-8">
+                     <h2 className={`text-2xl font-black font-display italic flex items-center gap-4 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                       📸 Galeria de Cortes
+                       <div className="h-1 flex-1 gradiente-ouro opacity-10 min-w-[40px]"></div>
+                     </h2>
+                     {isAdmin && (
+                       <button
+                         onClick={() => setShowGalleryUpload(v => !v)}
+                         className="flex items-center gap-2 gradiente-ouro text-black px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
+                       >
+                         + Adicionar Foto
+                       </button>
+                     )}
+                   </div>
+
+                   {/* Upload form — admin only */}
+                   {isAdmin && showGalleryUpload && (
+                     <div className={`mb-6 p-6 rounded-2xl border animate-in slide-in-from-top-2 space-y-4 ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
+                       <p className="text-[10px] font-black uppercase tracking-widest text-[#C58A4A]">Nova foto de corte</p>
+                       <input
+                         type="text"
+                         placeholder="Descrição do corte (ex: Degradê com barba delineada)"
+                         value={galleryUploadDesc}
+                         onChange={e => setGalleryUploadDesc(e.target.value)}
+                         className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-white/5 border-white/10 text-white'}`}
+                       />
+                       <label className={`flex items-center justify-center gap-3 w-full py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all font-black text-[10px] uppercase tracking-widest ${galleryUploading ? 'opacity-60 pointer-events-none border-zinc-600 text-zinc-500' : 'border-[#C58A4A]/40 text-[#C58A4A] hover:border-[#C58A4A] hover:bg-[#C58A4A]/5'}`}>
+                         {galleryUploading ? '⟳ Enviando...' : '📷 Escolher foto do dispositivo'}
+                         <input type="file" accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={galleryUploading} />
+                       </label>
+                       <button onClick={() => setShowGalleryUpload(false)} className={`text-[9px] font-black text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest`}>Cancelar</button>
+                     </div>
+                   )}
+
+                   {/* Photo grid */}
+                   {cutGallery.length === 0 ? (
+                     <div className={`text-center py-14 rounded-3xl border-2 border-dashed ${theme === 'light' ? 'border-zinc-200 text-zinc-400' : 'border-white/10 text-zinc-600'}`}>
+                       <p className="text-4xl mb-3">📸</p>
+                       <p className="font-black uppercase text-[10px] tracking-widest">Nenhuma foto cadastrada ainda</p>
+                     </div>
+                   ) : (
+                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                       {cutGallery.map((photo, idx) => (
+                         <div
+                           key={idx}
+                           className="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-lg"
+                           onClick={() => setGalleryLightbox(photo)}
+                         >
+                           <img src={photo.url} alt={photo.desc || `Corte ${idx+1}`} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500" />
+                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all flex items-end p-3">
+                             {photo.desc && <p className="text-white text-[10px] font-bold leading-tight line-clamp-2">{photo.desc}</p>}
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+                 </section>
+               );
+             })()}
+
+             {/* Lightbox galeria */}
+             {galleryLightbox && (
+               <div
+                 className="fixed inset-0 z-[500] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 animate-in fade-in"
+                 onClick={() => setGalleryLightbox(null)}
+               >
+                 <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+                   <img src={galleryLightbox.url} alt={galleryLightbox.desc} className="w-full rounded-3xl object-contain max-h-[70vh] shadow-2xl" />
+                   {galleryLightbox.desc && (
+                     <div className="mt-4 px-2">
+                       <p className="text-white font-black text-lg font-display italic">{galleryLightbox.desc}</p>
+                     </div>
+                   )}
+                   <div className="flex gap-3 mt-4">
+                     {user?.role === 'ADMIN' && (
+                       <button
+                         onClick={() => {
+                           const photos: {url:string;desc:string}[] = (config as any).cutGallery || [];
+                           const idx = photos.findIndex(p => p.url === galleryLightbox.url);
+                           if (idx > -1) handleGalleryDelete(idx);
+                         }}
+                         className="flex-1 py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-black text-[10px] uppercase tracking-widest hover:bg-red-500/30 transition-all"
+                       >
+                         🗑 Excluir
+                       </button>
+                     )}
+                     <button
+                       onClick={() => setGalleryLightbox(null)}
+                       className="flex-1 py-3 rounded-2xl bg-white/5 border border-white/10 text-zinc-300 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all"
+                     >
+                       Fechar
+                     </button>
+                   </div>
+                 </div>
+               </div>
+             )}
+
              {/* 2. Nossos Rituais */}
              <section className="mb-6" id="catalogo">
                 <AccordionHeader sectionKey="servicos" label="Todos os Serviços" icon={<Scissors size={18}/>} />
@@ -1276,55 +1408,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 )}
              </section>
 
-             {/* 6. Planos VIP */}
-             {config.vipPlans && config.vipPlans.filter(p => p.status === 'ATIVO').length > 0 && (
-               <section className="mb-6">
-                 <AccordionHeader sectionKey="planos" label="Planos VIP" icon={<Crown size={18}/>} />
-                 {openSections.has('planos') && (
-                 <div className="mt-3 px-2 pb-6 animate-in slide-in-from-top-2">
-                 <h2 className={`text-2xl font-black font-display italic mb-10 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                   Planos VIP <Crown size={24} className="text-[#C58A4A]" /> <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
-                 </h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan) => (
-                     <div key={plan.id} className={`rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
-                       {!!plan.featured && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
-                       <div className="flex items-center gap-3 mb-6">
-                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
-                           <Crown size={18} className={!!plan.featured ? 'text-black' : 'text-[#C58A4A]'} />
-                         </div>
-                         <div>
-                           <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
-                           {plan.discount && plan.discount > 0 ? <span className="text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full">{plan.discount}% OFF</span> : null}
-                         </div>
-                       </div>
-                       <p className={`text-4xl font-black mb-1 ${!!plan.featured ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
-                         R$ {plan.price.toFixed(2)}
-                         <span className={`text-sm font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>/{plan.period === 'MENSAL' ? 'mês' : 'ano'}</span>
-                       </p>
-                       <div className="mt-6 space-y-3">
-                         {plan.benefits.map((benefit, bi) => (
-                           <div key={bi} className="flex items-start gap-3">
-                             <CheckCircle2 size={16} className="text-[#C58A4A] shrink-0 mt-0.5" />
-                             <p className={`text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
-                           </div>
-                         ))}
-                       </div>
-                       <button
-                         onClick={() => { setVipModal(plan); setVipForm({ name: loggedClient?.name||'', phone: loggedClient?.phone||'', cpf: (loggedClient as any)?.cpfCnpj||'' }); setVipPayLink(null); setVipError(null); }}
-                         className={`w-full mt-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
-                       >
-                         Quero esse plano
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-                 </div>
-                 )}
-               </section>
-             )}
+             {/* Planos VIP movidos para após Destaques */}
 
-             {/* 7. Programa de Fidelidade */}
+                          {/* 7. Programa de Fidelidade */}
              {((config as any).stampsForFreeCut || (config as any).cashbackPercent) && (
                <section className="mb-6">
                  <AccordionHeader sectionKey="fidelidade" label="Programa de Fidelidade" icon={<Star size={18}/>} />
@@ -2024,7 +2110,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           </div>
                           <div>
                              <p className={`text-lg font-black italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.serviceName}</p>
-                             <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>{new Date(app.date + 'T12:00:00').toLocaleDateString('pt-BR')} • {app.startTime} com {app.professionalName}</p>
+                             <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-500'}`}>{new Date(app.date).toLocaleDateString('pt-BR')} • {app.startTime} com {app.professionalName}</p>
                           </div>
                        </div>
                        <div className={`px-4 py-2 rounded-full text-[8px] font-black uppercase ${app.status === 'CONCLUIDO_PAGO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-400'}`}>
@@ -2154,22 +2240,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                 const selServ     = services.find(s => s.id === selecao.serviceId);
 
                 const ProfBtn: React.FC<{ p: typeof professionals[0] }> = ({ p }) => {
-                  // Verifica se o cliente logado tem plano VIP ativo com cortes disponíveis
-                  const clientSubLocal = loggedClient
-                    ? (subscriptions || []).find((s: any) => s.clientId === loggedClient.id && s.status === 'ATIVA')
+                  const finalPrice = selServ
+                    ? (selServ.price + (p.isMaster && p.masterSurcharge ? p.masterSurcharge : 0))
                     : null;
-                  const activePlanLocal = clientSubLocal
-                    ? ((config as any).vipPlans || []).find((pl: any) => pl.id === clientSubLocal.planId)
-                    : null;
-                  const cutsUsedLocal = clientSubLocal?.cutsThisPeriod || 0;
-                  const cutsLimitLocal = activePlanLocal?.maxCuts;
-                  const isVipClient = clientSubLocal && (!cutsLimitLocal || cutsUsedLocal < cutsLimitLocal);
-
-                  const finalPrice = isVipClient
-                    ? 0
-                    : selServ
-                      ? (selServ.price + (p.isMaster && p.masterSurcharge ? p.masterSurcharge : 0))
-                      : null;
                   return (
                     <button
                       onClick={() => { setSelecao({ ...selecao, professionalId: p.id }); setPasso(3); }}
@@ -2221,19 +2294,13 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                           )}
                         </div>
 
-                        {/* Preço final com acréscimo Master / VIP grátis */}
+                        {/* Preço final com acréscimo Master */}
                         {finalPrice !== null && (
                           <div className="space-y-0.5">
-                            {isVipClient ? (
-                              <p className="text-[10px] font-black text-emerald-400">
-                                👑 Incluído no plano
-                              </p>
-                            ) : (
                             <p className={`text-[10px] font-black ${p.isMaster ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
                               R$ {finalPrice.toFixed(2)}
                             </p>
-                            )}
-                            {!isVipClient && p.isMaster && p.masterSurcharge && p.masterSurcharge > 0 && (
+                            {p.isMaster && p.masterSurcharge && p.masterSurcharge > 0 && (
                               <p className={`text-[8px] font-bold ${theme === 'light' ? 'text-[#8B5E2A]' : 'text-[#C58A4A]/70'}`}>
                                 + R$ {p.masterSurcharge.toFixed(2)} Master
                               </p>
@@ -2288,7 +2355,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x">
                      {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => {
                        const d = new Date();
-                       // i=0 é hoje — nunca mostra datas passadas
                        d.setDate(d.getDate() + i);
                        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                        const selProf = professionals.find((p: any) => p.id === selecao.professionalId);
