@@ -9,6 +9,7 @@ import { db } from './firebase';
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -346,7 +347,15 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   const login = async (id: string, pass: string) => {
-    const adminPass = (config as any).adminPassword || '654326';
+    // Se config ainda não carregou a senha, busca direto do Firestore
+    let adminPass = (config as any).adminPassword;
+    if (!adminPass) {
+      try {
+        const snap = await getDoc(doc(db, COLLECTIONS.CONFIG, 'main'));
+        if (snap.exists()) adminPass = snap.data().adminPassword;
+      } catch {}
+    }
+    adminPass = adminPass || '654326';
     if (id === 'novojeitoadm@gmail.com' && pass === adminPass) {
       const adminName = config.adminName || 'Novo Jeito';
       const adminAvatar = config.logo || 'https://i.pravatar.cc/150';
