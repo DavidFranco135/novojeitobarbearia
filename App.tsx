@@ -22,7 +22,7 @@ import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { user, config, theme, login, toggleTheme, addClient, clients, logout, changePassword } = useBarberStore() as any;
+  const { user, config, theme, login, toggleTheme, addClient, clients, logout, changePassword, loading: storeLoading } = useBarberStore() as any;
   // Sempre começa no dashboard — o index.html já limpa #dashboard antes do React carregar
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -188,6 +188,17 @@ const App: React.FC = () => {
 
   // Se não houver usuário logado e NÃO estiver na visão pública, mostra a tela de login (acesso ADM/Login Geral)
   if (!user && !isPublicView) {
+    // Aguarda config carregar do Firestore antes de mostrar o login
+    if (storeLoading) {
+      return (
+        <div className={`min-h-screen flex items-center justify-center ${theme === 'light' ? 'bg-[#F8F9FA]' : 'bg-[#050505]'}`}>
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 rounded-full border-4 border-[#C58A4A] border-t-transparent animate-spin"/>
+            <p className="text-[#C58A4A] font-black text-[10px] uppercase tracking-widest">Carregando...</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className={`min-h-screen flex items-center justify-center p-6 selection:bg-[#C58A4A]/30 relative overflow-hidden transition-all duration-500 ${theme === 'light' ? 'bg-[#F8F9FA] text-[#1A1A1A]' : 'bg-[#050505] text-[#f3f4f6]'}`}>
         <div className="absolute inset-0 z-0">
