@@ -105,12 +105,12 @@ export interface Appointment {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'AGENDADO' | 'CONCLUIDO_PAGO' | 'PENDENTE_PAGAMENTO' | 'REAGENDADO' | 'CANCELADO' | 'PENDENTE' | 'FIADO';
+  status: 'AGENDADO' | 'CONCLUIDO_PAGO' | 'PENDENTE_PAGAMENTO' | 'REAGENDADO' | 'CANCELADO' | 'PENDENTE';
   price: number;
   // ── Adicionais e Asaas ─────────────────────────────────
   additionals?: AppointmentAdditional[];
   totalPrice?: number;
-  paymentMethod?: 'PIX' | 'CARTAO' | 'DINHEIRO' | 'LINK' | 'DEBITO' | 'CREDITO' | 'FIADO';
+  paymentMethod?: 'PIX' | 'CARTAO' | 'DINHEIRO' | 'LINK';
   asaasPaymentId?: string;
   awaitingOnlinePayment?: boolean;
   asaasPaymentLink?: string;
@@ -146,6 +146,11 @@ export interface Notification {
   clientPhone?: string;
 }
 
+export interface PlanMember {
+  label: string;   // ex: 'Pai', 'Filho', 'Titular'
+  cuts: number;    // cortes incluídos para este membro
+}
+
 export interface VipPlan {
   id: string;
   name: string;
@@ -156,8 +161,9 @@ export interface VipPlan {
   discount?: number;
   featured?: boolean;
   status: 'ATIVO' | 'INATIVO';
-  maxCuts?: number;           // Limite de cortes por período (ex: 4)
+  maxCuts?: number;           // Total de cortes (soma de todos os membros)
   vipCommissionPct?: number;  // % de comissão do barbeiro sobre (price/maxCuts)
+  members?: PlanMember[];     // Membros com cotas individuais (ex: Pai 4 + Filho 4)
 }
 
 export interface ShopConfig {
@@ -222,6 +228,11 @@ export interface SubscriptionPayment {
   status: 'PAGO' | 'PENDENTE' | 'FALHOU';
 }
 
+export interface SubscriptionMemberCuts {
+  label: string;   // mesmo label do PlanMember
+  cutsUsed: number;
+}
+
 export interface Subscription {
   id: string;
   clientId: string;
@@ -234,8 +245,10 @@ export interface Subscription {
   status: 'ATIVA' | 'VENCIDA' | 'CANCELADA' | 'PAUSADA';
   usageCount: number;
   usageLimit?: number;
-  cutsThisPeriod?: number;    // Cortes realizados no período atual
-  periodStartDate?: string;   // Início do período vigente
+  cutsThisPeriod?: number;        // Cortes totais realizados no período
+  memberCuts?: SubscriptionMemberCuts[]; // Cortes por membro (ex: [{label:'Pai',cutsUsed:2}])
+  activeMember?: string;          // Membro selecionado para o próximo agendamento
+  periodStartDate?: string;
   paymentHistory: SubscriptionPayment[];
   createdAt: string;
 }
