@@ -593,9 +593,19 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       });
     }
 
-    // ── WhatsApp: enviado pela Cloud Function onAppointmentCreated ──────
-    // Não enviar aqui para evitar mensagem duplicada.
-    // A Cloud Function dispara automaticamente para qualquer agendamento criado.
+    // ── WhatsApp: confirmação de agendamento ──────────────────
+    try {
+      await wppNovoAgendamento(
+        data.clientPhone,
+        data.clientName,
+        data.serviceName,
+        data.date,
+        data.startTime,
+        data.professionalName
+      );
+    } catch (e) {
+      console.warn('WhatsApp confirmação falhou (não crítico):', e);
+    }
   };
 
   // ── LISTA NEGRA: marca cliente como não compareceu ────────
@@ -740,47 +750,57 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         }
       }
 
-      // Cashback + Selos
-      const cashbackPct = (config as any).cashbackPercent ?? 5;
-      const stampsLimit = (config as any).stampsForFreeCut ?? 10;
-      const cashbackValue = parseFloat(((appointment.price * cashbackPct) / 100).toFixed(2));
+      // ── Verifica se cliente tem assinatura VIP ativa ─────────────────
+      const activeSubForLoyalty = subscriptions.find((s: any) =>
+        s.clientId === appointment.clientId && s.status === 'ATIVA'
+      );
+      const isVipClient = !!activeSubForLoyalty;
 
-      const loyaltySnapshot = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
-      const cardDoc = loyaltySnapshot.docs.find(d => d.data().clientId === appointment.clientId);
+      // Clientes VIP NÃO acumulam selos, corte grátis ou benefício de parceiro
+      // Apenas ganham cashback por indicações (tratado em validateReferral)
+      if (!isVipClient) {
+        // Cashback + Selos — apenas para clientes não VIP
+        const cashbackPct = (config as any).cashbackPercent ?? 5;
+        const stampsLimit = (config as any).stampsForFreeCut ?? 10;
+        const cashbackValue = parseFloat(((appointment.price * cashbackPct) / 100).toFixed(2));
 
-      if (cardDoc) {
-        const card = cardDoc.data();
-        const newStamps = (card.stamps || 0) + 1;
-        const cycled = newStamps >= stampsLimit;
-        await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
-          stamps: cycled ? newStamps - stampsLimit : newStamps,
-          totalStamps: (card.totalStamps || 0) + 1,
-          credits: parseFloat(((card.credits || 0) + cashbackValue).toFixed(2)),
-          freeCutsPending: cycled ? (card.freeCutsPending || 0) + 1 : (card.freeCutsPending || 0),
-          freeCutsEarned: cycled ? (card.freeCutsEarned || 0) + 1 : (card.freeCutsEarned || 0),
-          updatedAt: new Date().toISOString(),
-        });
-      }
+        const loyaltySnapshot = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
+        const cardDoc = loyaltySnapshot.docs.find(d => d.data().clientId === appointment.clientId);
 
-      // ── NOVO: Gera 1 benefício parceiro para o cliente ──────
-      const benefitsSnap = await getDocs(collection(db, COLLECTIONS.CLIENT_BENEFITS));
-      const existingBenefit = benefitsSnap.docs.find(d => d.data().appointmentId === id);
+        if (cardDoc) {
+          const card = cardDoc.data();
+          const newStamps = (card.stamps || 0) + 1;
+          const cycled = newStamps >= stampsLimit;
+          await updateDoc(doc(db, COLLECTIONS.LOYALTY_CARDS, cardDoc.id), {
+            stamps: cycled ? newStamps - stampsLimit : newStamps,
+            totalStamps: (card.totalStamps || 0) + 1,
+            credits: parseFloat(((card.credits || 0) + cashbackValue).toFixed(2)),
+            freeCutsPending: cycled ? (card.freeCutsPending || 0) + 1 : (card.freeCutsPending || 0),
+            freeCutsEarned: cycled ? (card.freeCutsEarned || 0) + 1 : (card.freeCutsEarned || 0),
+            updatedAt: new Date().toISOString(),
+          });
+        }
 
-      if (!existingBenefit) {
-        const validityDays = (config as any).benefitValidityDays ?? 7;
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + validityDays);
+        // Benefício de parceiro — apenas para clientes não VIP
+        const benefitsSnap = await getDocs(collection(db, COLLECTIONS.CLIENT_BENEFITS));
+        const existingBenefit = benefitsSnap.docs.find(d => d.data().appointmentId === id);
 
-        await addDoc(collection(db, COLLECTIONS.CLIENT_BENEFITS), {
-          clientId: appointment.clientId,
-          clientName: appointment.clientName,
-          clientPhone: appointment.clientPhone,
-          appointmentId: id,
-          status: 'DISPONIVEL',
-          expiryDate: expiryDate.toISOString(),
-          createdAt: new Date().toISOString(),
-        });
-      }
+        if (!existingBenefit) {
+          const validityDays = (config as any).benefitValidityDays ?? 7;
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + validityDays);
+
+          await addDoc(collection(db, COLLECTIONS.CLIENT_BENEFITS), {
+            clientId: appointment.clientId,
+            clientName: appointment.clientName,
+            clientPhone: appointment.clientPhone,
+            appointmentId: id,
+            status: 'DISPONIVEL',
+            expiryDate: expiryDate.toISOString(),
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } // fim !isVipClient
 
       // ── Comissão VIP: detecta assinatura ativa do cliente ──────────────────
       const clientSub = subscriptions.find(s =>
