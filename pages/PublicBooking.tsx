@@ -1092,8 +1092,20 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
           </header>
 
           <main className="max-w-6xl mx-auto w-full px-6 flex-1 -mt-10 relative z-30 pb-40">
+             {/* ── CTA Principal — Agendar ── */}
+             <section className="pt-10 mb-10">
+               <button
+                 onClick={() => { setView('BOOKING'); setPasso(1); }}
+                 onTouchEnd={e => { e.preventDefault(); setView('BOOKING'); setPasso(1); }}
+                 className="w-full gradiente-ouro text-black py-5 rounded-[2rem] font-black text-base uppercase tracking-widest shadow-2xl shadow-[#C58A4A]/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                 ✂️ Agendar meu horário
+               </button>
+             </section>
+
              {/* 1. Destaques da Casa */}
-             <section className="mb-20 pt-10">
+             <section className="mb-20">
                 <h2 className={`text-2xl font-black font-display italic mb-8 flex items-center gap-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Destaques da Casa <div className="h-1 flex-1 gradiente-ouro opacity-10"></div></h2>
                 <div className="relative group">
                   <button 
@@ -1969,13 +1981,15 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
           )}
 
           {/* ── Botão Flutuante: Agendar Agora ── */}
-          <div className="fixed bottom-4 right-4 z-[90] animate-in slide-in-from-bottom-4 duration-700">
+          <div className="fixed bottom-6 left-0 right-0 z-[90] flex justify-center px-6 pointer-events-none animate-in slide-in-from-bottom-4 duration-700">
             <button
               onClick={() => { setView('BOOKING'); setPasso(1); }}
-              className="flex items-center gap-1.5 gradiente-ouro text-black px-3 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#C58A4A]/30 hover:scale-105 active:scale-95 transition-all"
+              onTouchEnd={e => { e.preventDefault(); setView('BOOKING'); setPasso(1); }}
+              className="pointer-events-auto flex items-center justify-center gap-3 gradiente-ouro text-black px-10 py-4 rounded-full font-black text-sm uppercase tracking-widest shadow-2xl shadow-[#C58A4A]/40 hover:scale-105 active:scale-95 transition-all"
+              style={{minWidth: '220px'}}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              Agendar
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              ✂️ Agendar Horário
             </button>
           </div>
 
