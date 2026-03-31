@@ -901,9 +901,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                    Planos VIP <Crown size={22} className="text-[#C58A4A]" />
                    <div className="h-1 flex-1 gradiente-ouro opacity-10"></div>
                  </h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div className="flex gap-5 overflow-x-auto pb-4 snap-x scrollbar-hide" style={{WebkitOverflowScrolling:'touch'}}>
                    {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan) => (
-                     <div key={plan.id} className={`rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
+                     <div key={plan.id} className={`snap-center flex-shrink-0 w-72 rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
                        {!!plan.featured && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
                        <div className="flex items-center gap-3 mb-6">
                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
