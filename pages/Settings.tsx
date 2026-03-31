@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Save, Store, Upload, ImageIcon, User as UserIcon, Trash2, Plus,
+  Save, Store, Upload, ImageIcon, User as UserIcon, Trash2, Plus, Camera,
   MapPin, RotateCcw, Crown, X, Star, Image, Phone, Instagram,
   Clock, Link, Edit3
 } from 'lucide-react';
@@ -304,6 +304,83 @@ const Settings: React.FC = () => {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* 5b. Galeria de Cortes */}
+          <div className={card}>
+            <div className="flex items-center justify-between">
+              <h3 className={h3}><Camera size={22} className="text-[#C58A4A]" /> Galeria — Fotos de Cortes</h3>
+            </div>
+            <p className={`text-[10px] font-bold mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Fotos de cortes realizados exibidas na página pública. Clientes podem ampliar e ver a descrição.
+            </p>
+
+            {/* Upload de nova foto */}
+            <div className={`mt-6 p-5 rounded-2xl border space-y-4 ${isDark ? 'bg-white/3 border-white/5' : 'bg-zinc-50 border-zinc-200'}`}>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Adicionar nova foto</p>
+              <input
+                type="text"
+                placeholder="Descrição do corte (ex: Degradê com barba delineada)"
+                value={(formData as any).newCutPhotoDesc || ''}
+                onChange={e => setFormData({ ...formData, newCutPhotoDesc: e.target.value } as any)}
+                className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600' : 'bg-white border-zinc-300 text-zinc-900 placeholder:text-zinc-400'}`}
+              />
+              <label className={`flex items-center justify-center gap-2 w-full py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all font-black text-[10px] uppercase tracking-widest ${loading ? 'opacity-50 pointer-events-none border-zinc-600 text-zinc-500' : 'border-[#C58A4A]/40 text-[#C58A4A] hover:border-[#C58A4A] hover:bg-[#C58A4A]/5'}`}>
+                <Plus size={14} /> {loading ? 'Enviando...' : 'Escolher foto do dispositivo'}
+                <input type="file" accept="image/*" className="hidden" disabled={loading} onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const desc = (formData as any).newCutPhotoDesc || '';
+                  const imgData = new FormData();
+                  imgData.append('image', file);
+                  try {
+                    const res = await fetch(`https://api.imgbb.com/1/upload?key=da736db48f154b9108b23a36d4393848`, { method: 'POST', body: imgData });
+                    const json = await res.json();
+                    if (!json.success) throw new Error('Falha');
+                    const url = json.data.url;
+                    const current: {url:string;desc:string}[] = (formData as any).cutGallery || [];
+                    const updated = [...current, { url, desc }];
+                    setFormData(prev => ({ ...prev, cutGallery: updated, newCutPhotoDesc: '' } as any));
+                    await updateConfig({ cutGallery: updated } as any);
+                  } catch { alert('Erro ao enviar foto.'); }
+                  e.target.value = '';
+                }} />
+              </label>
+            </div>
+
+            {/* Grid de fotos */}
+            {(!((formData as any).cutGallery) || ((formData as any).cutGallery || []).length === 0) ? (
+              <div className={`rounded-2xl p-10 text-center border-2 border-dashed mt-4 ${isDark ? 'border-white/10 text-zinc-600' : 'border-zinc-300 text-zinc-400'}`}>
+                <p className="text-3xl mb-3">📸</p>
+                <p className="text-[10px] font-black uppercase tracking-widest">Nenhuma foto de corte ainda.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                {((formData as any).cutGallery || []).map((photo: {url:string;desc:string}, i: number) => (
+                  <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden">
+                    <img src={photo.url} className="w-full h-full object-cover" alt={photo.desc || `Corte ${i+1}`} />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm('Excluir esta foto?')) return;
+                        const current: {url:string;desc:string}[] = (formData as any).cutGallery || [];
+                        const updated = current.filter((_,idx) => idx !== i);
+                        setFormData(prev => ({ ...prev, cutGallery: updated } as any));
+                        await updateConfig({ cutGallery: updated } as any);
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-700 shadow-lg"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    {photo.desc && (
+                      <div className={`absolute bottom-0 inset-x-0 p-2 opacity-0 group-hover:opacity-100 transition-all ${isDark ? 'bg-black/70' : 'bg-white/80'}`}>
+                        <p className={`text-[9px] font-bold line-clamp-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{photo.desc}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 6. Programa de Fidelidade */}
