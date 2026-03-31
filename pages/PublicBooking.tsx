@@ -2130,8 +2130,22 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
            {/* ── Botão Agendar — destaque dentro do portal ── */}
            <button
-             onClick={() => { setView('BOOKING'); setPasso(1); }}
-             onTouchEnd={e => { e.preventDefault(); setView('BOOKING'); setPasso(1); }}
+             onClick={() => {
+               // Cliente já logado — pula verificação e vai direto para escolher serviço
+               if (loggedClient) {
+                 setSelecao(prev => ({ ...prev, clientName: loggedClient.name, clientPhone: loggedClient.phone, clientEmail: loggedClient.email || '' }));
+                 setClientVerified(true);
+                 setView('BOOKING'); setPasso(1);
+               }
+             }}
+             onTouchEnd={e => {
+               e.preventDefault();
+               if (loggedClient) {
+                 setSelecao(prev => ({ ...prev, clientName: loggedClient.name, clientPhone: loggedClient.phone, clientEmail: loggedClient.email || '' }));
+                 setClientVerified(true);
+                 setView('BOOKING'); setPasso(1);
+               }
+             }}
              className="w-full gradiente-ouro text-black py-5 rounded-[2rem] font-black text-base uppercase tracking-widest shadow-2xl shadow-[#C58A4A]/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mb-8"
            >
              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -2382,7 +2396,10 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
            </header>
            
            <div className={`rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 md:p-12 shadow-2xl flex flex-col gap-10 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-[#C58A4A]/10'}`}>
-              {passo === 1 && (
+              {passo === 1 && (() => {
+                // Se já está verificado (veio do portal do cliente), pula direto para passo 2
+                if (clientVerified) { setTimeout(() => setPasso(2), 0); return null; }
+                return (
                 <div className="space-y-8 animate-in slide-in-from-right-2 text-center">
                   <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Você Tem Cadastro?</h3>
                   <div className="flex flex-col sm:flex-row gap-4 max-w-sm mx-auto w-full">
@@ -2390,7 +2407,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                     <button onClick={() => setShowQuickClient(true)} className={`flex-1 border py-6 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 hover:bg-white' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>NÃO, CRIAR CONTA</button>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {passo === 2 && (() => {
                 const masterList  = professionals.filter(p => p.isMaster);
