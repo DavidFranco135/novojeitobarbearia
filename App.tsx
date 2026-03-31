@@ -22,7 +22,7 @@ import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { user, config, theme, login, toggleTheme, addClient, clients, logout, changePassword, loading: storeLoading } = useBarberStore() as any;
+  const { user, config, theme, login, toggleTheme, addClient, clients, logout, changePassword } = useBarberStore() as any;
   // Sempre começa no dashboard — o index.html já limpa #dashboard antes do React carregar
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -39,23 +39,7 @@ const App: React.FC = () => {
   }, [activeTab, user]);
   // Sempre começa na página pública — o admin acessa pelo botão de cadeado
   // Isso evita tela preta quando o PWA é salvo com #dashboard na URL
-  const [isPublicView, setIsPublicView] = useState(() => {
-    try {
-      // Se tem sessão admin ativa, não mostra página pública
-      const adminSession = localStorage.getItem('nj_admin_session');
-      if (adminSession === 'true') return false;
-      return true;
-    } catch { return true; }
-  });
-
-  // Salva estado da view no localStorage
-  const handleSetPublicView = (val: boolean) => {
-    try {
-      if (!val) localStorage.setItem('nj_admin_session', 'true');
-      else localStorage.removeItem('nj_admin_session');
-    } catch {}
-    setIsPublicView(val);
-  };
+  const [isPublicView, setIsPublicView] = useState(true);
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   // ── Esqueci senha ADM ──────────────────────────────────────
@@ -145,15 +129,8 @@ const App: React.FC = () => {
   // CORREÇÃO: Função para ir para visão do cliente (faz logout e vai para público)
   const handleGoToClientView = () => {
     logout();
-    handleSetPublicView(true);
+    setIsPublicView(true);
   };
-
-  // Limpa sessão admin quando user vai a null (logout pelo menu lateral)
-  React.useEffect(() => {
-    if (!user) {
-      try { localStorage.removeItem('nj_admin_session'); } catch {}
-    }
-  }, [user]);
 
   // Se o usuário logado for um CLIENTE, ele deve ver apenas o Portal do Membro
   if (user && user.role === 'CLIENTE') {
@@ -177,7 +154,7 @@ const App: React.FC = () => {
           <button onClick={toggleTheme} className={`p-4 rounded-2xl border shadow-2xl transition-all ${theme === 'light' ? 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900' : 'bg-[#66360f] text-black border-transparent'}`}>
             {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
           </button>
-          <button onClick={() => handleSetPublicView(false)} className={`p-4 rounded-2xl border shadow-2xl transition-all ${theme === 'light' ? 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'}`}>
+          <button onClick={() => setIsPublicView(false)} className={`p-4 rounded-2xl border shadow-2xl transition-all ${theme === 'light' ? 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'}`}>
             <LogOut size={24} />
           </button>
         </div>
@@ -188,17 +165,6 @@ const App: React.FC = () => {
 
   // Se não houver usuário logado e NÃO estiver na visão pública, mostra a tela de login (acesso ADM/Login Geral)
   if (!user && !isPublicView) {
-    // Aguarda config carregar do Firestore antes de mostrar o login
-    if (storeLoading) {
-      return (
-        <div className={`min-h-screen flex items-center justify-center ${theme === 'light' ? 'bg-[#F8F9FA]' : 'bg-[#050505]'}`}>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 rounded-full border-4 border-[#C58A4A] border-t-transparent animate-spin"/>
-            <p className="text-[#C58A4A] font-black text-[10px] uppercase tracking-widest">Carregando...</p>
-          </div>
-        </div>
-      );
-    }
     return (
       <div className={`min-h-screen flex items-center justify-center p-6 selection:bg-[#C58A4A]/30 relative overflow-hidden transition-all duration-500 ${theme === 'light' ? 'bg-[#F8F9FA] text-[#1A1A1A]' : 'bg-[#050505] text-[#f3f4f6]'}`}>
         <div className="absolute inset-0 z-0">
@@ -256,7 +222,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          <button onClick={() => handleSetPublicView(true)} className={`w-full text-[10px] font-black uppercase tracking-[0.3em] transition-all ${theme === 'light' ? 'text-zinc-600 hover:text-blue-600' : 'opacity-40 hover:opacity-100 hover:text-[#C58A4A]'}`}>Visualizar Site (Site Público)</button>
+          <button onClick={() => setIsPublicView(true)} className={`w-full text-[10px] font-black uppercase tracking-[0.3em] transition-all ${theme === 'light' ? 'text-zinc-600 hover:text-blue-600' : 'opacity-40 hover:opacity-100 hover:text-[#C58A4A]'}`}>Visualizar Site (Site Público)</button>
 
       {/* ── MODAL ESQUECI SENHA ADM ── */}
       {showForgotAdm && (
