@@ -23,7 +23,7 @@ const Settings: React.FC = () => {
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<VipPlan | null>(null);
   const [newPlan, setNewPlan] = useState<Partial<VipPlan>>({
-    name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', maxCuts: 4, vipCommissionPct: 50
+    name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', maxCuts: 4, vipCommissionPct: 50, members: []
   });
 
   const IMGBB_API_KEY = 'da736db48f154b9108b23a36d4393848';
@@ -99,7 +99,11 @@ const Settings: React.FC = () => {
       discount: newPlan.discount ?? 0,
       featured: newPlan.featured ?? false,
       status: newPlan.status!,
-      maxCuts: newPlan.maxCuts ?? 4,
+      members: (newPlan as any).members || [],
+      // maxCuts = soma dos cortes de todos os membros (ou valor manual se sem membros)
+      maxCuts: ((newPlan as any).members && (newPlan as any).members.length > 0)
+        ? (newPlan as any).members.reduce((s: number, m: any) => s + (m.cuts || 0), 0)
+        : (newPlan.maxCuts ?? 4),
       vipCommissionPct: newPlan.vipCommissionPct ?? 50
     };
     const current = formData.vipPlans || [];
@@ -109,7 +113,7 @@ const Settings: React.FC = () => {
     }));
     setShowVipPlanModal(false);
     setEditingPlan(null);
-    setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30, featured: false, maxCuts: 4, vipCommissionPct: 50 });
+    setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', customDays: 30, featured: false, maxCuts: 4, vipCommissionPct: 50, members: [] });
   };
 
   const handleEditPlan   = (plan: VipPlan) => { setEditingPlan(plan); setNewPlan(plan); setShowVipPlanModal(true); };
@@ -732,15 +736,67 @@ const Settings: React.FC = () => {
                     onChange={e => setNewPlan({ ...newPlan, discount: parseInt(e.target.value) || 0 })} className={inp} />
                 </div>
               </div>
+              {/* ── Membros do Plano ──────────────────────────────── */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className={lbl}>👥 Membros do Plano</label>
+                  <button type="button"
+                    onClick={() => setNewPlan({ ...newPlan, members: [...((newPlan as any).members || []), { label: '', cuts: 4 }] } as any)}
+                    className="text-[9px] font-black text-[#C58A4A] hover:underline uppercase tracking-widest"
+                  >+ Adicionar Membro</button>
+                </div>
+                {((newPlan as any).members || []).length === 0 ? (
+                  <div className={`p-4 rounded-xl border-2 border-dashed text-center ${isDark ? 'border-white/10 text-zinc-600' : 'border-zinc-200 text-zinc-400'}`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest">Plano individual</p>
+                    <p className="text-[9px] mt-1">Clique em "+ Adicionar Membro" para criar plano com múltiplos beneficiários (ex: Pai + Filho)</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {((newPlan as any).members || []).map((member: any, i: number) => (
+                      <div key={i} className={`flex items-center gap-2 p-3 rounded-xl border ${isDark ? 'bg-white/3 border-white/10' : 'bg-zinc-50 border-zinc-200'}`}>
+                        <input
+                          type="text" placeholder="Nome (ex: Pai, Filho)"
+                          value={member.label}
+                          onChange={e => {
+                            const mems = [...(newPlan as any).members];
+                            mems[i] = { ...mems[i], label: e.target.value };
+                            setNewPlan({ ...newPlan, members: mems } as any);
+                          }}
+                          className={`flex-1 border p-2 rounded-lg text-xs font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                        />
+                        <input
+                          type="number" min="1" max="20" value={member.cuts}
+                          onChange={e => {
+                            const mems = [...(newPlan as any).members];
+                            mems[i] = { ...mems[i], cuts: parseInt(e.target.value) || 1 };
+                            setNewPlan({ ...newPlan, members: mems } as any);
+                          }}
+                          className={`w-14 border p-2 rounded-lg text-xs font-bold outline-none text-center ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                        />
+                        <span className={`text-[9px] font-bold whitespace-nowrap ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>cortes</span>
+                        <button type="button"
+                          onClick={() => setNewPlan({ ...newPlan, members: (newPlan as any).members.filter((_: any, idx: number) => idx !== i) } as any)}
+                          className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all">✕</button>
+                      </div>
+                    ))}
+                    <p className="text-[10px] font-black text-[#C58A4A] text-right">
+                      Total: {((newPlan as any).members || []).reduce((s: number, m: any) => s + (m.cuts || 0), 0)} cortes incluídos no plano
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Cortes por período + Comissão VIP */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className={lbl}>Cortes por Período</label>
-                  <input type="number" min="1" max="100" value={newPlan.maxCuts || 4}
-                    onChange={e => setNewPlan({ ...newPlan, maxCuts: parseInt(e.target.value) || 4 })} className={inp}
-                    placeholder="Ex: 4" />
-                  <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Máximo de cortes incluídos</p>
-                </div>
+                {((newPlan as any).members || []).length === 0 && (
+                  <div className="space-y-2">
+                    <label className={lbl}>Cortes por Período</label>
+                    <input type="number" min="1" max="100" value={newPlan.maxCuts || 4}
+                      onChange={e => setNewPlan({ ...newPlan, maxCuts: parseInt(e.target.value) || 4 })} className={inp}
+                      placeholder="Ex: 4" />
+                    <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Máximo de cortes incluídos</p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className={lbl}>Comissão Barbeiro (%)</label>
                   <input type="number" min="0" max="100" value={newPlan.vipCommissionPct || 50}
