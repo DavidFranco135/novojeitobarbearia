@@ -258,7 +258,21 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
-  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
+  // ── Persistência de sessão ────────────────────────────────────────────
+  const SESSION_KEY = 'nj_client_session';
+
+  const getStoredSession = () => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  };
+
+  const storedSession = getStoredSession();
+
+  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(
+    storedSession?.clientId ? 'CLIENT_DASHBOARD' : initialView
+  );
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [referralName, setReferralName] = useState('');
   const [referralPhone, setReferralPhone] = useState('');
@@ -286,6 +300,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loggedClient, setLoggedClient] = useState<Client | null>(null);
+  const [sessionRestored, setSessionRestored] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
   // Estados para verificação de cadastro no agendamento (passo 4)
@@ -416,17 +431,43 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   }, [urlReferrerId, clients]);
 
   // Sincroniza o usuário logado do store com o loggedClient deste componente
+  // e restaura sessão do localStorage ao recarregar a página
   useEffect(() => {
+    if (clients.length === 0) return; // aguarda clientes carregarem
+
+    // Prioridade 1: usuário logado no store (admin vendo como cliente)
     if (user && user.role === 'CLIENTE') {
-      const client = clients.find(c => c.id === user.id);
+      const client = clients.find((c: any) => c.id === user.id);
       if (client) {
         setLoggedClient(client);
         setEditData({ name: client.name, phone: client.phone, email: client.email });
-        setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
+        setNewReview((prev: any) => ({ ...prev, userName: client.name, clientPhone: client.phone }));
         if (initialView === 'CLIENT_DASHBOARD') setView('CLIENT_DASHBOARD');
+        setSessionRestored(true);
+        return;
       }
     }
-  }, [user, clients, initialView]);
+
+    // Prioridade 2: restaurar sessão salva no localStorage
+    if (!sessionRestored) {
+      const session = getStoredSession();
+      if (session?.clientId) {
+        const client = clients.find((c: any) => c.id === session.clientId);
+        if (client) {
+          setLoggedClient(client);
+          setClientVerified(true);
+          setSelecao((prev: any) => ({ ...prev, clientName: client.name, clientPhone: client.phone, clientEmail: client.email || '' }));
+          setEditData({ name: client.name, phone: client.phone, email: client.email });
+          setNewReview((prev: any) => ({ ...prev, userName: client.name, clientPhone: client.phone }));
+          setView('CLIENT_DASHBOARD');
+        } else {
+          // Cliente não existe mais — limpa sessão
+          localStorage.removeItem(SESSION_KEY);
+        }
+      }
+      setSessionRestored(true);
+    }
+  }, [user, clients, initialView, sessionRestored]);
 
   // Estados para drag scroll
   const [isDragging, setIsDragging] = useState(false);
@@ -633,6 +674,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     try {
       const client = await addClient({ name: registerData.name, phone: registerData.phone, email: registerData.email, password: registerData.password });
       setLoggedClient(client);
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ clientId: client.id }));
       setEditData({ name: client.name, phone: client.phone, email: client.email });
       setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
       setRegisterData({ name: '', phone: '', email: '', password: '', confirmPassword: '' });
@@ -856,6 +898,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
     // 5º — Tudo certo: acesso liberado
     setLoggedClient(client);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ clientId: client.id }));
     setEditData({ name: client.name, phone: client.phone, email: client.email });
     setNewReview(prev => ({ ...prev, userName: client.name, clientPhone: client.phone }));
     setLoginPassword('');
@@ -924,6 +967,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
   const handleLogout = () => {
     setLoggedClient(null);
+    localStorage.removeItem(SESSION_KEY);
     logout();
     setView('HOME');
   };
