@@ -258,7 +258,6 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
-  // ── Persistência de sessão ────────────────────────────────────────────
   const SESSION_KEY = 'nj_client_session';
 
   const getStoredSession = () => {
@@ -268,11 +267,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     } catch { return null; }
   };
 
-  const storedSession = getStoredSession();
-
-  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(
-    storedSession?.clientId ? 'CLIENT_DASHBOARD' : initialView
-  );
+  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [referralName, setReferralName] = useState('');
   const [referralPhone, setReferralPhone] = useState('');
@@ -433,9 +428,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   // Sincroniza o usuário logado do store com o loggedClient deste componente
   // e restaura sessão do localStorage ao recarregar a página
   useEffect(() => {
-    if (clients.length === 0) return; // aguarda clientes carregarem
+    if (clients.length === 0) return;
 
-    // Prioridade 1: usuário logado no store (admin vendo como cliente)
+    // Prioridade 1: usuário logado no store
     if (user && user.role === 'CLIENTE') {
       const client = clients.find((c: any) => c.id === user.id);
       if (client) {
@@ -461,8 +456,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
           setNewReview((prev: any) => ({ ...prev, userName: client.name, clientPhone: client.phone }));
           setView('CLIENT_DASHBOARD');
         } else {
-          // Cliente não existe mais — limpa sessão
           localStorage.removeItem(SESSION_KEY);
+          // Não muda a view — mantém HOME
         }
       }
       setSessionRestored(true);
