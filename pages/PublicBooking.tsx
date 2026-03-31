@@ -13,16 +13,59 @@ interface PublicBookingProps {
 }
 
 // ── Componente de galeria pública com pastas deslizáveis ─────────────────
+type CutAlbumPub = {id:string;name:string;photos:{url:string;desc:string}[]};
 interface GaleriaPublicaProps {
-  albums: {id:string;name:string;photos:{url:string;desc:string}[]}[];
+  albums: CutAlbumPub[];
   theme: string;
+  isAdmin?: boolean;
+  updateConfig?: (data: any) => Promise<void>;
 }
-const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme }) => {
+const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme, isAdmin, updateConfig }) => {
   const isDark = theme !== 'light';
-  const [openAlbum, setOpenAlbum] = React.useState<{id:string;name:string;photos:{url:string;desc:string}[]}|null>(null);
+  const [openAlbum, setOpenAlbum] = React.useState<CutAlbumPub|null>(null);
   const [lightboxIdx, setLightboxIdx] = React.useState<number|null>(null);
   const [dragStartX, setDragStartX] = React.useState<number|null>(null);
+  const [editingAlbumId, setEditingAlbumId] = React.useState<string|null>(null);
+  const [editingAlbumName, setEditingAlbumName] = React.useState('');
+  const [editingPhotoIdx, setEditingPhotoIdx] = React.useState<number|null>(null);
+  const [editingPhotoDesc, setEditingPhotoDesc] = React.useState('');
   const photos = openAlbum?.photos || [];
+
+  const saveAlbums = async (updated: CutAlbumPub[]) => {
+    if (updateConfig) await updateConfig({ cutAlbums: updated });
+  };
+
+  const handleDeleteAlbum = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Excluir esta pasta e todas as fotos?')) return;
+    await saveAlbums(albums.filter(a => a.id !== id));
+  };
+
+  const handleRenameAlbum = async (id: string) => {
+    if (!editingAlbumName.trim()) return;
+    const updated = albums.map(a => a.id === id ? {...a, name: editingAlbumName.trim()} : a);
+    await saveAlbums(updated);
+    if (openAlbum?.id === id) setOpenAlbum(prev => prev ? {...prev, name: editingAlbumName.trim()} : prev);
+    setEditingAlbumId(null);
+  };
+
+  const handleDeletePhoto = async (photoIdx: number) => {
+    if (!openAlbum || !window.confirm('Excluir esta foto?')) return;
+    const updatedPhotos = openAlbum.photos.filter((_, i) => i !== photoIdx);
+    const updated = albums.map(a => a.id === openAlbum.id ? {...a, photos: updatedPhotos} : a);
+    await saveAlbums(updated);
+    setOpenAlbum(prev => prev ? {...prev, photos: updatedPhotos} : prev);
+    setLightboxIdx(null);
+  };
+
+  const handleUpdatePhotoDesc = async (photoIdx: number, desc: string) => {
+    if (!openAlbum) return;
+    const updatedPhotos = openAlbum.photos.map((p, i) => i === photoIdx ? {...p, desc} : p);
+    const updated = albums.map(a => a.id === openAlbum.id ? {...a, photos: updatedPhotos} : a);
+    await saveAlbums(updated);
+    setOpenAlbum(prev => prev ? {...prev, photos: updatedPhotos} : prev);
+    setEditingPhotoIdx(null);
+  };
 
   const goNext = () => lightboxIdx !== null && lightboxIdx < photos.length-1 && setLightboxIdx(lightboxIdx+1);
   const goPrev = () => lightboxIdx !== null && lightboxIdx > 0 && setLightboxIdx(lightboxIdx-1);
@@ -39,13 +82,18 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme }) => {
         {/* Pastas deslizando para o lado */}
         <div className="flex gap-5 overflow-x-auto pb-4 snap-x scrollbar-hide" style={{WebkitOverflowScrolling:'touch'}}>
           {albums.map(album => (
-            <div key={album.id}
-              className={`snap-center flex-shrink-0 w-52 rounded-[2rem] overflow-hidden cursor-pointer border transition-all hover:scale-[1.02] hover:border-[#C58A4A]/40 ${isDark?'cartao-vidro border-white/5':'bg-white border-zinc-200 shadow-sm'}`}
-              onClick={() => setOpenAlbum(album)}
-            >
-              <div className="aspect-square bg-zinc-900 relative">
+            <div key={album.id} className="snap-center flex-shrink-0 w-52 group">
+              {/* Thumbnail clicável */}
+              <div
+                className="rounded-[2rem] overflow-hidden cursor-pointer border transition-all hover:scale-[1.02] hover:border-[#C58A4A]/40 relative aspect-square bg-zinc-900"
+                style={{border:'1px solid rgba(255,255,255,0.05)'}}
+                onClick={() => setOpenAlbum(album)}
+              >
                 {album.photos.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-zinc-700 text-4xl">📁</div>
+                  <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700 gap-2">
+                    <span className="text-4xl">📁</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Vazia</span>
+                  </div>
                 ) : album.photos.length === 1 ? (
                   <img src={album.photos[0].url} className="w-full h-full object-cover" alt=""/>
                 ) : (
@@ -53,12 +101,41 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme }) => {
                     {album.photos.slice(0,4).map((p,i) => <img key={i} src={p.url} className="w-full h-full object-cover" alt=""/>)}
                   </div>
                 )}
-                <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-black/70 to-transparent"/>
+                {/* Gradiente + nome sobrepostos */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-4">
+                  <p className="text-white font-black text-sm leading-tight">{album.name}</p>
+                  <p className="text-zinc-400 text-[9px] font-bold mt-0.5">{album.photos.length} foto{album.photos.length!==1?'s':''}</p>
+                </div>
               </div>
-              <div className="p-4">
-                <p className={`font-black text-sm ${isDark?'text-white':'text-zinc-900'}`}>{album.name}</p>
-                <p className={`text-[9px] font-bold mt-0.5 ${isDark?'text-zinc-500':'text-zinc-400'}`}>{album.photos.length} foto{album.photos.length!==1?'s':''}</p>
-              </div>
+              {/* Botões admin abaixo do card */}
+              {isAdmin && (
+                <div className="flex gap-2 mt-2 px-1">
+                  {editingAlbumId === album.id ? (
+                    <div className="flex gap-2 w-full">
+                      <input
+                        autoFocus
+                        value={editingAlbumName}
+                        onChange={e => setEditingAlbumName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleRenameAlbum(album.id)}
+                        className="flex-1 bg-white/10 border border-white/20 text-white p-2 rounded-lg text-[10px] font-bold outline-none"
+                      />
+                      <button onClick={() => handleRenameAlbum(album.id)} className="px-2 py-1.5 bg-[#C58A4A] text-black rounded-lg text-[9px] font-black">✓</button>
+                      <button onClick={() => setEditingAlbumId(null)} className="px-2 py-1.5 bg-white/10 text-zinc-400 rounded-lg text-[9px] font-black">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => { setEditingAlbumId(album.id); setEditingAlbumName(album.name); }}
+                        className="flex-1 py-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 hover:text-white text-[9px] font-black uppercase tracking-widest transition-all"
+                      >✏️ Renomear</button>
+                      <button
+                        onClick={e => handleDeleteAlbum(album.id, e)}
+                        className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-[9px] font-black transition-all"
+                      >🗑</button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -67,20 +144,74 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme }) => {
       {/* Modal pasta aberta */}
       {openAlbum && (
         <div className="fixed inset-0 z-[400] flex flex-col bg-black/98 backdrop-blur-xl animate-in fade-in" onClick={() => { setOpenAlbum(null); setLightboxIdx(null); }}>
-          <div className="flex items-center gap-4 p-6 border-b border-white/10" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setOpenAlbum(null)} className="p-2 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all">
+          <div className="flex items-center gap-4 p-5 border-b border-white/10" onClick={e => e.stopPropagation()}>
+            <button onClick={() => { setOpenAlbum(null); setLightboxIdx(null); }} className="p-2 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all flex-shrink-0">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <div>
-              <p className="text-white font-black text-lg font-display italic">{openAlbum.name}</p>
-              <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">{openAlbum.photos.length} fotos</p>
+            <div className="flex-1 min-w-0">
+              {isAdmin && editingAlbumId === openAlbum.id ? (
+                <div className="flex gap-2">
+                  <input autoFocus value={editingAlbumName} onChange={e => setEditingAlbumName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRenameAlbum(openAlbum.id)}
+                    className="flex-1 bg-white/10 border border-white/20 text-white p-2 rounded-lg text-sm font-bold outline-none"/>
+                  <button onClick={() => handleRenameAlbum(openAlbum.id)} className="px-3 py-2 bg-[#C58A4A] text-black rounded-lg text-[10px] font-black">✓</button>
+                  <button onClick={() => setEditingAlbumId(null)} className="px-3 py-2 bg-white/10 text-zinc-400 rounded-lg text-[10px] font-black">✕</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white font-black text-lg font-display italic truncate">{openAlbum.name}</p>
+                    <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">{openAlbum.photos.length} foto{openAlbum.photos.length!==1?'s':''}</p>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => { setEditingAlbumId(openAlbum.id); setEditingAlbumName(openAlbum.name); }} className="p-2 bg-white/10 text-zinc-300 hover:text-white rounded-xl transition-all text-xs">✏️</button>
+                      <button onClick={e => handleDeleteAlbum(openAlbum.id, e)} className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-xl transition-all text-xs">🗑</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4" onClick={e => e.stopPropagation()}>
             <div className="grid grid-cols-3 gap-2">
               {openAlbum.photos.map((photo, idx) => (
-                <div key={idx} className="aspect-square rounded-xl overflow-hidden cursor-pointer" onClick={() => setLightboxIdx(idx)}>
-                  <img src={photo.url} alt={photo.desc||''} className="w-full h-full object-cover hover:scale-110 transition-all duration-500"/>
+                <div key={idx} className="space-y-1">
+                  <div className="aspect-square rounded-xl overflow-hidden cursor-pointer relative group" onClick={() => setLightboxIdx(idx)}>
+                    <img src={photo.url} alt={photo.desc||''} className="w-full h-full object-cover hover:scale-110 transition-all duration-500"/>
+                    {/* Nome da foto no hover */}
+                    {photo.desc && (
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <p className="text-white text-[8px] font-bold leading-tight line-clamp-2">{photo.desc}</p>
+                      </div>
+                    )}
+                    {/* Botão excluir — admin only */}
+                    {isAdmin && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDeletePhoto(idx); }}
+                        className="absolute top-1 right-1 p-1.5 bg-red-600/90 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                      </button>
+                    )}
+                  </div>
+                  {/* Descrição editável — admin only */}
+                  {isAdmin && (
+                    editingPhotoIdx === idx ? (
+                      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                        <input autoFocus value={editingPhotoDesc} onChange={e => setEditingPhotoDesc(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleUpdatePhotoDesc(idx, editingPhotoDesc)}
+                          className="flex-1 bg-white/10 border border-white/20 text-white p-1.5 rounded-lg text-[9px] font-bold outline-none"/>
+                        <button onClick={() => handleUpdatePhotoDesc(idx, editingPhotoDesc)} className="px-1.5 bg-[#C58A4A] text-black rounded-lg text-[8px] font-black">✓</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); setEditingPhotoIdx(idx); setEditingPhotoDesc(photo.desc); }}
+                        className="w-full text-left text-[9px] text-zinc-600 hover:text-zinc-300 transition-colors px-1 truncate"
+                      >
+                        {photo.desc || '+ descrição'}
+                      </button>
+                    )
+                  )}
                 </div>
               ))}
             </div>
@@ -111,7 +242,10 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme }) => {
                 {photos.map((_,i) => <button key={i} onClick={e=>{e.stopPropagation();setLightboxIdx(i);}} className={`rounded-full transition-all ${i===lightboxIdx?'w-4 h-2 bg-[#C58A4A]':'w-2 h-2 bg-white/30'}`}/>)}
               </div>
             )}
-            <button onClick={() => setLightboxIdx(null)} className="mt-4 w-full py-3 rounded-2xl bg-white/5 border border-white/10 text-zinc-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all">Fechar</button>
+            <div className="flex gap-3 mt-4">
+              {isAdmin && <button onClick={e => {e.stopPropagation(); handleDeletePhoto(lightboxIdx!);}} className="flex-1 py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-black text-[10px] uppercase hover:bg-red-500/30 transition-all">🗑 Excluir</button>}
+              <button onClick={() => setLightboxIdx(null)} className="flex-1 py-3 rounded-2xl bg-white/5 border border-white/10 text-zinc-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all">Fechar</button>
+            </div>
           </div>
         </div>
       )}
@@ -1055,7 +1189,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                const cutAlbums: {id:string;name:string;photos:{url:string;desc:string}[]}[] = (config as any).cutAlbums || [];
                if (!cutAlbums || cutAlbums.length === 0) return null;
                return (
-                 <GaleriaPublica albums={cutAlbums} theme={theme} />
+                 <GaleriaPublica albums={cutAlbums} theme={theme} isAdmin={user?.role === 'ADMIN'} updateConfig={updateConfig} />
                );
              })()}
 
