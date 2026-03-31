@@ -9,7 +9,6 @@ import { db } from './firebase';
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -347,20 +346,11 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   const login = async (id: string, pass: string) => {
-    // Busca senha admin direto do Firestore para garantir que está atualizada
-    let adminPass = (config as any).adminPassword || '654326';
-    try {
-      const cfgSnap = await getDoc(doc(db, COLLECTIONS.CONFIG, 'main'));
-      if (cfgSnap.exists()) {
-        adminPass = cfgSnap.data().adminPassword || adminPass;
-      }
-    } catch { /* usa valor do estado se Firestore falhar */ }
-
+    const adminPass = (config as any).adminPassword || '654326';
     if (id === 'novojeitoadm@gmail.com' && pass === adminPass) {
       const adminName = config.adminName || 'Novo Jeito';
       const adminAvatar = config.logo || 'https://i.pravatar.cc/150';
       setUser({ id: 'admin', name: adminName, email: id, role: 'ADMIN', avatar: adminAvatar });
-      localStorage.setItem('nj_admin_session', 'true');
       return;
     }
     // Check staff members
