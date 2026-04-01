@@ -18,6 +18,7 @@ import Automacoes from './pages/Automacoes';
 import Staff from './pages/Staff';
 import Products from './pages/Products';
 import Inbox from './pages/Inbox';
+import GaleriaCortes from './pages/GaleriaCortes';
 import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
@@ -279,6 +280,7 @@ const App: React.FC = () => {
         case 'financial':     return <Financial />;
         case 'suggestions':   return <Suggestions />;
         case 'automacoes':    return <Automacoes />;
+        case 'galeria':       return <GaleriaCortes />;
         case 'settings':      return <Settings />;
         case 'products':      return <Products />;
         case 'inbox':         return <Inbox />;
@@ -314,6 +316,7 @@ const App: React.FC = () => {
       case 'staff':         return <Staff />;
       case 'inbox':         return <Inbox />;
       case 'products':      return <Products />;
+      case 'galeria':       return <GaleriaCortes />;
       default:              return <Dashboard onNavigate={setActiveTab} />;
     }
   };
