@@ -315,6 +315,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [bookingPayLink, setBookingPayLink] = useState<string | null>(null);
   const [wantsPayNow, setWantsPayNow] = useState(false);
   const [vipModal, setVipModal] = useState<any>(null);
+  const [expandedPlans, setExpandedPlans] = useState<Record<string,boolean>>({});
   // ── Galeria de fotos de cortes ──────────────────────────────
   const [galleryLightbox, setGalleryLightbox] = useState<{url:string;desc:string}|null>(null);
   const [showGalleryUpload, setShowGalleryUpload] = useState(false);
@@ -1213,28 +1214,20 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                            ✂️ {plan.maxCuts} cortes incluídos
                          </p>
                        )}
-                       {(() => {
-                         const [expanded, setExpanded] = React.useState(false);
-                         const shown = expanded ? plan.benefits : plan.benefits.slice(0, 4);
-                         return (
-                           <div className="space-y-1.5 mb-4">
-                             {shown.map((benefit: string, bi: number) => (
-                               <div key={bi} className="flex items-start gap-2">
-                                 <CheckCircle2 size={12} className="text-[#C58A4A] shrink-0 mt-0.5" />
-                                 <p className={`text-[11px] ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
-                               </div>
-                             ))}
-                             {plan.benefits.length > 4 && (
-                               <button
-                                 onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-                                 className="text-[9px] font-black text-[#C58A4A] hover:text-[#E8B97A] transition-colors pl-5 uppercase tracking-widest"
-                               >
-                                 {expanded ? '▲ Ver menos' : `▼ +${plan.benefits.length - 4} benefícios`}
-                               </button>
-                             )}
+                       <div className="space-y-1.5 mb-4">
+                         {(expandedPlans[plan.id] ? plan.benefits : plan.benefits.slice(0,4)).map((benefit: string, bi: number) => (
+                           <div key={bi} className="flex items-start gap-2">
+                             <CheckCircle2 size={12} className="text-[#C58A4A] shrink-0 mt-0.5" />
+                             <p className={`text-[11px] ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
                            </div>
-                         );
-                       })()}
+                         ))}
+                         {plan.benefits.length > 4 && (
+                           <button onClick={e => { e.stopPropagation(); setExpandedPlans(p => ({...p, [plan.id]: !p[plan.id]})); }}
+                             className="text-[9px] font-black text-[#C58A4A] hover:text-[#E8B97A] transition-colors pl-5 uppercase tracking-widest">
+                             {expandedPlans[plan.id] ? '▲ Ver menos' : `▼ +${plan.benefits.length - 4} benefícios`}
+                           </button>
+                         )}
+                       </div>
                        <button
                          onClick={() => { setVipModal(plan); setVipForm({ name: loggedClient?.name||'', phone: loggedClient?.phone||'', cpf: (loggedClient as any)?.cpfCnpj||'' }); setVipPayLink(null); setVipError(null); }}
                          className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
