@@ -733,7 +733,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           amount: revenueAmount,
           type: 'RECEITA',
           category: clientSub ? `Plano VIP - ${clientSub.planName}` : 'Serviços',
-          date: new Date().toISOString().split('T')[0],
+          date: appointment.date || new Date().toISOString().split('T')[0],
           appointmentId: id,
           isSubscriptionService: !!clientSub,
           subscriptionId: clientSub?.id || null,
@@ -748,7 +748,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             amount: commissionAmount,
             type: 'DESPESA',
             category: 'Comissões',
-            date: new Date().toISOString().split('T')[0],
+            date: appointment.date || new Date().toISOString().split('T')[0],
             appointmentId: id,
             professionalId: appointment.professionalId,
           });
@@ -845,7 +845,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
                 amount: commissionVal,
                 type: 'DESPESA',
                 category: 'Comissão',
-                date: new Date().toISOString().split('T')[0],
+                date: appointment.date || new Date().toISOString().split('T')[0],
                 appointmentId: id,
                 professionalId: prof.id,
               });
@@ -1006,7 +1006,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         amount: creditUsed,
         type: 'DESPESA',
         category: freeCutUsed ? 'Corte Grátis' : 'Desconto Fidelidade',
-        date: new Date().toISOString().split('T')[0],
+        date: appt.date || new Date().toISOString().split('T')[0],
         appointmentId: id,
         clientId: appt.clientId,
       });
@@ -1026,7 +1026,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
               amount: commissionAmount,
               type: 'DESPESA',
               category: 'Comissões',
-              date: new Date().toISOString().split('T')[0],
+              date: appt.date || new Date().toISOString().split('T')[0],
               appointmentId: id,
               professionalId: professional.id,
             });
