@@ -225,6 +225,7 @@ const Appointments: React.FC = () => {
     setFinPayMethod('PIX');
     setFinNewItem({ name: '', price: '' });
     setFinResult(null);
+    setEditedServicePrice('');
   };
 
   // ── Desconto VIP do cliente sendo finalizado ──────────────────────────
@@ -242,7 +243,11 @@ const Appointments: React.FC = () => {
     if (!finModal) return;
     setFinLoading(true);
     try {
-      const result = await (finalizeAppointment as any)(finModal.id, finAdditionals, finPayMethod);
+      // Se o barbeiro alterou o preço do serviço, usa o novo valor
+      const finalAdditionals = editedServicePrice !== '' && parseFloat(editedServicePrice) !== finModal.price
+        ? [{ id: '_svc_edit', name: `${finModal.serviceName} (ajuste)`, price: parseFloat(editedServicePrice) - finModal.price, qty: 1 }, ...finAdditionals]
+        : finAdditionals;
+      const result = await (finalizeAppointment as any)(finModal.id, finalAdditionals, finPayMethod);
       setFinResult(result || { _method: finPayMethod });
     } catch(e) {
       console.error('Finalize error:', e);
@@ -269,7 +274,9 @@ const Appointments: React.FC = () => {
     setFinNewItem({ name: '', price: '' });
   };
 
-  const finTotal = (finModal?.price || 0) + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
+  const [editedServicePrice, setEditedServicePrice] = useState<string>('');
+  const serviceBasePrice = editedServicePrice !== '' ? (parseFloat(editedServicePrice) || 0) : (finModal?.price || 0);
+  const finTotal = serviceBasePrice + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
   const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all'>('day');
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
@@ -837,9 +844,20 @@ const Appointments: React.FC = () => {
               ) : (
                 <>
                   {/* ── Serviço base ── */}
-                  <div className={`flex items-center justify-between p-4 rounded-2xl ${isDark ? 'bg-white/3 border border-white/5' : 'bg-zinc-50 border border-zinc-100'}`}>
-                    <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>{finModal.serviceName}</p>
-                    <p className="font-black text-[#C58A4A]">R$ {(finModal.price || 0).toFixed(2)}</p>
+                  <div className={`flex items-center justify-between gap-3 p-4 rounded-2xl ${isDark ? 'bg-white/3 border border-white/5' : 'bg-zinc-50 border border-zinc-100'}`}>
+                    <p className={`font-black text-sm flex-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>{finModal.serviceName}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`text-[10px] font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>R$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editedServicePrice !== '' ? editedServicePrice : (finModal.price || 0).toFixed(2)}
+                        onChange={e => setEditedServicePrice(e.target.value)}
+                        className={`w-20 text-right font-black text-[#C58A4A] text-sm border-b-2 outline-none bg-transparent transition-all ${isDark ? 'border-white/10 focus:border-[#C58A4A]' : 'border-zinc-300 focus:border-[#C58A4A]'}`}
+                        title="Toque para editar o valor do serviço"
+                      />
+                    </div>
                   </div>
 
                   {/* ── Adicionais existentes ── */}
