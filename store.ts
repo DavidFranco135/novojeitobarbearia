@@ -1142,6 +1142,10 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     }
   };
 
+  const updateAppointment = async (id: string, data: Partial<any>) => {
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), data);
+  };
+
   const deleteAppointment = async (id: string) => {
     // ✅ CORREÇÃO: Remove TODAS as entradas financeiras relacionadas a este agendamento
     // Isso inclui: receita, comissões, descontos, cashback, etc.
@@ -1445,7 +1449,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
-      addAppointment, markNoShow, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment,
+      addAppointment, markNoShow, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment, updateAppointment,
       addFinancialEntry, deleteFinancialEntry,
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,
