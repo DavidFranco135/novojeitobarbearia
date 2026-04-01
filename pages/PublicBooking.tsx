@@ -1818,6 +1818,15 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </section>
              )}
 
+             {/* ── GALERIA DE CORTES — Pastas deslizáveis ───────────── */}
+             {(() => {
+               const cutAlbums: {id:string;name:string;photos:{url:string;desc:string}[]}[] = (config as any).cutAlbums || [];
+               if (!cutAlbums || cutAlbums.length === 0) return null;
+               return (
+                 <GaleriaPublica albums={cutAlbums} theme={theme} isAdmin={user?.role === 'ADMIN'} updateConfig={updateConfig} />
+               );
+             })()}
+
              {/* ── RANKING TOP 10 ── */}
              <section className="mb-6" id="ranking">
                <AccordionHeader sectionKey="ranking" label="Ranking de Clientes" icon={<Trophy size={18}/>} />
@@ -3054,14 +3063,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
             )}
           </div>
-             {/* ── GALERIA DE CORTES — Pastas deslizáveis ───────────── */}
-             {(() => {
-               const cutAlbums: {id:string;name:string;photos:{url:string;desc:string}[]}[] = (config as any).cutAlbums || [];
-               if (!cutAlbums || cutAlbums.length === 0) return null;
-               return (
-                 <GaleriaPublica albums={cutAlbums} theme={theme} isAdmin={user?.role === 'ADMIN'} updateConfig={updateConfig} />
-               );
-             })()}
+
         </div>
       )}
     </div>
