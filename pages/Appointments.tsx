@@ -95,7 +95,7 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, markNoShow, updateAppointmentStatus, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme,
+    addAppointment, markNoShow, updateAppointmentStatus, updateAppointment, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme,
     subscriptions, config,
   } = useBarberStore() as any;
   const isDark = theme !== 'light';
@@ -156,6 +156,8 @@ const Appointments: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
+  const [editDetailService, setEditDetailService] = useState(false);
+  const [editDetailPrice, setEditDetailPrice] = useState('');
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
@@ -662,13 +664,55 @@ const Appointments: React.FC = () => {
               <div className="overflow-y-auto flex-1 px-8 py-4 space-y-3">
               {/* Info grid */}
               <div className="space-y-3">
-                <div className={`flex items-center gap-4 p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
-                  <Scissors size={16} className="text-[#C58A4A] shrink-0"/>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Serviço</p>
-                    <p className={`text-sm font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.serviceName}</p>
-                    {service && <p className="text-[9px] text-zinc-500 mt-0.5">{service.durationMinutes} min • R$ {app.price?.toFixed(2)}</p>}
+                <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Scissors size={16} className="text-[#C58A4A] shrink-0"/>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Serviço</p>
+                    </div>
+                    {app.status !== 'CONCLUIDO_PAGO' && (
+                      <button onClick={() => { setEditDetailService(v => !v); setEditDetailPrice(String(app.price || 0)); }}
+                        className="text-[9px] font-black text-[#C58A4A] hover:underline uppercase tracking-widest">
+                        {editDetailService ? 'Cancelar' : '✏️ Editar'}
+                      </button>
+                    )}
                   </div>
+                  {editDetailService ? (
+                    <div className="space-y-3 animate-in slide-in-from-top-1">
+                      <select
+                        value={app.serviceId}
+                        onChange={async e => {
+                          const svc = services.find((s: any) => s.id === e.target.value);
+                          if (!svc) return;
+                          await updateAppointment(app.id, { serviceId: svc.id, serviceName: svc.name, price: svc.price });
+                          setShowDetailModal({ ...app, serviceId: svc.id, serviceName: svc.name, price: svc.price });
+                          setEditDetailPrice(String(svc.price));
+                        }}
+                        className={`w-full border p-3 rounded-xl text-sm font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                      >
+                        {services.map((s: any) => <option key={s.id} value={s.id} className="bg-zinc-950">{s.name} — R$ {s.price?.toFixed(2)}</option>)}
+                      </select>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Valor:</span>
+                        <span className={`text-[10px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>R$</span>
+                        <input type="number" min="0" step="0.01" value={editDetailPrice}
+                          onChange={e => setEditDetailPrice(e.target.value)}
+                          className={`flex-1 border p-2 rounded-xl text-sm font-bold outline-none text-center ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                        />
+                        <button onClick={async () => {
+                          const newPrice = parseFloat(editDetailPrice) || 0;
+                          await updateAppointment(app.id, { price: newPrice });
+                          setShowDetailModal({ ...app, price: newPrice });
+                          setEditDetailService(false);
+                        }} className="px-4 py-2 bg-[#C58A4A] text-black rounded-xl font-black text-[10px] uppercase">Salvar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className={`text-sm font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{app.serviceName || 'Serviço não informado'}</p>
+                      {service && <p className="text-[9px] text-zinc-500 mt-0.5">{service.durationMinutes} min • R$ {app.price?.toFixed(2)}</p>}
+                    </>
+                  )}
                 </div>
 
                 <div className={`flex items-center gap-4 p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50' : 'bg-white/5'}`}>
