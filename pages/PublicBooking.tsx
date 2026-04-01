@@ -254,7 +254,7 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme, isAdmin,
 };
 
 const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) => {
-  const { services, professionals, appointments, addAppointment, addClient, updateClient, updateConfig, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, logout, suggestions, isSlotBlocked, addSubscription, subscriptions, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
+  const { services, professionals, appointments, addAppointment, addClient, updateClient, updateConfig, config, theme, likeProfessional, addShopReview, addSuggestion, updateSuggestion, clients, user, login, logout, suggestions, isSlotBlocked, addSubscription, subscriptions, referrals, createReferral, validateReferral, cancelReferral, loyaltyCards } = useBarberStore() as any;
   const { partners } = useBarberStore() as any;
   const { products } = useBarberStore() as any;
   
@@ -854,10 +854,20 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     } finally { setLoading(false); }
   };
 
-  const handleLoginPortal = () => {
+  const handleLoginPortal = async () => {
     if (!loginIdentifier || !loginPassword) {
       alert("Preencha e-mail/celular e senha.");
       return;
+    }
+
+    // ── Detecta credenciais de admin e redireciona para o painel ─────────
+    try {
+      await login(loginIdentifier, loginPassword);
+      // Se chegou aqui, login foi bem-sucedido (admin ou staff)
+      // O App.tsx vai detectar user.role !== 'CLIENTE' e mostrar o painel
+      return;
+    } catch {
+      // Não é admin nem staff — continua para verificar como cliente
     }
 
     const normalizePhone = (p: string) => p.replace(/\D/g, '');
@@ -1223,14 +1233,45 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </section>
              )}
 
-             {/* ── GALERIA DE CORTES — Pastas deslizáveis ───────────── */}
-             {(() => {
-               const cutAlbums: {id:string;name:string;photos:{url:string;desc:string}[]}[] = (config as any).cutAlbums || [];
-               if (!cutAlbums || cutAlbums.length === 0) return null;
-               return (
-                 <GaleriaPublica albums={cutAlbums} theme={theme} isAdmin={user?.role === 'ADMIN'} updateConfig={updateConfig} />
-               );
-             })()}
+             {/* ── INDIQUE E GANHE — Banner ── */}
+             <section className="mb-10">
+               <button
+                 onClick={() => setView('LOGIN')}
+                 className="w-full relative overflow-hidden rounded-[2rem] p-0 border-2 border-[#C58A4A]/40 hover:border-[#C58A4A] transition-all group"
+                 style={{background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0e00 50%, #0a0a0a 100%)'}}
+               >
+                 {/* Glow animado */}
+                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500" style={{background: 'radial-gradient(ellipse at center, rgba(197,138,74,0.15) 0%, transparent 70%)'}}/>
+                 {/* Linha dourada topo */}
+                 <div className="absolute top-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+
+                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
+                   <div className="flex items-center gap-5 text-left">
+                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
+                       <span className="text-2xl sm:text-3xl">🎁</span>
+                     </div>
+                     <div>
+                       <p className="text-[#E8B97A] text-[10px] font-black uppercase tracking-[0.3em] mb-1">Programa de Indicação</p>
+                       <p className="text-white text-xl sm:text-2xl font-black font-display italic leading-tight">
+                         Indique e Ganhe{' '}
+                         <span style={{color: '#C58A4A'}}>R$ {(config as any).referralRewardAmount ?? 5}</span>
+                       </p>
+                       <p className="text-zinc-400 text-[11px] sm:text-xs mt-1">
+                         Cada amigo que cortar = crédito na sua carteira · {(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
+                       </p>
+                     </div>
+                   </div>
+                   <div className="shrink-0">
+                     <span className="inline-flex items-center gap-2 text-black font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg transition-all group-hover:scale-105" style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
+                       Quero Indicar <ArrowRight size={14}/>
+                     </span>
+                   </div>
+                 </div>
+                 {/* Linha dourada base */}
+                 <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+               </button>
+             </section>
+
 
                           {/* 2. Nossos Rituais */}
              <section className="mb-6" id="catalogo">
@@ -1763,45 +1804,14 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                </section>
              )}
 
-             {/* ── INDIQUE E GANHE — Banner ── */}
-             <section className="mb-10">
-               <button
-                 onClick={() => setView('LOGIN')}
-                 className="w-full relative overflow-hidden rounded-[2rem] p-0 border-2 border-[#C58A4A]/40 hover:border-[#C58A4A] transition-all group"
-                 style={{background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0e00 50%, #0a0a0a 100%)'}}
-               >
-                 {/* Glow animado */}
-                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500" style={{background: 'radial-gradient(ellipse at center, rgba(197,138,74,0.15) 0%, transparent 70%)'}}/>
-                 {/* Linha dourada topo */}
-                 <div className="absolute top-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
-
-                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
-                   <div className="flex items-center gap-5 text-left">
-                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
-                       <span className="text-2xl sm:text-3xl">🎁</span>
-                     </div>
-                     <div>
-                       <p className="text-[#E8B97A] text-[10px] font-black uppercase tracking-[0.3em] mb-1">Programa de Indicação</p>
-                       <p className="text-white text-xl sm:text-2xl font-black font-display italic leading-tight">
-                         Indique e Ganhe{' '}
-                         <span style={{color: '#C58A4A'}}>R$ {(config as any).referralRewardAmount ?? 5}</span>
-                       </p>
-                       <p className="text-zinc-400 text-[11px] sm:text-xs mt-1">
-                         Cada amigo que cortar = crédito na sua carteira · {(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
-                       </p>
-                     </div>
-                   </div>
-                   <div className="shrink-0">
-                     <span className="inline-flex items-center gap-2 text-black font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg transition-all group-hover:scale-105" style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
-                       Quero Indicar <ArrowRight size={14}/>
-                     </span>
-                   </div>
-                 </div>
-                 {/* Linha dourada base */}
-                 <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
-               </button>
-             </section>
-
+             {/* ── GALERIA DE CORTES — Pastas deslizáveis ───────────── */}
+             {(() => {
+               const cutAlbums: {id:string;name:string;photos:{url:string;desc:string}[]}[] = (config as any).cutAlbums || [];
+               if (!cutAlbums || cutAlbums.length === 0) return null;
+               return (
+                 <GaleriaPublica albums={cutAlbums} theme={theme} isAdmin={user?.role === 'ADMIN'} updateConfig={updateConfig} />
+               );
+             })()}
              {/* ── RANKING TOP 10 ── */}
              <section className="mb-6" id="ranking">
                <AccordionHeader sectionKey="ranking" label="Ranking de Clientes" icon={<Trophy size={18}/>} />
