@@ -316,6 +316,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   const [wantsPayNow, setWantsPayNow] = useState(false);
   const [vipModal, setVipModal] = useState<any>(null);
   const [expandedPlans, setExpandedPlans] = useState<Record<string,boolean>>({});
+  const [showReferralRules, setShowReferralRules] = useState(false);
   // ── Galeria de fotos de cortes ──────────────────────────────
   const [galleryLightbox, setGalleryLightbox] = useState<{url:string;desc:string}|null>(null);
   const [showGalleryUpload, setShowGalleryUpload] = useState(false);
@@ -1242,41 +1243,105 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
              {/* ── INDIQUE E GANHE — Banner ── */}
              <section className="mb-10">
-               <button
-                 onClick={() => setView('LOGIN')}
-                 className="w-full relative overflow-hidden rounded-[2rem] p-0 border-2 border-[#C58A4A]/40 hover:border-[#C58A4A] transition-all group"
-                 style={{background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0e00 50%, #0a0a0a 100%)'}}
-               >
-                 {/* Glow animado */}
-                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500" style={{background: 'radial-gradient(ellipse at center, rgba(197,138,74,0.15) 0%, transparent 70%)'}}/>
-                 {/* Linha dourada topo */}
-                 <div className="absolute top-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+               <div className="relative">
+                 <button
+                   onClick={() => setView('LOGIN')}
+                   className="w-full relative overflow-hidden rounded-[2rem] p-0 border-2 border-[#C58A4A]/40 hover:border-[#C58A4A] transition-all group"
+                   style={{background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0e00 50%, #0a0a0a 100%)'}}
+                 >
+                   {/* Glow animado */}
+                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500" style={{background: 'radial-gradient(ellipse at center, rgba(197,138,74,0.15) 0%, transparent 70%)'}}/>
+                   {/* Linha dourada topo */}
+                   <div className="absolute top-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
 
-                 <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
-                   <div className="flex items-center gap-5 text-left">
-                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
-                       <span className="text-2xl sm:text-3xl">🎁</span>
+                   <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-6 sm:px-10 sm:py-8">
+                     <div className="flex items-center gap-5 text-left">
+                       <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
+                         <span className="text-2xl sm:text-3xl">🎁</span>
+                       </div>
+                       <div>
+                         <p className="text-[#E8B97A] text-[10px] font-black uppercase tracking-[0.3em] mb-1">Programa de Indicação</p>
+                         <p className="text-white text-xl sm:text-2xl font-black font-display italic leading-tight">
+                           Indique e Ganhe{' '}
+                           <span style={{color: '#C58A4A'}}>R$ {(config as any).referralRewardAmount ?? 5}</span>
+                         </p>
+                         <p className="text-zinc-400 text-[11px] sm:text-xs mt-1">
+                           Cada amigo que cortar = crédito na sua carteira · {(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
+                         </p>
+                       </div>
                      </div>
-                     <div>
-                       <p className="text-[#E8B97A] text-[10px] font-black uppercase tracking-[0.3em] mb-1">Programa de Indicação</p>
-                       <p className="text-white text-xl sm:text-2xl font-black font-display italic leading-tight">
-                         Indique e Ganhe{' '}
-                         <span style={{color: '#C58A4A'}}>R$ {(config as any).referralRewardAmount ?? 5}</span>
-                       </p>
-                       <p className="text-zinc-400 text-[11px] sm:text-xs mt-1">
-                         Cada amigo que cortar = crédito na sua carteira · {(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis
-                       </p>
+                     <div className="shrink-0">
+                       <span className="inline-flex items-center gap-2 text-black font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg transition-all group-hover:scale-105" style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
+                         Quero Indicar <ArrowRight size={14}/>
+                       </span>
                      </div>
                    </div>
-                   <div className="shrink-0">
-                     <span className="inline-flex items-center gap-2 text-black font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg transition-all group-hover:scale-105" style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
-                       Quero Indicar <ArrowRight size={14}/>
-                     </span>
+                   {/* Linha dourada base */}
+                   <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
+                 </button>
+
+                 {/* ℹ️ Botão de regras */}
+                 <button
+                   onClick={() => setShowReferralRules(true)}
+                   className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full flex items-center justify-center border border-[#C58A4A]/40 bg-black/60 text-[#C58A4A] hover:bg-[#C58A4A]/20 transition-all"
+                   title="Ver regras do programa"
+                 >
+                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                   </svg>
+                 </button>
+               </div>
+
+               {/* Modal de regras */}
+               {showReferralRules && (
+                 <div className="fixed inset-0 z-[400] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in p-4" onClick={() => setShowReferralRules(false)}>
+                   <div className="w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}
+                     style={{background: 'linear-gradient(135deg, #0f0f0f 0%, #1a0e00 100%)', border: '1px solid rgba(197,138,74,0.3)'}}>
+                     {/* Header */}
+                     <div className="p-6 border-b border-[#C58A4A]/20">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background: 'linear-gradient(135deg, #8B5E2A, #E8B97A)'}}>
+                             <span className="text-lg">🎁</span>
+                           </div>
+                           <div>
+                             <p className="text-white font-black text-base font-display italic">Indique e Ganhe</p>
+                             <p className="text-[#C58A4A] text-[9px] font-black uppercase tracking-widest">Regras do Programa</p>
+                           </div>
+                         </div>
+                         <button onClick={() => setShowReferralRules(false)} className="w-8 h-8 rounded-full bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-all">✕</button>
+                       </div>
+                     </div>
+                     {/* Regras */}
+                     <div className="p-6 space-y-4">
+                       {[
+                         { icon: '👤', title: 'Quem pode indicar?', desc: 'Qualquer cliente cadastrado no portal pode indicar amigos.' },
+                         { icon: '🔗', title: 'Como indicar?', desc: 'Entre no portal, vá em "Indique e Ganhe" e compartilhe seu link exclusivo de indicação.' },
+                         { icon: '💰', title: `Ganhe R$ ${(config as any).referralRewardAmount ?? 5} por indicação`, desc: `Quando seu amigo realizar o primeiro corte, você recebe R$ ${(config as any).referralRewardAmount ?? 5} de crédito na sua carteira automaticamente.` },
+                         { icon: '✂️', title: `${(config as any).referralFreeCutThreshold ?? 3} indicações = 1 corte grátis`, desc: `A cada ${(config as any).referralFreeCutThreshold ?? 3} amigos indicados que realizarem cortes, você ganha 1 corte grátis.` },
+                         { icon: '📱', title: 'O amigo precisa ser novo?', desc: 'Sim, o amigo indicado deve ser um cliente novo que ainda não possui cadastro na barbearia.' },
+                         { icon: '⏱️', title: 'Quando o crédito é liberado?', desc: 'O crédito é liberado automaticamente após o barbeiro concluir o atendimento do amigo indicado.' },
+                       ].map((rule, i) => (
+                         <div key={i} className="flex items-start gap-3">
+                           <div className="w-8 h-8 rounded-xl bg-[#C58A4A]/10 border border-[#C58A4A]/20 flex items-center justify-center shrink-0 text-sm">{rule.icon}</div>
+                           <div>
+                             <p className="text-white font-black text-[11px] uppercase tracking-widest">{rule.title}</p>
+                             <p className="text-zinc-400 text-[11px] mt-0.5 leading-relaxed">{rule.desc}</p>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                     <div className="px-6 pb-6">
+                       <button onClick={() => { setShowReferralRules(false); setView('LOGIN'); }}
+                         onTouchEnd={e => { e.preventDefault(); setShowReferralRules(false); setView('LOGIN'); }}
+                         className="w-full py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest text-black shadow-lg"
+                         style={{background: 'linear-gradient(135deg, #C58A4A, #E8B97A)'}}>
+                         Quero Participar →
+                       </button>
+                     </div>
                    </div>
                  </div>
-                 {/* Linha dourada base */}
-                 <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background: 'linear-gradient(90deg, transparent, #C58A4A, #E8B97A, #C58A4A, transparent)'}}/>
-               </button>
+               )}
              </section>
 
 
