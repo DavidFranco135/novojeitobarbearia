@@ -1193,37 +1193,40 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                  </h2>
                  <div className="flex gap-5 overflow-x-auto pb-4 snap-x scrollbar-hide" style={{WebkitOverflowScrolling:'touch'}}>
                    {config.vipPlans.filter(p => p.status === 'ATIVO').map((plan) => (
-                     <div key={plan.id} className={`snap-center flex-shrink-0 w-72 rounded-[2.5rem] p-8 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
+                     <div key={plan.id} className={`snap-center flex-shrink-0 w-64 rounded-2xl p-5 border relative overflow-hidden transition-all hover:scale-[1.02] ${!!plan.featured ? 'border-[#C58A4A]/40 bg-gradient-to-br from-[#C58A4A]/10 to-transparent' : theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/10'}`}>
                        {!!plan.featured && <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"></div>}
-                       <div className="flex items-center gap-3 mb-6">
-                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
-                           <Crown size={18} className={!!plan.featured ? 'text-black' : 'text-[#C58A4A]'} />
+                       <div className="flex items-center gap-2 mb-3">
+                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${!!plan.featured ? 'gradiente-ouro' : 'bg-white/5 border border-white/10'}`}>
+                           <Crown size={14} className={!!plan.featured ? 'text-black' : 'text-[#C58A4A]'} />
                          </div>
                          <div>
-                           <p className={`font-black text-lg ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
-                           {plan.discount && plan.discount > 0 ? <span className="text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full">{plan.discount}% OFF</span> : null}
+                           <p className={`font-black text-sm ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
+                           {plan.discount && plan.discount > 0 ? <span className="text-[8px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-1.5 py-0.5 rounded-full">{plan.discount}% OFF</span> : null}
                          </div>
                        </div>
-                       <p className={`text-4xl font-black mb-1 ${!!plan.featured ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                       <p className={`text-2xl font-black mb-0.5 ${!!plan.featured ? 'text-[#C58A4A]' : theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
                          R$ {plan.price.toFixed(2)}
-                         <span className={`text-sm font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>/{plan.period === 'MENSAL' ? 'mês' : plan.period === 'ANUAL' ? 'ano' : plan.period === 'SEMANAL' ? 'sem' : 'período'}</span>
+                         <span className={`text-xs font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>/{plan.period === 'MENSAL' ? 'mês' : plan.period === 'ANUAL' ? 'ano' : plan.period === 'SEMANAL' ? 'sem' : 'período'}</span>
                        </p>
                        {plan.maxCuts && (
-                         <p className="text-[10px] font-black text-[#C58A4A] uppercase tracking-widest mt-1">
+                         <p className="text-[9px] font-black text-[#C58A4A] uppercase tracking-widest mb-2">
                            ✂️ {plan.maxCuts} cortes incluídos
                          </p>
                        )}
-                       <div className="mt-6 space-y-3">
-                         {plan.benefits.map((benefit, bi) => (
-                           <div key={bi} className="flex items-start gap-3">
-                             <CheckCircle2 size={16} className="text-[#C58A4A] shrink-0 mt-0.5" />
-                             <p className={`text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
+                       <div className="space-y-1.5 mb-4">
+                         {plan.benefits.slice(0, 4).map((benefit, bi) => (
+                           <div key={bi} className="flex items-start gap-2">
+                             <CheckCircle2 size={12} className="text-[#C58A4A] shrink-0 mt-0.5" />
+                             <p className={`text-[11px] ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{benefit}</p>
                            </div>
                          ))}
+                         {plan.benefits.length > 4 && (
+                           <p className="text-[9px] text-zinc-500 font-bold pl-5">+{plan.benefits.length - 4} benefícios</p>
+                         )}
                        </div>
                        <button
                          onClick={() => { setVipModal(plan); setVipForm({ name: loggedClient?.name||'', phone: loggedClient?.phone||'', cpf: (loggedClient as any)?.cpfCnpj||'' }); setVipPayLink(null); setVipError(null); }}
-                         className={`w-full mt-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
+                         className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:scale-105 ${!!plan.featured ? 'gradiente-ouro text-black shadow-lg' : theme === 'light' ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-white/10 text-white border border-white/10 hover:bg-white/20'}`}
                        >
                          Quero esse plano
                        </button>
