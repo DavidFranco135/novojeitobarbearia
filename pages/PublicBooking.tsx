@@ -2533,6 +2533,33 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               })()}
 
               {passo === 2 && (() => {
+                // Se serviço não foi escolhido ainda, mostra seleção de serviço primeiro
+                if (!selecao.serviceId) {
+                  const cats = ['Todos', ...Array.from(new Set(services.map((s: any) => s.category).filter(Boolean)))];
+                  return (
+                    <div className="space-y-6 animate-in slide-in-from-right-2">
+                      <h3 className={`text-2xl font-black font-display italic text-center ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Escolha o Serviço</h3>
+                      <div className="space-y-3">
+                        {services.filter((s: any) => s.status !== 'INATIVO').map((svc: any) => (
+                          <button key={svc.id}
+                            onClick={() => setSelecao(prev => ({ ...prev, serviceId: svc.id }))}
+                            className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all text-left hover:border-[#C58A4A]/50 ${theme === 'light' ? 'bg-zinc-50 border-zinc-200 hover:bg-white' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {svc.image && <img src={svc.image} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>}
+                              <div className="min-w-0">
+                                <p className={`font-black text-sm truncate ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{svc.name}</p>
+                                <p className={`text-[10px] font-bold ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>{svc.durationMinutes} min</p>
+                              </div>
+                            </div>
+                            <p className="font-black text-[#C58A4A] shrink-0">R$ {svc.price.toFixed(2)}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+
                 const masterList  = professionals.filter(p => p.isMaster);
                 const regularList = professionals.filter(p => !p.isMaster);
                 const selServ     = services.find(s => s.id === selecao.serviceId);
@@ -2612,7 +2639,16 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
                 return (
                   <div className="space-y-8 animate-in slide-in-from-right-2 text-center">
-                    <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Escolha o Artífice</h3>
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Escolha o Artífice</h3>
+                      {selServ && (
+                        <button onClick={() => setSelecao(prev => ({...prev, serviceId: ''}))}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[#C58A4A]/30 bg-[#C58A4A]/10 text-[#C58A4A] text-[9px] font-black uppercase tracking-widest hover:bg-[#C58A4A]/20 transition-all">
+                          ✂️ {selServ.name} · R$ {selServ.price.toFixed(2)}
+                          <span className="text-zinc-500">✕</span>
+                        </button>
+                      )}
+                    </div>
 
                     {/* Masters primeiro */}
                     {masterList.length > 0 && (
