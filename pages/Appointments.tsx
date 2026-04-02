@@ -95,7 +95,7 @@ const scheduleNotificationSound = (): void => {
 const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
-    addAppointment, markNoShow, updateAppointmentStatus, updateAppointment, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme,
+    addAppointment, markNoShow, markFiadoPago, updateAppointmentStatus, updateAppointment, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme,
     subscriptions, config,
   } = useBarberStore() as any;
   const isDark = theme !== 'light';
@@ -279,7 +279,9 @@ const Appointments: React.FC = () => {
   const [editedServicePrice, setEditedServicePrice] = useState<string>('');
   const serviceBasePrice = editedServicePrice !== '' ? (parseFloat(editedServicePrice) || 0) : (finModal?.price || 0);
   const finTotal = serviceBasePrice + finAdditionals.reduce((s,a) => s + a.price * a.qty, 0);
-  const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all'>('day');
+  const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all' | 'fiados'>('day');
+  const [fiadoPayMethod, setFiadoPayMethod] = useState<string>('DINHEIRO');
+  const [fiadoPayingId, setFiadoPayingId] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
   const hoursNormal = useMemo(() => Array.from({ length: 14 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`), []);
@@ -288,14 +290,14 @@ const Appointments: React.FC = () => {
   const appointmentsToday = useMemo(() => appointments.filter(a => a.date === currentDate), [appointments, currentDate]);
   
   const appointmentsFiltered = useMemo(() => {
-    if (filterPeriod === 'day') {
-      return appointments.filter(a => a.date === currentDate);
-    } else if (filterPeriod === 'month') {
-      return appointments.filter(a => a.date.startsWith(selectedMonth));
-    } else {
-      return appointments;
-    }
+    if (filterPeriod === 'fiados') return appointments.filter(a => a.status === 'FIADO');
+    if (filterPeriod === 'day') return appointments.filter(a => a.date === currentDate);
+    if (filterPeriod === 'month') return appointments.filter(a => a.date.startsWith(selectedMonth));
+    return appointments;
   }, [appointments, currentDate, selectedMonth, filterPeriod]);
+
+  const fiadosCount = useMemo(() => appointments.filter(a => a.status === 'FIADO').length, [appointments]);
+  const fiadosTotal = useMemo(() => appointments.filter(a => a.status === 'FIADO').reduce((s, a) => s + ((a as any).totalPrice ?? a.price ?? 0), 0), [appointments]);
 
   const handleQuickClient = async () => {
     if(!quickClient.name || !quickClient.phone) return alert("Preencha nome e telefone");
@@ -400,6 +402,17 @@ const Appointments: React.FC = () => {
               className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filterPeriod === 'all' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
             >
               Todos
+            </button>
+            <button 
+              onClick={() => { setFilterPeriod('fiados'); setViewMode('list'); }} 
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1.5 ${filterPeriod === 'fiados' ? 'bg-orange-500 text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+            >
+              📒 Fiados
+              {fiadosCount > 0 && (
+                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${filterPeriod === 'fiados' ? 'bg-black/20 text-black' : 'bg-orange-500 text-black'}`}>
+                  {fiadosCount}
+                </span>
+              )}
             </button>
           </div>
           
@@ -532,6 +545,73 @@ const Appointments: React.FC = () => {
           </div>
         ) : (
           <div className="p-6 space-y-3 overflow-y-auto h-full scrollbar-hide">
+
+            {/* ── ABA FIADOS ── */}
+            {filterPeriod === 'fiados' && (
+              <div className="space-y-4">
+                <div className={`flex items-center justify-between p-4 rounded-2xl border ${isDark ? 'bg-orange-500/10 border-orange-500/30' : 'bg-orange-50 border-orange-200'}`}>
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-orange-400">📒 Total em Fiados</p>
+                    <p className="text-2xl font-black text-orange-400 font-display italic">R$ {fiadosTotal.toFixed(2)}</p>
+                  </div>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{fiadosCount} pendente{fiadosCount !== 1 ? 's' : ''}</p>
+                </div>
+                {appointmentsFiltered.length === 0 && (
+                  <div className={`text-center py-16 rounded-2xl border-2 border-dashed ${isDark ? 'border-white/10 text-zinc-600' : 'border-zinc-200 text-zinc-400'}`}>
+                    <p className="text-4xl mb-3">📒</p>
+                    <p className="font-black uppercase text-[10px] tracking-widest">Nenhum fiado pendente</p>
+                  </div>
+                )}
+                {appointmentsFiltered.map(app => (
+                  <div key={app.id} className={`rounded-2xl border p-4 ${isDark ? 'bg-orange-500/5 border-orange-500/25' : 'bg-orange-50 border-orange-200'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-black cursor-pointer hover:text-orange-400 transition-colors truncate ${isDark ? 'text-white' : 'text-zinc-900'}`} onClick={() => setShowDetailModal(app)}>{app.clientName}</p>
+                        <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{app.serviceName || 'Serviço'} • {app.date?.split('-').reverse().join('/')} {app.startTime}</p>
+                        <p className={`text-[9px] mt-0.5 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>{app.professionalName}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-lg font-black text-orange-400">R$ {((app as any).totalPrice ?? app.price ?? 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-orange-500/20">
+                      {fiadoPayingId === app.id ? (
+                        <div className="space-y-3 animate-in fade-in">
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Forma de recebimento:</p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {(['DINHEIRO','PIX','DEBITO','CREDITO'] as const).map(m => (
+                              <button key={m} onClick={() => setFiadoPayMethod(m)}
+                                className={`py-2 rounded-xl text-[8px] font-black uppercase tracking-widest border-2 transition-all ${fiadoPayMethod === m ? 'border-orange-500 bg-orange-500/20 text-orange-400' : isDark ? 'border-white/10 bg-white/5 text-zinc-500' : 'border-zinc-200 bg-zinc-50 text-zinc-400'}`}>
+                                {m === 'DINHEIRO' ? '💵' : m === 'PIX' ? '📱' : m === 'DEBITO' ? '💳 D' : '💳 C'}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => setFiadoPayingId(null)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-100 border-zinc-200 text-zinc-500'}`}>Cancelar</button>
+                            <button onClick={async () => { await (markFiadoPago as any)(app.id, fiadoPayMethod); setFiadoPayingId(null); }}
+                              className="flex-1 py-3 rounded-xl font-black text-[9px] uppercase bg-orange-500 text-black hover:bg-orange-400 transition-all">
+                              ✅ Confirmar Recebimento
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button onClick={() => { setFiadoPayingId(app.id); setFiadoPayMethod('DINHEIRO'); }}
+                            className="flex-1 py-3 rounded-xl font-black text-[9px] uppercase bg-orange-500 text-black hover:bg-orange-400 transition-all">
+                            💰 Marcar como Recebido
+                          </button>
+                          <button onClick={() => setShowDetailModal(app)} className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-100 border-zinc-200 text-zinc-500'}`}>Detalhes</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── LISTA NORMAL ── */}
+            {filterPeriod !== 'fiados' && (
+              <>
              {appointmentsFiltered.length === 0 && (
                <p className={`text-center py-20 font-black uppercase text-[10px] italic ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-600'}`}>
                  Nenhum agendamento {filterPeriod === 'day' ? 'para hoje' : filterPeriod === 'month' ? 'neste mês' : 'encontrado'}.
@@ -566,6 +646,8 @@ const Appointments: React.FC = () => {
                   </div>
                </div>
              ))}
+              </>
+            )}
           </div>
         )}
       </div>
