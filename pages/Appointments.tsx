@@ -96,6 +96,7 @@ const Appointments: React.FC = () => {
   const { 
     appointments, professionals, services, clients, user, notifications,
     addAppointment, markNoShow, markFiadoPago, updateAppointmentStatus, updateAppointment, deleteAppointment, addClient, updateClient, rescheduleAppointment, finalizeAppointment, theme,
+    waitQueue: waitQueueStore, addToWaitQueue, removeFromWaitQueue,
     subscriptions, config,
   } = useBarberStore() as any;
   const isDark = theme !== 'light';
@@ -443,7 +444,7 @@ const Appointments: React.FC = () => {
               className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 ${(filterPeriod as any) === 'espera' ? 'bg-blue-500 text-white' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
             >
               ⏳
-              {waitList.length > 0 && <span className={`text-[7px] font-black px-1 py-0.5 rounded-full ${(filterPeriod as any) === 'espera' ? 'bg-white/20 text-white' : 'bg-blue-500 text-white'}`}>{waitList.length}</span>}
+              {((waitQueueStore || []).filter((w:any)=>w.status==='AGUARDANDO').length + waitList.length) > 0 && <span className={`text-[7px] font-black px-1 py-0.5 rounded-full ${(filterPeriod as any) === 'espera' ? 'bg-white/20 text-white' : 'bg-blue-500 text-white'}`}>{(waitQueueStore || []).filter((w:any)=>w.status==='AGUARDANDO').length + waitList.length}</span>}
             </button>
           </div>
           <div className="flex items-center gap-1">
@@ -583,6 +584,27 @@ const Appointments: React.FC = () => {
             {/* ── ABA ESPERA (clientes avulsos) ── */}
             {(filterPeriod as any) === 'espera' && (
               <div className="space-y-4">
+                {/* Fila do Firestore — clientes que entraram pelo app */}
+                {(waitQueueStore || []).filter((w:any) => w.status === 'AGUARDANDO').length > 0 && (
+                  <div className="space-y-2">
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>📱 Aguardando pelo App</p>
+                    {(waitQueueStore || []).filter((w:any) => w.status === 'AGUARDANDO').map((w:any, idx:number) => (
+                      <div key={w.id} className={`rounded-2xl border p-4 flex items-center gap-4 ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
+                        <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 font-black text-sm shrink-0">{idx + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>{w.name}</p>
+                          <p className="text-[9px] text-zinc-500 font-bold">{w.profName || 'Qualquer barbeiro'} • Desde {w.since}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => { setModoAvulso(true); setAvulsoNome(w.name); if(w.profId) setNewApp((prev:any)=>({...prev, professionalId:w.profId})); removeFromWaitQueue(w.id); setShowAddModal(true); }}
+                            className="px-3 py-2 bg-[#C58A4A] text-black rounded-xl font-black text-[9px] uppercase">✂️</button>
+                          <button onClick={() => removeFromWaitQueue(w.id)} className={`p-2 rounded-xl ${isDark ? 'bg-white/5 text-zinc-500 hover:text-red-400' : 'bg-zinc-100 text-zinc-400 hover:text-red-500'} transition-all`}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Form de entrada rápida */}
                 <div className={`rounded-2xl p-4 border space-y-3 ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
                   <p className="text-[9px] font-black uppercase tracking-widest text-blue-400">⏳ Adicionar à fila de espera</p>
