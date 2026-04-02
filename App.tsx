@@ -18,7 +18,7 @@ import Automacoes from './pages/Automacoes';
 import Staff from './pages/Staff';
 import Products from './pages/Products';
 import Inbox from './pages/Inbox';
-import GaleriaCortes from './pages/GaleriaCortes';
+import FilaEspera from './pages/FilaEspera';
 import { useBarberStore } from './store';
 import { LogIn, Sparkles, Sun, Moon, LogOut, UserPlus } from 'lucide-react';
 
@@ -62,6 +62,12 @@ const App: React.FC = () => {
   }, []);
 
   // ── NOVO: Se URL tem token de benefício, mostra validador ──
+  // Mostra fila de espera pública quando URL tem ?fila=1
+  const isFilaView = new URLSearchParams(window.location.search).get('fila') === '1';
+  if (isFilaView) {
+    return <FilaEspera />;
+  }
+
   if (benefitToken) {
     return (
       <BenefitValidator
@@ -316,7 +322,6 @@ const App: React.FC = () => {
       case 'staff':         return <Staff />;
       case 'inbox':         return <Inbox />;
       case 'products':      return <Products />;
-      case 'galeria':       return <GaleriaCortes />;
       default:              return <Dashboard onNavigate={setActiveTab} />;
     }
   };
