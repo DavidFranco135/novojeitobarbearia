@@ -400,49 +400,37 @@ const Appointments: React.FC = () => {
              )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2">
+          {/* Linha de filtros — cabe tudo na tela mobile */}
+          <div className="flex items-center gap-1 flex-wrap">
             <button 
               onClick={() => setFilterPeriod('day')} 
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filterPeriod === 'day' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
-            >
-              Dia
-            </button>
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${filterPeriod === 'day' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+            >Dia</button>
             <button 
               onClick={() => setFilterPeriod('month')} 
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filterPeriod === 'month' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
-            >
-              Mês
-            </button>
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${filterPeriod === 'month' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+            >Mês</button>
             <button 
               onClick={() => setFilterPeriod('all')} 
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filterPeriod === 'all' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
-            >
-              Todos
-            </button>
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${filterPeriod === 'all' ? 'bg-[#C58A4A] text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+            >Todos</button>
             <button 
               onClick={() => { setFilterPeriod('fiados'); setViewMode('list'); }} 
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1.5 ${filterPeriod === 'fiados' ? 'bg-orange-500 text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 ${filterPeriod === 'fiados' ? 'bg-orange-500 text-black' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
             >
-              📒 Fiados
-              {fiadosCount > 0 && (
-                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${filterPeriod === 'fiados' ? 'bg-black/20 text-black' : 'bg-orange-500 text-black'}`}>
-                  {fiadosCount}
-                </span>
-              )}
+              📒
+              {fiadosCount > 0 && <span className={`text-[7px] font-black px-1 py-0.5 rounded-full ${filterPeriod === 'fiados' ? 'bg-black/20 text-black' : 'bg-orange-500 text-black'}`}>{fiadosCount}</span>}
             </button>
             <button 
               onClick={() => { setFilterPeriod('espera' as any); setViewMode('list'); }} 
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1.5 ${(filterPeriod as any) === 'espera' ? 'bg-blue-500 text-white' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 ${(filterPeriod as any) === 'espera' ? 'bg-blue-500 text-white' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
             >
-              ⏳ Espera
-              {waitList.length > 0 && (
-                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${(filterPeriod as any) === 'espera' ? 'bg-white/20 text-white' : 'bg-blue-500 text-white'}`}>
-                  {waitList.length}
-                </span>
-              )}
+              ⏳
+              {waitList.length > 0 && <span className={`text-[7px] font-black px-1 py-0.5 rounded-full ${(filterPeriod as any) === 'espera' ? 'bg-white/20 text-white' : 'bg-blue-500 text-white'}`}>{waitList.length}</span>}
             </button>
           </div>
+          <div className="flex items-center gap-1">
           
           {filterPeriod === 'day' && (
             <div className={`flex items-center border rounded-xl p-1 ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
@@ -479,6 +467,7 @@ const Appointments: React.FC = () => {
               </button>
             </div>
           )}
+          </div>
           
           <button onClick={() => setShowAddModal(true)} className="gradiente-ouro text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Agendar +</button>
         </div>
