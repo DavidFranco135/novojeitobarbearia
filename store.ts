@@ -1149,6 +1149,17 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), data);
   };
 
+  // ── Fila de Espera ────────────────────────────────────────────
+  const addToWaitQueue = async (data: { name: string; profId: string; profName: string; since: string; status?: string }) => {
+    await addDoc(collection(db, COLLECTIONS.WAIT_QUEUE), { ...data, status: 'AGUARDANDO', createdAt: new Date().toISOString() });
+  };
+  const removeFromWaitQueue = async (id: string) => {
+    await deleteDoc(doc(db, COLLECTIONS.WAIT_QUEUE, id));
+  };
+  const updateWaitQueueItem = async (id: string, data: any) => {
+    await updateDoc(doc(db, COLLECTIONS.WAIT_QUEUE, id), data);
+  };
+
   const deleteAppointment = async (id: string) => {
     // ✅ CORREÇÃO: Remove TODAS as entradas financeiras relacionadas a este agendamento
     // Isso inclui: receita, comissões, descontos, cashback, etc.
@@ -1445,17 +1456,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     value: {
       user, clients, professionals, services, appointments, financialEntries,
       notifications, suggestions, config, loading, theme,
-    const addToWaitQueue = async (data: { name: string; profId: string; profName: string; since: string; status?: string }) => {
-    await addDoc(collection(db, COLLECTIONS.WAIT_QUEUE), { ...data, status: 'AGUARDANDO', createdAt: new Date().toISOString() });
-  };
-  const removeFromWaitQueue = async (id: string) => {
-    await deleteDoc(doc(db, COLLECTIONS.WAIT_QUEUE, id));
-  };
-  const updateWaitQueueItem = async (id: string, data: any) => {
-    await updateDoc(doc(db, COLLECTIONS.WAIT_QUEUE, id), data);
-  };
-
-    loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral, changePassword,
+      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral, changePassword,
       clientBenefits,  // ── NOVO ──
       toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
       products, addProduct, updateProduct, deleteProduct, decreaseProductStock,
@@ -1467,6 +1468,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,
       updateConfig, addShopReview,
+      waitQueue, addToWaitQueue, removeFromWaitQueue, updateWaitQueueItem,
       addLoyaltyCard, updateLoyaltyCard,
       addSubscription, updateSubscription, deleteSubscription,
       addPartner, updatePartner, deletePartner,
