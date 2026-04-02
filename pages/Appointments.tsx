@@ -163,7 +163,12 @@ const Appointments: React.FC = () => {
   const [modoAvulso, setModoAvulso] = useState(false);
   const [avulsoNome, setAvulsoNome] = useState('');
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
-  const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '', cpfCnpj: '' });
+  const [quickClient, setQuickClient] = useState({
+    name: '', phone: '', email: '', password: '',
+    cpfCnpj: '', birthdate: '', gender: '',
+    address: '', neighborhood: '', city: '',
+    profession: '', instagram: '', howFound: '',
+  });
   // ── Modal Finalização ──────────────────────────────────────
   const [finModal, setFinModal] = useState<any>(null);
   const [finAdditionals, setFinAdditionals] = useState<{id:string;name:string;price:number;qty:number}[]>([]);
@@ -307,10 +312,10 @@ const Appointments: React.FC = () => {
 
   const handleQuickClient = async () => {
     if(!quickClient.name || !quickClient.phone) return alert("Preencha nome e telefone");
-    const client = await addClient({ ...quickClient, email: quickClient.email });
+    const client = await addClient({ ...quickClient });
     setNewApp({...newApp, clientId: client.id});
     setShowQuickClient(false);
-    setQuickClient({ name: '', phone: '', email: '' });
+    setQuickClient({ name: '', phone: '', email: '', password: '', cpfCnpj: '', birthdate: '', gender: '', address: '', neighborhood: '', city: '', profession: '', instagram: '', howFound: '' });
   };
 
   // ── Cancelar por ausência: lista negra + WhatsApp ─────────────
@@ -810,21 +815,45 @@ const Appointments: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                  <div className="flex gap-2">
-                    <select required value={newApp.clientId} onChange={e => setNewApp({...newApp, clientId: e.target.value})} className="flex-1 bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
-                      <option value="" className="bg-zinc-950">Selecione o Cliente</option>
-                      {clients.map(c => <option key={c.id} value={c.id} className="bg-zinc-950">{c.name}</option>)}
-                    </select>
-                    <button type="button" onClick={() => setShowQuickClient(true)} className="p-4 bg-[#C58A4A] text-black rounded-xl hover:scale-105 transition-all"><UserPlus size={20}/></button>
-                  </div>
+                  <select required value={newApp.clientId} onChange={e => setNewApp({...newApp, clientId: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
+                    <option value="" className="bg-zinc-950">Selecione o Cliente</option>
+                    {clients.map(c => <option key={c.id} value={c.id} className="bg-zinc-950">{c.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setShowQuickClient(v => !v)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#C58A4A]/40 text-[#C58A4A] bg-[#C58A4A]/5 hover:bg-[#C58A4A]/15 transition-all font-black text-[10px] uppercase tracking-widest">
+                    <UserPlus size={14}/> Cadastrar Novo Cliente
+                  </button>
                   {showQuickClient && (
-                    <div className="p-4 bg-white/5 rounded-xl border border-[#C58A4A]/30 space-y-3 animate-in slide-in-from-top-2">
-                      <p className="text-[9px] font-black uppercase text-[#C58A4A]">Rápido: Novo Cliente</p>
-                      <input type="text" placeholder="Nome" value={quickClient.name} onChange={e => setQuickClient({...quickClient, name: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
-                      <input type="tel" placeholder="WhatsApp" value={quickClient.phone} onChange={e => setQuickClient({...quickClient, phone: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                    <div className="p-4 bg-white/5 rounded-xl border border-[#C58A4A]/30 space-y-3 animate-in slide-in-from-top-2 max-h-80 overflow-y-auto">
+                      <p className="text-[9px] font-black uppercase text-[#C58A4A]">📋 Cadastro Rápido</p>
+                      {/* Obrigatórios */}
+                      <input type="text" placeholder="Nome *" value={quickClient.name} onChange={e => setQuickClient({...quickClient, name: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="tel" placeholder="WhatsApp *" value={quickClient.phone} onChange={e => setQuickClient({...quickClient, phone: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      {/* Opcionais */}
                       <input type="email" placeholder="E-mail" value={quickClient.email} onChange={e => setQuickClient({...quickClient, email: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
-                      <input type="text" placeholder="CPF (para cobranças Asaas)" value={quickClient.cpfCnpj} onChange={e => setQuickClient({...quickClient, cpfCnpj: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
-                      <div className="flex gap-2">
+                      <input type="password" placeholder="Senha (portal cliente)" value={quickClient.password} onChange={e => setQuickClient({...quickClient, password: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="text" placeholder="CPF/CNPJ" value={quickClient.cpfCnpj} onChange={e => setQuickClient({...quickClient, cpfCnpj: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="date" placeholder="Data de Nascimento" value={quickClient.birthdate} onChange={e => setQuickClient({...quickClient, birthdate: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <select value={quickClient.gender} onChange={e => setQuickClient({...quickClient, gender: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs text-zinc-400">
+                        <option value="">Gênero</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                      <input type="text" placeholder="Endereço" value={quickClient.address} onChange={e => setQuickClient({...quickClient, address: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="text" placeholder="Bairro" value={quickClient.neighborhood} onChange={e => setQuickClient({...quickClient, neighborhood: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="text" placeholder="Cidade" value={quickClient.city} onChange={e => setQuickClient({...quickClient, city: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="text" placeholder="Profissão" value={quickClient.profession} onChange={e => setQuickClient({...quickClient, profession: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <input type="text" placeholder="Instagram" value={quickClient.instagram} onChange={e => setQuickClient({...quickClient, instagram: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs" />
+                      <select value={quickClient.howFound} onChange={e => setQuickClient({...quickClient, howFound: e.target.value})} className="w-full bg-black/20 border border-white/5 p-3 rounded-lg text-xs text-zinc-400">
+                        <option value="">Como nos conheceu?</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="Indicação">Indicação</option>
+                        <option value="Google">Google</option>
+                        <option value="Passou na rua">Passou na rua</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                      <div className="flex gap-2 pt-1">
                         <button type="button" onClick={() => setShowQuickClient(false)} className="flex-1 bg-white/5 text-zinc-500 py-2 rounded-lg text-[9px] font-black uppercase hover:bg-white/10 transition-all">Fechar</button>
                         <button type="button" onClick={handleQuickClient} className="flex-1 bg-[#C58A4A] text-black py-2 rounded-lg text-[9px] font-black uppercase">Salvar e Selecionar</button>
                       </div>
