@@ -126,6 +126,7 @@ const COLLECTIONS = {
   INACTIVITY_CAMPAIGNS: 'inactivityCampaigns',
   CLIENT_BENEFITS: 'clientBenefits',  // ── NOVO ──
   PRODUCTS: 'products',
+  WAIT_QUEUE: 'waitQueue',
 };
 
 // ── Gerador de token único para QR Code de benefício ─────────
@@ -174,6 +175,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
   });
   const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCard[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [waitQueue, setWaitQueue] = useState<any[]>([]);
   const [referrals, setReferrals] = useState<any[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
@@ -207,6 +209,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       onSnapshot(collection(db, COLLECTIONS.PRODUCTS), snap => setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       // ── NOVO: Escuta em tempo real para benefícios ──
       onSnapshot(collection(db, COLLECTIONS.CLIENT_BENEFITS), snap => setClientBenefits(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientBenefit)))),
+      onSnapshot(collection(db, COLLECTIONS.WAIT_QUEUE), snap => setWaitQueue(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(doc(db, COLLECTIONS.CONFIG, 'main'), docSnap => {
         if (docSnap.exists()) {
           const configData = docSnap.data() as ShopConfig;
@@ -1442,7 +1445,17 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     value: {
       user, clients, professionals, services, appointments, financialEntries,
       notifications, suggestions, config, loading, theme,
-      loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral, changePassword,
+    const addToWaitQueue = async (data: { name: string; profId: string; profName: string; since: string; status?: string }) => {
+    await addDoc(collection(db, COLLECTIONS.WAIT_QUEUE), { ...data, status: 'AGUARDANDO', createdAt: new Date().toISOString() });
+  };
+  const removeFromWaitQueue = async (id: string) => {
+    await deleteDoc(doc(db, COLLECTIONS.WAIT_QUEUE, id));
+  };
+  const updateWaitQueueItem = async (id: string, data: any) => {
+    await updateDoc(doc(db, COLLECTIONS.WAIT_QUEUE, id), data);
+  };
+
+    loyaltyCards, subscriptions, partners, blockedSlots, inactivityCampaigns, referrals, createReferral, validateReferral, cancelReferral, changePassword,
       clientBenefits,  // ── NOVO ──
       toggleTheme, login, logout, updateUser, staff, addStaff, updateStaff, deleteStaff,
       products, addProduct, updateProduct, deleteProduct, decreaseProductStock,
