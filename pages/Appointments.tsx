@@ -160,6 +160,8 @@ const Appointments: React.FC = () => {
   const [editDetailPrice, setEditDetailPrice] = useState('');
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
   const [showQuickClient, setShowQuickClient] = useState(false);
+  const [modoAvulso, setModoAvulso] = useState(false);
+  const [avulsoNome, setAvulsoNome] = useState('');
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
   const [quickClient, setQuickClient] = useState({ name: '', phone: '', email: '', cpfCnpj: '' });
   // ── Modal Finalização ──────────────────────────────────────
@@ -282,6 +284,10 @@ const Appointments: React.FC = () => {
   const [filterPeriod, setFilterPeriod] = useState<'day' | 'month' | 'all' | 'fiados'>('day');
   const [fiadoPayMethod, setFiadoPayMethod] = useState<string>('DINHEIRO');
   const [fiadoPayingId, setFiadoPayingId] = useState<string | null>(null);
+  // ── Lista de Espera (avulsos) ──────────────────────────────
+  const [waitList, setWaitList] = useState<{id:string;name:string;profId:string;since:string}[]>([]);
+  const [waitName, setWaitName] = useState('');
+  const [waitProfId, setWaitProfId] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
   const hoursNormal = useMemo(() => Array.from({ length: 14 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`), []);
@@ -339,10 +345,16 @@ const Appointments: React.FC = () => {
     try {
       const service = services.find(s => s.id === newApp.serviceId);
       if (!service) return;
+      if (!newApp.professionalId) return alert('Selecione o barbeiro.');
+      if (modoAvulso && !avulsoNome.trim()) return alert('Digite o nome do cliente avulso.');
+      if (!modoAvulso && !newApp.clientId) return alert('Selecione o cliente.');
       const [h, m] = newApp.startTime.split(':').map(Number);
       const totalMinutes = h * 60 + m + service.durationMinutes;
       const endTime = `${Math.floor(totalMinutes / 60).toString().padStart(2, '0')}:${(totalMinutes % 60).toString().padStart(2, '0')}`;
-      await addAppointment({ ...newApp, clientName: clients.find(c => c.id === newApp.clientId)?.name || '', clientPhone: clients.find(c => c.id === newApp.clientId)?.phone || '', serviceName: service.name, professionalName: professionals.find(p => p.id === newApp.professionalId)?.name || '', date: currentDate, endTime, price: service.price });
+      const clientName = modoAvulso ? avulsoNome.trim() : (clients.find(c => c.id === newApp.clientId)?.name || '');
+      const clientPhone = modoAvulso ? '' : (clients.find(c => c.id === newApp.clientId)?.phone || '');
+      const clientId = modoAvulso ? '' : newApp.clientId;
+      await addAppointment({ ...newApp, clientId, clientName, clientPhone, serviceName: service.name, professionalName: professionals.find(p => p.id === newApp.professionalId)?.name || '', date: currentDate, endTime, price: service.price });
       setShowAddModal(false);
     } catch (err) { alert("Erro ao agendar."); }
   };
@@ -411,6 +423,17 @@ const Appointments: React.FC = () => {
               {fiadosCount > 0 && (
                 <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${filterPeriod === 'fiados' ? 'bg-black/20 text-black' : 'bg-orange-500 text-black'}`}>
                   {fiadosCount}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => { setFilterPeriod('espera' as any); setViewMode('list'); }} 
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1.5 ${(filterPeriod as any) === 'espera' ? 'bg-blue-500 text-white' : theme === 'light' ? 'bg-zinc-100 text-zinc-600' : 'bg-white/5 text-zinc-500'}`}
+            >
+              ⏳ Espera
+              {waitList.length > 0 && (
+                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${(filterPeriod as any) === 'espera' ? 'bg-white/20 text-white' : 'bg-blue-500 text-white'}`}>
+                  {waitList.length}
                 </span>
               )}
             </button>
@@ -546,6 +569,92 @@ const Appointments: React.FC = () => {
         ) : (
           <div className="p-6 space-y-3 overflow-y-auto h-full scrollbar-hide">
 
+            {/* ── ABA ESPERA (clientes avulsos) ── */}
+            {(filterPeriod as any) === 'espera' && (
+              <div className="space-y-4">
+                {/* Form de entrada rápida */}
+                <div className={`rounded-2xl p-4 border space-y-3 ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-blue-400">⏳ Adicionar à fila de espera</p>
+                  <input
+                    type="text"
+                    placeholder="Nome do cliente avulso *"
+                    value={waitName}
+                    onChange={e => setWaitName(e.target.value)}
+                    className={`w-full border p-3 rounded-xl text-sm font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-blue-400' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
+                  />
+                  <select
+                    value={waitProfId}
+                    onChange={e => setWaitProfId(e.target.value)}
+                    className={`w-full border p-3 rounded-xl text-sm font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                  >
+                    <option value="">Qualquer barbeiro</option>
+                    {professionals.map((p: any) => <option key={p.id} value={p.id} className="bg-zinc-950">{p.name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => {
+                      if (!waitName.trim()) return alert('Digite o nome do cliente.');
+                      setWaitList(prev => [...prev, {
+                        id: Date.now().toString(),
+                        name: waitName.trim(),
+                        profId: waitProfId,
+                        since: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                      }]);
+                      setWaitName(''); setWaitProfId('');
+                    }}
+                    className="w-full py-3 rounded-xl bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest hover:bg-blue-400 transition-all"
+                  >
+                    + Entrou na fila
+                  </button>
+                </div>
+
+                {/* Lista de espera */}
+                {waitList.length === 0 ? (
+                  <div className={`text-center py-12 rounded-2xl border-2 border-dashed ${isDark ? 'border-white/10 text-zinc-600' : 'border-zinc-200 text-zinc-400'}`}>
+                    <p className="text-3xl mb-2">⏳</p>
+                    <p className="font-black uppercase text-[10px] tracking-widest">Nenhum cliente aguardando</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{waitList.length} na fila</p>
+                    {waitList.map((w, idx) => {
+                      const prof = professionals.find((p: any) => p.id === w.profId);
+                      return (
+                        <div key={w.id} className={`rounded-2xl border p-4 flex items-center gap-4 ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
+                          <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 font-black text-sm shrink-0">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-black text-sm truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>{w.name}</p>
+                            <p className="text-[9px] text-zinc-500 font-bold">{prof ? prof.name : 'Qualquer barbeiro'} • Desde {w.since}</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button
+                              onClick={() => {
+                                setModoAvulso(true);
+                                setAvulsoNome(w.name);
+                                if (w.profId) setNewApp(prev => ({...prev, professionalId: w.profId}));
+                                setWaitList(prev => prev.filter(x => x.id !== w.id));
+                                setShowAddModal(true);
+                              }}
+                              className="px-3 py-2 bg-[#C58A4A] text-black rounded-xl font-black text-[9px] uppercase hover:bg-[#E5A86A] transition-all"
+                            >
+                              ✂️ Agendar
+                            </button>
+                            <button
+                              onClick={() => setWaitList(prev => prev.filter(x => x.id !== w.id))}
+                              className={`p-2 rounded-xl ${isDark ? 'bg-white/5 text-zinc-500 hover:text-red-400' : 'bg-zinc-100 text-zinc-400 hover:text-red-500'} transition-all`}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── ABA FIADOS ── */}
             {filterPeriod === 'fiados' && (
               <div className="space-y-4">
@@ -675,6 +784,32 @@ const Appointments: React.FC = () => {
             <h2 className="text-2xl font-black font-display italic">Novo Agendamento</h2>
             <div className="space-y-6">
                <div className="space-y-4">
+                  {/* Toggle Cadastrado / Avulso */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button"
+                      onClick={() => { setModoAvulso(false); setAvulsoNome(''); }}
+                      className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 transition-all ${!modoAvulso ? 'border-[#C58A4A] bg-[#C58A4A]/10 text-[#C58A4A]' : 'border-white/10 bg-white/5 text-zinc-500'}`}
+                    >👤 Cadastrado</button>
+                    <button type="button"
+                      onClick={() => { setModoAvulso(true); setShowQuickClient(false); setNewApp({...newApp, clientId: ''}); }}
+                      className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 transition-all ${modoAvulso ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-white/10 bg-white/5 text-zinc-500'}`}
+                    >✂️ Avulso</button>
+                  </div>
+
+                  {modoAvulso ? (
+                    <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-2 animate-in slide-in-from-top-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">✂️ Cliente sem cadastro</p>
+                      <input
+                        type="text"
+                        placeholder="Nome do cliente *"
+                        value={avulsoNome}
+                        onChange={e => setAvulsoNome(e.target.value)}
+                        autoFocus
+                        className="w-full bg-black/20 border border-amber-500/30 text-white p-3 rounded-xl text-xs font-bold outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  ) : (
+                    <>
                   <div className="flex gap-2">
                     <select required value={newApp.clientId} onChange={e => setNewApp({...newApp, clientId: e.target.value})} className="flex-1 bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
                       <option value="" className="bg-zinc-950">Selecione o Cliente</option>
@@ -695,6 +830,8 @@ const Appointments: React.FC = () => {
                       </div>
                     </div>
                   )}
+                    </>
+                  )}
                   <select required value={newApp.professionalId} onChange={e => setNewApp({...newApp, professionalId: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
                     <option value="" className="bg-zinc-950">Barbeiro</option>
                     {professionals.map(p => <option key={p.id} value={p.id} className="bg-zinc-950">{p.name}</option>)}
@@ -706,7 +843,7 @@ const Appointments: React.FC = () => {
                   <input required type="time" value={newApp.startTime} onChange={e => setNewApp({...newApp, startTime: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black" />
                </div>
                <div className="flex gap-3">
-                  <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
+                  <button type="button" onClick={() => { setShowAddModal(false); setModoAvulso(false); setAvulsoNome(''); }} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
                   <button type="button" onClick={handleCreateAppointment} onTouchEnd={e => { e.preventDefault(); handleCreateAppointment(); }} className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px]">Agendar Agora</button>
                </div>
             </div>
