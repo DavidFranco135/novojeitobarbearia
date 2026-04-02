@@ -260,6 +260,13 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   
   const SESSION_KEY = 'nj_client_session';
 
+  // ── Fila de Espera ─────────────────────────────────────────
+  const [filaName, setFilaName] = useState('');
+  const [filaProfId, setFilaProfId] = useState('');
+  const [filaMyId, setFilaMyId] = useState<string|null>(null);
+  const [filaStep, setFilaStep] = useState<'form'|'waiting'|'called'>('form');
+  const [filaLoading, setFilaLoading] = useState(false);
+
   const getStoredSession = () => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
@@ -267,7 +274,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     } catch { return null; }
   };
 
-  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD'>(initialView);
+  const [view, setView] = useState<'HOME' | 'BOOKING' | 'LOGIN' | 'CLIENT_DASHBOARD' | 'FILA'>(initialView);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [referralName, setReferralName] = useState('');
   const [referralPhone, setReferralPhone] = useState('');
@@ -426,6 +433,19 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     }
     window.history.replaceState(null, '', window.location.pathname);
   }, [urlReferrerId, clients]);
+
+  // ── Monitora fila de espera ──────────────────────────────────
+  const { waitQueue, addToWaitQueue, removeFromWaitQueue } = useBarberStore() as any;
+
+  React.useEffect(() => {
+    if (!filaMyId || !waitQueue) return;
+    const entry = (waitQueue || []).find((w: any) => w.id === filaMyId);
+    if (!entry) {
+      if (filaStep === 'waiting') setFilaStep('called');
+    } else if (entry.status === 'CHAMADO') {
+      setFilaStep('called');
+    }
+  }, [waitQueue, filaMyId, filaStep]);
 
   // Sincroniza o usuário logado do store com o loggedClient deste componente
   // e restaura sessão do localStorage ao recarregar a página
@@ -2090,8 +2110,15 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
             </div>
           )}
 
-          {/* ── Botão Flutuante: Agendar Agora ── */}
-          <div className="fixed bottom-4 right-4 z-[90] animate-in slide-in-from-bottom-4 duration-700">
+          {/* ── Botões Flutuantes ── */}
+          <div className="fixed bottom-4 right-4 z-[90] animate-in slide-in-from-bottom-4 duration-700 flex flex-col gap-2 items-end">
+            <button
+              onClick={() => setView('FILA')}
+              onTouchEnd={e => { e.preventDefault(); setView('FILA'); }}
+              className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all"
+            >
+              ⏳ Fila de Espera
+            </button>
             <button
               onClick={() => { setView('BOOKING'); setPasso(1); }}
               onTouchEnd={e => { e.preventDefault(); setView('BOOKING'); setPasso(1); }}
@@ -2507,6 +2534,131 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
               </div>
 
            </div>
+        </div>
+      )}
+
+      {/* ══════════════ FILA DE ESPERA ══════════════ */}
+      {view === 'FILA' && (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 animate-in fade-in">
+
+          {/* Header */}
+          <div className="text-center mb-8">
+            {config?.logo && <img src={config.logo} className="w-16 h-16 rounded-2xl mx-auto mb-3 object-cover shadow-lg" alt=""/>}
+            <h2 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{config?.name}</h2>
+            <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Fila de Espera</p>
+          </div>
+
+          <div className={`w-full max-w-sm rounded-[2.5rem] p-8 space-y-5 ${theme === 'light' ? 'bg-white border border-zinc-200 shadow-lg' : 'cartao-vidro border-[#C58A4A]/10'}`}>
+
+            {/* FORM */}
+            {filaStep === 'form' && (
+              <>
+                <div>
+                  <h3 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Entre na fila ✂️</h3>
+                  <p className={`text-[11px] mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Adicione seu nome e aguarde ser chamado.</p>
+                </div>
+                <input type="text" placeholder="Seu nome *" value={filaName} onChange={e => setFilaName(e.target.value)}
+                  className={`w-full border p-4 rounded-2xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]'}`}/>
+                <select value={filaProfId} onChange={e => setFilaProfId(e.target.value)}
+                  className={`w-full border p-4 rounded-2xl text-sm font-bold outline-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-white/5 border-white/10 text-white'}`}>
+                  <option value="">Qualquer barbeiro</option>
+                  {(professionals || []).map((p: any) => <option key={p.id} value={p.id} className="bg-zinc-950">{p.name}</option>)}
+                </select>
+
+                {/* Fila atual */}
+                {(waitQueue || []).filter((w: any) => w.status === 'AGUARDANDO').length > 0 && (
+                  <div className={`p-4 rounded-2xl ${theme === 'light' ? 'bg-zinc-50 border border-zinc-200' : 'bg-white/5 border border-white/5'}`}>
+                    <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                      ⏳ {(waitQueue || []).filter((w: any) => w.status === 'AGUARDANDO').length} na fila agora
+                    </p>
+                    {(waitQueue || []).filter((w: any) => w.status === 'AGUARDANDO').map((w: any, i: number) => (
+                      <div key={w.id} className="flex items-center gap-2 py-1">
+                        <span className="text-[#C58A4A] font-black text-xs w-4">{i + 1}.</span>
+                        <span className={`text-xs font-bold ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>{w.name}</span>
+                        <span className={`text-[9px] ml-auto ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{w.profName !== 'Qualquer barbeiro' ? w.profName : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  disabled={filaLoading}
+                  onTouchEnd={async e => {
+                    e.preventDefault();
+                    if (!filaName.trim()) return alert('Digite seu nome.');
+                    setFilaLoading(true);
+                    const prof = (professionals || []).find((p: any) => p.id === filaProfId);
+                    const since = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    await addToWaitQueue({ name: filaName.trim(), profId: filaProfId, profName: prof?.name || 'Qualquer barbeiro', since, status: 'AGUARDANDO' });
+                    setTimeout(() => {
+                      const found = (waitQueue || []).find((w: any) => w.name === filaName.trim() && w.since === since);
+                      if (found) setFilaMyId(found.id);
+                    }, 1500);
+                    setFilaStep('waiting');
+                    setFilaLoading(false);
+                  }}
+                  onClick={async () => {
+                    if (!filaName.trim()) return alert('Digite seu nome.');
+                    setFilaLoading(true);
+                    const prof = (professionals || []).find((p: any) => p.id === filaProfId);
+                    const since = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    await addToWaitQueue({ name: filaName.trim(), profId: filaProfId, profName: prof?.name || 'Qualquer barbeiro', since, status: 'AGUARDANDO' });
+                    setTimeout(() => {
+                      const found = (waitQueue || []).find((w: any) => w.name === filaName.trim() && w.since === since);
+                      if (found) setFilaMyId(found.id);
+                    }, 1500);
+                    setFilaStep('waiting');
+                    setFilaLoading(false);
+                  }}
+                  className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {filaLoading ? '⏳ Entrando...' : '✂️ Entrar na fila'}
+                </button>
+
+                <button onClick={() => setView('HOME')} onTouchEnd={e=>{e.preventDefault();setView('HOME');}}
+                  className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase border transition-all ${theme === 'light' ? 'bg-zinc-100 border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                  ← Voltar
+                </button>
+              </>
+            )}
+
+            {/* AGUARDANDO */}
+            {filaStep === 'waiting' && (
+              <div className="text-center space-y-5">
+                <div className="w-24 h-24 rounded-full gradiente-ouro flex items-center justify-center mx-auto shadow-2xl shadow-[#C58A4A]/30">
+                  <span className="text-4xl font-black text-black">
+                    {filaMyId ? ((waitQueue || []).filter((w: any) => w.status === 'AGUARDANDO').findIndex((w: any) => w.id === filaMyId) + 1) || '...' : '...'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Você está na fila!</h3>
+                  <p className={`text-[11px] mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Posição atual • fique de olho</p>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  {[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-[#C58A4A] animate-bounce" style={{animationDelay:`${i*150}ms`}}/>)}
+                </div>
+                <p className={`text-[11px] ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Aguarde ser chamado pelo barbeiro</p>
+                <button onClick={async () => { if (filaMyId) await removeFromWaitQueue(filaMyId); setFilaMyId(null); setFilaStep('form'); setFilaName(''); setFilaProfId(''); }}
+                  className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase border transition-all ${theme === 'light' ? 'bg-zinc-100 border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-400'}`}>
+                  Sair da fila
+                </button>
+              </div>
+            )}
+
+            {/* CHAMADO */}
+            {filaStep === 'called' && (
+              <div className="text-center space-y-5">
+                <div className="text-6xl animate-bounce">✂️</div>
+                <h3 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>É a sua vez!</h3>
+                <p className={`text-sm ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>O barbeiro está esperando por você.</p>
+                <button onClick={() => { setFilaStep('form'); setFilaName(''); setFilaProfId(''); setFilaMyId(null); setView('HOME'); }}
+                  onTouchEnd={e => { e.preventDefault(); setFilaStep('form'); setFilaName(''); setFilaProfId(''); setFilaMyId(null); setView('HOME'); }}
+                  className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black uppercase tracking-widest text-sm">
+                  Obrigado! ✓
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
