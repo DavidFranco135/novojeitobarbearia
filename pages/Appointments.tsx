@@ -377,6 +377,22 @@ const Appointments: React.FC = () => {
   return (
 
     <div className="h-full flex flex-col space-y-4 animate-in fade-in pb-10">
+
+      {/* Modo compacto: só grade + botão para sair */}
+      {compactView && (
+        <div className="flex items-center justify-end px-2 pt-1">
+          <button
+            onClick={() => { setCompactView(false); document.exitFullscreen?.(); }}
+            className="px-4 py-2 rounded-lg text-[9px] font-black uppercase bg-purple-600 text-white flex items-center gap-2 shadow-lg"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            Sair do Compacto
+          </button>
+        </div>
+      )}
+
+      {/* Header normal — oculto no compacto */}
+      {!compactView && (
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className={`text-2xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Agenda Digital</h1>
@@ -472,6 +488,7 @@ const Appointments: React.FC = () => {
           <button onClick={() => setShowAddModal(true)} className="gradiente-ouro text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Agendar +</button>
         </div>
       </div>
+      )}
 
       <div className={`flex-1 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
         {viewMode === 'grid' ? (
