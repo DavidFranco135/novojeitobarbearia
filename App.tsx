@@ -61,9 +61,10 @@ const App: React.FC = () => {
     return params.get('validateBenefit');
   }, []);
 
-  // ── NOVO: Se URL tem token de benefício, mostra validador ──
-  // Mostra fila de espera pública quando URL tem ?fila=1
-  const isFilaView = new URLSearchParams(window.location.search).get('fila') === '1';
+  const isFilaView = React.useMemo(() => {
+    return new URLSearchParams(window.location.search).get('fila') === '1';
+  }, []);
+
   if (isFilaView) {
     return <FilaEspera />;
   }
