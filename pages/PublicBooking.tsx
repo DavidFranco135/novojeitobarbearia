@@ -574,12 +574,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
     const today = new Date().toISOString().split('T')[0];
     const isToday = selecao.date === today;
-    const nowMinutes = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : 0;
+    const nowHour = isToday ? new Date().getHours() : 0;
     const available = isToday
-      ? times.filter(t => {
-          const [h, m] = t.split(':').map(Number);
-          return (h * 60 + m) > nowMinutes;
-        })
+      ? times.filter(t => parseInt(t.split(':')[0]) >= nowHour)
       : times;
     return {
       manha: available.filter(t => parseInt(t.split(':')[0]) < 12),
@@ -1786,7 +1783,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                      </div>
                      {/* Cartão de selos visual */}
                      {(() => {
-                       const myCard = loyaltyCards?.find((lc: any) => lc.clientId === loggedClient.id);
+                       const myCard = loyaltyCards?.find((lc: any) =>
+               lc.clientId === loggedClient.id ||
+               (loggedClient.phone && lc.clientPhone === loggedClient.phone) ||
+               (loggedClient.name && lc.clientName === loggedClient.name && !lc.clientId)
+             );
                        const stampsTotal = (config as any).stampsForFreeCut || 10;
                        const stampsUsed = myCard?.stamps || 0;
                        const freeCutsPending = myCard?.freeCutsPending || 0;
@@ -2325,6 +2326,46 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
              ✂️ Agendar meu horário
            </button>
+
+           {/* ── Cartão de Selos — dados reais do Firestore ── */}
+           {(() => {
+             const myCard = loyaltyCards?.find((lc: any) =>
+               lc.clientId === loggedClient.id ||
+               (loggedClient.phone && lc.clientPhone === loggedClient.phone) ||
+               (loggedClient.name && lc.clientName === loggedClient.name && !lc.clientId)
+             );
+             const stampsTotal = (config as any).stampsForFreeCut || 10;
+             const stampsUsed = myCard?.stamps || 0;
+             const freeCutsPending = myCard?.freeCutsPending || 0;
+             const credits = myCard?.credits || 0;
+             return (
+               <div className={`rounded-[2rem] p-6 mb-6 border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/20'}`}>
+                 <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro rounded-t-[2rem]"/>
+                 <div className="flex items-center justify-between mb-4">
+                   <div>
+                     <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Cartão de Fidelidade</p>
+                     <p className={`text-lg font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{stampsUsed} de {stampsTotal} selos</p>
+                   </div>
+                   <div className="text-right space-y-1">
+                     {credits > 0 && <p className="text-emerald-400 font-black text-sm">💰 R$ {credits.toFixed(2)}</p>}
+                     {freeCutsPending > 0 && <p className="text-[#C58A4A] font-black text-[10px] uppercase">🎁 {freeCutsPending}x corte grátis!</p>}
+                   </div>
+                 </div>
+                 <div className="grid grid-cols-5 gap-2">
+                   {Array.from({ length: stampsTotal }).map((_, i) => (
+                     <div key={i} className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-all ${i < stampsUsed ? 'gradiente-ouro border-transparent shadow-lg shadow-[#C58A4A]/20' : theme === 'light' ? 'bg-zinc-100 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                       {i < stampsUsed
+                         ? <Scissors size={13} className="text-black"/>
+                         : <span className={`text-[9px] font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{i + 1}</span>}
+                     </div>
+                   ))}
+                 </div>
+                 {stampsUsed === 0 && (
+                   <p className={`text-center text-[10px] mt-3 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Seus selos aparecem aqui após cada atendimento ✂️</p>
+                 )}
+               </div>
+             );
+           })()}
 
            <div className="grid md:grid-cols-3 gap-6 mb-10">
               <div className={`md:col-span-1 rounded-[2rem] p-8 text-center space-y-6 ${theme === 'light' ? 'bg-white border border-zinc-200' : 'cartao-vidro border-white/5'}`}>
