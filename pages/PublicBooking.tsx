@@ -2327,6 +2327,67 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
              ✂️ Agendar meu horário
            </button>
 
+           {/* ── Plano VIP ativo — info do plano ── */}
+           {(() => {
+             const mySub = (subscriptions || []).find((s: any) => s.clientId === loggedClient.id && s.status === 'ATIVA');
+             if (!mySub) return null;
+             const plan = ((config as any).vipPlans || []).find((p: any) => p.id === mySub.planId);
+             if (!plan) return null;
+             const cutsUsed = mySub.cutsThisPeriod || 0;
+             const maxCuts = plan.maxCuts || 0;
+             const pct = maxCuts > 0 ? Math.min((cutsUsed / maxCuts) * 100, 100) : 0;
+             const available = maxCuts === 0 || cutsUsed < maxCuts;
+             return (
+               <div className={`rounded-[2rem] p-6 mb-6 border relative overflow-hidden ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-[#C58A4A]/30'}`}>
+                 <div className="absolute top-0 inset-x-0 h-1 gradiente-ouro"/>
+                 <div className="flex items-center justify-between mb-4">
+                   <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 gradiente-ouro rounded-xl flex items-center justify-center shrink-0">
+                       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-black"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.7 2a1 1 0 0 0 0 2h8.6a1 1 0 0 0 0-2H7.7z"/></svg>
+                     </div>
+                     <div>
+                       <p className={`font-black text-base ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>{plan.name}</p>
+                       <p className="text-[9px] font-black text-[#C58A4A] uppercase tracking-widest">Plano Ativo</p>
+                     </div>
+                   </div>
+                   <div className="text-right">
+                     <p className={`text-xl font-black ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>R$ {mySub.price?.toFixed(2)}</p>
+                     <p className={`text-[9px] ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>/{plan.period === 'MENSAL' ? 'mês' : plan.period}</p>
+                   </div>
+                 </div>
+
+                 {maxCuts > 0 && (
+                   <div className="mb-4">
+                     <div className="flex items-center justify-between mb-1">
+                       <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Cortes utilizados</p>
+                       <p className={`text-[10px] font-black ${available ? 'text-[#C58A4A]' : 'text-red-400'}`}>{cutsUsed}/{maxCuts}</p>
+                     </div>
+                     <div className={`w-full h-2 rounded-full ${theme === 'light' ? 'bg-zinc-200' : 'bg-white/10'}`}>
+                       <div className={`h-full rounded-full transition-all ${cutsUsed >= maxCuts ? 'bg-red-500' : 'bg-[#C58A4A]'}`} style={{width:`${pct}%`}}/>
+                     </div>
+                     {!available && <p className="text-[9px] text-red-400 font-black mt-1">⛔ Limite de cortes atingido — renova em {mySub.endDate}</p>}
+                   </div>
+                 )}
+
+                 {plan.benefits?.length > 0 && (
+                   <div className="space-y-1.5">
+                     {plan.benefits.slice(0,3).map((b: string, i: number) => (
+                       <div key={i} className="flex items-center gap-2">
+                         <div className="w-1.5 h-1.5 rounded-full bg-[#C58A4A] shrink-0"/>
+                         <p className={`text-[11px] ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{b}</p>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+
+                 <div className={`mt-4 pt-4 border-t flex items-center justify-between ${theme === 'light' ? 'border-zinc-100' : 'border-white/5'}`}>
+                   <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Válido até</p>
+                   <p className={`text-[11px] font-black ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>{mySub.endDate}</p>
+                 </div>
+               </div>
+             );
+           })()}
+
            {/* ── Cartão de Selos — dados reais do Firestore ── */}
            {(() => {
              const myCard = loyaltyCards?.find((lc: any) =>
