@@ -20,6 +20,17 @@ const Settings: React.FC = () => {
   const [newAdminPass, setNewAdminPass] = useState('');
   const [reprocessing, setReprocessing] = useState(false);
   const [reprocessMsg, setReprocessMsg] = useState<{ok:boolean;txt:string}|null>(null);
+  // ── Abas do Settings ──────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'geral'|'planos'|'fidelidade'|'seguranca'>('geral');
+  // ── Gestão de Selos ───────────────────────────────────────────
+  const [loyaltyCards, setLoyaltyCards] = useState<any[]>([]);
+  const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+  const [loyaltySearch, setLoyaltySearch] = useState('');
+  const [editingCard, setEditingCard] = useState<any>(null);
+  const [editStamps, setEditStamps] = useState('');
+  const [editCredits, setEditCredits] = useState('');
+  const [editFreeCuts, setEditFreeCuts] = useState('');
+  const [loyaltySaveMsg, setLoyaltySaveMsg] = useState<{ok:boolean;txt:string}|null>(null);
   const [confirmAdminPass, setConfirmAdminPass] = useState('');
   const [passMsg, setPassMsg] = useState<{ok:boolean;txt:string}|null>(null);
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
@@ -172,6 +183,23 @@ const Settings: React.FC = () => {
         </button>
       </div>
 
+      {/* ── Abas de Navegação ── */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 border-b border-white/10">
+        {([
+          { key: 'geral',      label: '⚙️ Geral',      },
+          { key: 'planos',     label: '👑 Planos VIP',  },
+          { key: 'fidelidade', label: '🏅 Fidelidade',  },
+          { key: 'seguranca',  label: '🔐 Segurança',   },
+        ] as const).map(tab => (
+          <button key={tab.key} type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 ${activeTab === tab.key ? 'gradiente-ouro text-black shadow-lg' : isDark ? 'bg-white/5 text-zinc-400 hover:bg-white/10' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}
+          >{tab.label}</button>
+        ))}
+      </div>
+
+      {/* ══ ABA GERAL ══ */}
+      {activeTab === 'geral' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
         {/* ══ Coluna Principal ══ */}
@@ -623,161 +651,266 @@ const Settings: React.FC = () => {
             </button>
           </div>
 
-          {/* ── Segurança — Trocar Senha Admin ── */}
+
+
+
+        </aside>
+      </div>
+
+      )} {/* fim aba geral */}
+
+      {/* ══ ABA PLANOS VIP ══ */}
+      {activeTab === 'planos' && (
+        <div className="space-y-6">
           <div className={card}>
-            <h3 className={h3}>🔐 Segurança — Senha Admin</h3>
-            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-              Troque a senha de acesso ao painel administrativo.
-            </p>
-            <div className="space-y-3">
-              <input
-                type="password"
-                placeholder="Nova senha"
-                value={newAdminPass}
-                onChange={e => { setNewAdminPass(e.target.value); setPassMsg(null); }}
-                className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-[#C58A4A]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
-              />
-              <input
-                type="password"
-                placeholder="Confirmar nova senha"
-                value={confirmAdminPass}
-                onChange={e => { setConfirmAdminPass(e.target.value); setPassMsg(null); }}
-                className={`w-full border p-4 rounded-xl text-sm font-bold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-[#C58A4A]' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
-              />
-              {passMsg && (
-                <p className={`text-[10px] font-black uppercase tracking-widest ${passMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>
-                  {passMsg.txt}
-                </p>
+            <h3 className={h3}>👑 Planos VIP</h3>
+            <p className={`text-[10px] mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Gerencie os planos de assinatura da barbearia.</p>
+            <div className="space-y-4 mt-6">
+              {(formData.vipPlans || []).map((plan: any) => (
+                <div key={plan.id} className={`flex items-center justify-between p-4 rounded-2xl border ${isDark ? 'bg-white/3 border-white/5' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${plan.featured ? 'gradiente-ouro' : isDark ? 'bg-white/10' : 'bg-zinc-200'}`}>
+                      <Crown size={14} className={plan.featured ? 'text-black' : 'text-[#C58A4A]'}/>
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`font-black text-sm truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>{plan.name}</p>
+                      <p className={`text-[9px] font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>R$ {plan.price?.toFixed(2)} / {plan.period === 'MENSAL' ? 'mês' : plan.period} {plan.maxCuts ? `· ${plan.maxCuts} cortes` : ''}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[8px] font-black px-2 py-1 rounded-full ${plan.status === 'ATIVO' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{plan.status}</span>
+                    <button type="button" onClick={() => handleEditPlan(plan)} className="p-2 rounded-xl bg-[#C58A4A]/10 text-[#C58A4A] hover:bg-[#C58A4A]/20 transition-all"><Edit3 size={13}/></button>
+                    <button type="button" onClick={() => handleDeletePlan(plan.id)} className="p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"><Trash2 size={13}/></button>
+                  </div>
+                </div>
+              ))}
+              {(formData.vipPlans || []).length === 0 && (
+                <div className={`text-center py-10 rounded-2xl border-2 border-dashed ${isDark ? 'border-white/10 text-zinc-600' : 'border-zinc-200 text-zinc-400'}`}>
+                  <p className="font-black text-[10px] uppercase tracking-widest">Nenhum plano criado</p>
+                </div>
               )}
-              <button
-                type="button"
+              <button type="button" onClick={() => { setEditingPlan(null); setNewPlan({ name: '', price: 0, period: 'MENSAL', benefits: [''], status: 'ATIVO', maxCuts: 4, vipCommissionPct: 50, members: [] }); setShowVipPlanModal(true); }}
+                className="w-full py-4 rounded-2xl gradiente-ouro text-black font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all flex items-center justify-center gap-2">
+                <Plus size={14}/> Novo Plano VIP
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ ABA FIDELIDADE ══ */}
+      {activeTab === 'fidelidade' && (
+        <div className="space-y-6">
+          {/* Configurações de fidelidade */}
+          <div className={card}>
+            <h3 className={h3}>🏅 Programa de Fidelidade</h3>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="space-y-2">
+                <label className={lbl}>Selos para Corte Grátis</label>
+                <input type="number" min="1" max="50" value={(formData as any).stampsForFreeCut || 10}
+                  onChange={e => setFormData({...formData, stampsForFreeCut: parseInt(e.target.value)||10} as any)}
+                  className={inp}/>
+              </div>
+              <div className="space-y-2">
+                <label className={lbl}>% Cashback por Visita</label>
+                <input type="number" min="0" max="50" value={(formData as any).cashbackPercent || 5}
+                  onChange={e => setFormData({...formData, cashbackPercent: parseInt(e.target.value)||0} as any)}
+                  className={inp}/>
+              </div>
+            </div>
+            <button type="button" onClick={handleSave} disabled={loading}
+              className="w-full mt-4 gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+              {loading ? '⏳ Salvando...' : '💾 Salvar Configurações'}
+            </button>
+          </div>
+
+          {/* Gestão de cartões */}
+          <div className={card}>
+            <h3 className={h3}>🃏 Cartões dos Clientes</h3>
+            <div className="mt-4 space-y-4">
+              <input type="text" placeholder="🔍 Buscar cliente..." value={loyaltySearch}
+                onChange={e => setLoyaltySearch(e.target.value)}
+                className={inp}/>
+              {/* Carregar cartões */}
+              <button type="button" disabled={loyaltyLoading}
                 onClick={async () => {
-                  if (!newAdminPass || newAdminPass.length < 4) {
-                    setPassMsg({ ok: false, txt: 'Senha precisa ter pelo menos 4 caracteres.' });
-                    return;
-                  }
-                  if (newAdminPass !== confirmAdminPass) {
-                    setPassMsg({ ok: false, txt: 'As senhas não coincidem.' });
-                    return;
-                  }
+                  setLoyaltyLoading(true);
                   try {
-                    await updateConfig({ adminPassword: newAdminPass } as any);
-                    setPassMsg({ ok: true, txt: '✅ Senha alterada com sucesso!' });
-                    setNewAdminPass('');
-                    setConfirmAdminPass('');
-                  } catch {
-                    setPassMsg({ ok: false, txt: 'Erro ao salvar. Tente novamente.' });
-                  }
+                    const { getFirestore, collection: col, getDocs } = await import('firebase/firestore');
+                    const { getApp } = await import('firebase/app');
+                    const db = getFirestore(getApp());
+                    const snap = await getDocs(col(db, 'loyaltyCards'));
+                    setLoyaltyCards(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                  } catch {}
+                  setLoyaltyLoading(false);
                 }}
-                className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
-              >
+                className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase border transition-all ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:border-[#C58A4A]' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:border-[#C58A4A]'}`}>
+                {loyaltyLoading ? '⏳ Carregando...' : '🔄 Carregar Cartões'}
+              </button>
+
+              {loyaltyCards.filter(c => !loyaltySearch || c.clientName?.toLowerCase().includes(loyaltySearch.toLowerCase()) || c.clientPhone?.includes(loyaltySearch)).map(card => (
+                <div key={card.id} className={`rounded-2xl border p-4 space-y-3 ${isDark ? 'bg-white/3 border-white/5' : 'bg-zinc-50 border-zinc-100'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>{card.clientName}</p>
+                      <p className={`text-[9px] font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{card.clientPhone}</p>
+                    </div>
+                    <button type="button" onClick={() => { setEditingCard(card); setEditStamps(String(card.stamps||0)); setEditCredits(String(card.credits||0)); setEditFreeCuts(String(card.freeCutsPending||0)); setLoyaltySaveMsg(null); }}
+                      className="p-2 rounded-xl bg-[#C58A4A]/10 text-[#C58A4A] hover:bg-[#C58A4A]/20 transition-all"><Edit3 size={13}/></button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className={`p-2 rounded-xl ${isDark ? 'bg-white/5' : 'bg-white border border-zinc-100'}`}>
+                      <p className="text-[#C58A4A] font-black text-lg">{card.stamps||0}</p>
+                      <p className={`text-[8px] font-black uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Selos</p>
+                    </div>
+                    <div className={`p-2 rounded-xl ${isDark ? 'bg-white/5' : 'bg-white border border-zinc-100'}`}>
+                      <p className="text-emerald-400 font-black text-lg">R${(card.credits||0).toFixed(0)}</p>
+                      <p className={`text-[8px] font-black uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Créditos</p>
+                    </div>
+                    <div className={`p-2 rounded-xl ${isDark ? 'bg-white/5' : 'bg-white border border-zinc-100'}`}>
+                      <p className="text-amber-400 font-black text-lg">{card.freeCutsPending||0}</p>
+                      <p className={`text-[8px] font-black uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Grátis</p>
+                    </div>
+                  </div>
+                  <p className={`text-[8px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Total histórico: {card.totalStamps||0} cortes</p>
+
+                  {/* Editor inline */}
+                  {editingCard?.id === card.id && (
+                    <div className="space-y-3 pt-3 border-t border-white/10 animate-in slide-in-from-top-2">
+                      {loyaltySaveMsg && <p className={`text-[9px] font-black uppercase ${loyaltySaveMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{loyaltySaveMsg.txt}</p>}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="space-y-1">
+                          <label className={`text-[8px] font-black uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Selos</label>
+                          <input type="number" min="0" value={editStamps} onChange={e => setEditStamps(e.target.value)}
+                            className={`w-full border p-2 rounded-xl text-sm font-bold text-center outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}/>
+                        </div>
+                        <div className="space-y-1">
+                          <label className={`text-[8px] font-black uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Créditos R$</label>
+                          <input type="number" min="0" step="0.01" value={editCredits} onChange={e => setEditCredits(e.target.value)}
+                            className={`w-full border p-2 rounded-xl text-sm font-bold text-center outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}/>
+                        </div>
+                        <div className="space-y-1">
+                          <label className={`text-[8px] font-black uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Grátis</label>
+                          <input type="number" min="0" value={editFreeCuts} onChange={e => setEditFreeCuts(e.target.value)}
+                            className={`w-full border p-2 rounded-xl text-sm font-bold text-center outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}/>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setEditingCard(null)}
+                          className={`flex-1 py-2.5 rounded-xl font-black text-[9px] uppercase border ${isDark ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-100 border-zinc-200 text-zinc-500'}`}>
+                          Cancelar
+                        </button>
+                        <button type="button"
+                          onClick={async () => {
+                            try {
+                              const { getFirestore, doc: docFn, updateDoc } = await import('firebase/firestore');
+                              const { getApp } = await import('firebase/app');
+                              const db = getFirestore(getApp());
+                              await updateDoc(docFn(db, 'loyaltyCards', card.id), {
+                                stamps: parseInt(editStamps)||0,
+                                credits: parseFloat(editCredits)||0,
+                                freeCutsPending: parseInt(editFreeCuts)||0,
+                                updatedAt: new Date().toISOString(),
+                              });
+                              setLoyaltyCards(prev => prev.map(c => c.id === card.id ? { ...c, stamps: parseInt(editStamps)||0, credits: parseFloat(editCredits)||0, freeCutsPending: parseInt(editFreeCuts)||0 } : c));
+                              setLoyaltySaveMsg({ ok: true, txt: '✅ Salvo!' });
+                              setTimeout(() => { setEditingCard(null); setLoyaltySaveMsg(null); }, 1500);
+                            } catch { setLoyaltySaveMsg({ ok: false, txt: 'Erro ao salvar.' }); }
+                          }}
+                          className="flex-1 py-2.5 rounded-xl font-black text-[9px] uppercase gradiente-ouro text-black hover:scale-105 transition-all">
+                          💾 Salvar
+                        </button>
+                        <button type="button"
+                          onClick={async () => {
+                            if (!confirm(`Resetar cartão de ${card.clientName}?`)) return;
+                            try {
+                              const { getFirestore, doc: docFn, updateDoc } = await import('firebase/firestore');
+                              const { getApp } = await import('firebase/app');
+                              const db = getFirestore(getApp());
+                              await updateDoc(docFn(db, 'loyaltyCards', card.id), { stamps: 0, credits: 0, freeCutsPending: 0, updatedAt: new Date().toISOString() });
+                              setLoyaltyCards(prev => prev.map(c => c.id === card.id ? { ...c, stamps: 0, credits: 0, freeCutsPending: 0 } : c));
+                              setEditingCard(null);
+                            } catch {}
+                          }}
+                          className="p-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
+                          <Trash2 size={13}/>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {loyaltyCards.length === 0 && !loyaltyLoading && (
+                <p className={`text-center py-8 text-[10px] font-black uppercase ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Clique em "Carregar Cartões" para visualizar</p>
+              )}
+            </div>
+          </div>
+
+          {/* Reprocessar */}
+          <div className={card}>
+            <h3 className={h3}>🔧 Manutenção de Selos</h3>
+            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Reprocessa todos os cartões com base nos agendamentos finalizados. Use uma vez para corrigir histórico.</p>
+            {reprocessMsg && <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${reprocessMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>{reprocessMsg.txt}</p>}
+            <button type="button" disabled={reprocessing}
+              onClick={async () => {
+                if (!confirm('Confirma o reprocessamento de selos?')) return;
+                setReprocessing(true); setReprocessMsg(null);
+                try {
+                  const { getFirestore, collection: col, getDocs, doc: docFn, updateDoc, addDoc } = await import('firebase/firestore');
+                  const { getApp } = await import('firebase/app');
+                  const db = getFirestore(getApp());
+                  const apptSnap = await getDocs(col(db, 'appointments'));
+                  const finalized = apptSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(a => a.status === 'CONCLUIDO_PAGO' && a.clientId);
+                  const byClient: Record<string, any[]> = {};
+                  for (const a of finalized) { if (!byClient[a.clientId]) byClient[a.clientId] = []; byClient[a.clientId].push(a); }
+                  const stampsLimit = (config as any).stampsForFreeCut ?? 10;
+                  const cashbackPct = (config as any).cashbackPercent ?? 5;
+                  const cardSnap = await getDocs(col(db, 'loyaltyCards'));
+                  const existing: Record<string, any> = {};
+                  cardSnap.docs.forEach(d => { existing[d.data().clientId] = { id: d.id, ...d.data() }; });
+                  let updated = 0, created = 0;
+                  for (const [clientId, appts] of Object.entries(byClient)) {
+                    const total = appts.length;
+                    const stamps = total % stampsLimit;
+                    const freeCuts = Math.floor(total / stampsLimit);
+                    const credits = parseFloat(((appts.reduce((s: number, a: any) => s + (a.price||0), 0) * cashbackPct) / 100).toFixed(2));
+                    const data = { clientId, clientName: appts[0].clientName||'', clientPhone: appts[0].clientPhone||'', stamps, totalStamps: total, credits, freeCutsPending: freeCuts, freeCutsEarned: freeCuts, updatedAt: new Date().toISOString() };
+                    if (existing[clientId]) { await updateDoc(docFn(db, 'loyaltyCards', existing[clientId].id), data); updated++; }
+                    else { await addDoc(col(db, 'loyaltyCards'), { ...data, createdAt: new Date().toISOString() }); created++; }
+                  }
+                  setReprocessMsg({ ok: true, txt: `✅ ${created} criados, ${updated} atualizados.` });
+                } catch (e: any) { setReprocessMsg({ ok: false, txt: `Erro: ${e.message}` }); }
+                setReprocessing(false);
+              }}
+              className="w-full py-4 rounded-2xl font-black text-[10px] uppercase border transition-all bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 disabled:opacity-50">
+              {reprocessing ? '⏳ Processando...' : '🔄 Reprocessar Selos Agora'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══ ABA SEGURANÇA ══ */}
+      {activeTab === 'seguranca' && (
+        <div className="max-w-lg space-y-6">
+          <div className={card}>
+            <h3 className={h3}>🔐 Senha Admin</h3>
+            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Troque a senha de acesso ao painel administrativo.</p>
+            <div className="space-y-3">
+              <input type="password" placeholder="Nova senha" value={newAdminPass} onChange={e => { setNewAdminPass(e.target.value); setPassMsg(null); }} className={inp}/>
+              <input type="password" placeholder="Confirmar nova senha" value={confirmAdminPass} onChange={e => { setConfirmAdminPass(e.target.value); setPassMsg(null); }} className={inp}/>
+              {passMsg && <p className={`text-[10px] font-black uppercase tracking-widest ${passMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>{passMsg.txt}</p>}
+              <button type="button" onClick={async () => {
+                if (!newAdminPass || newAdminPass.length < 4) { setPassMsg({ ok: false, txt: 'Senha precisa ter pelo menos 4 caracteres.' }); return; }
+                if (newAdminPass !== confirmAdminPass) { setPassMsg({ ok: false, txt: 'As senhas não coincidem.' }); return; }
+                try { await updateConfig({ adminPassword: newAdminPass } as any); setPassMsg({ ok: true, txt: '✅ Senha alterada com sucesso!' }); setNewAdminPass(''); setConfirmAdminPass(''); }
+                catch { setPassMsg({ ok: false, txt: 'Erro ao salvar. Tente novamente.' }); }
+              }} className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                 🔒 Alterar Senha
               </button>
             </div>
           </div>
-
-          {/* ── Manutenção ── */}
-          <div className={card}>
-            <h3 className={h3}>🔧 Manutenção</h3>
-            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-              Ferramentas administrativas para corrigir dados do sistema.
-            </p>
-
-            <div className="space-y-3">
-              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
-                <p className="text-amber-400 font-black text-[10px] uppercase tracking-widest mb-1">⚠️ Reprocessar Selos de Fidelidade</p>
-                <p className={`text-[10px] mb-3 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                  Recalcula os selos de todos os clientes com base nos agendamentos finalizados. Use apenas uma vez para corrigir selos antigos. Nenhum dado é deletado.
-                </p>
-                {reprocessMsg && (
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${reprocessMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>
-                    {reprocessMsg.txt}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  disabled={reprocessing}
-                  onClick={async () => {
-                    if (!confirm('Confirma o reprocessamento de selos? Isso vai recalcular todos os cartões de fidelidade.')) return;
-                    setReprocessing(true);
-                    setReprocessMsg(null);
-                    try {
-                      const { getFirestore, collection: col, getDocs, doc, setDoc, query, where } = await import('firebase/firestore');
-                      const { getApp } = await import('firebase/app');
-                      const db = getFirestore(getApp());
-
-                      // Busca todos agendamentos finalizados
-                      const apptSnap = await getDocs(col(db, 'appointments'));
-                      const finalized = apptSnap.docs
-                        .map(d => ({ id: d.id, ...d.data() } as any))
-                        .filter(a => a.status === 'CONCLUIDO_PAGO' && a.clientId);
-
-                      // Agrupa por clientId
-                      const byClient: Record<string, any[]> = {};
-                      for (const a of finalized) {
-                        if (!byClient[a.clientId]) byClient[a.clientId] = [];
-                        byClient[a.clientId].push(a);
-                      }
-
-                      const stampsLimit = (config as any).stampsForFreeCut ?? 10;
-                      const cashbackPct = (config as any).cashbackPercent ?? 5;
-
-                      // Busca cards existentes
-                      const cardSnap = await getDocs(col(db, 'loyaltyCards'));
-                      const existingCards: Record<string, any> = {};
-                      cardSnap.docs.forEach(d => { existingCards[d.data().clientId] = { id: d.id, ...d.data() }; });
-
-                      let updated = 0;
-                      let created = 0;
-
-                      for (const [clientId, appts] of Object.entries(byClient)) {
-                        const totalStamps = appts.length;
-                        const stamps = totalStamps % stampsLimit;
-                        const freeCutsEarned = Math.floor(totalStamps / stampsLimit);
-                        const totalRevenue = appts.reduce((s: number, a: any) => s + (a.price || 0), 0);
-                        const credits = parseFloat(((totalRevenue * cashbackPct) / 100).toFixed(2));
-                        const clientName = appts[0].clientName || '';
-                        const clientPhone = appts[0].clientPhone || '';
-
-                        const cardData = {
-                          clientId,
-                          clientName,
-                          clientPhone,
-                          stamps,
-                          totalStamps,
-                          credits,
-                          freeCutsPending: freeCutsEarned,
-                          freeCutsEarned,
-                          updatedAt: new Date().toISOString(),
-                        };
-
-                        if (existingCards[clientId]) {
-                          const { doc: docFn, updateDoc } = await import('firebase/firestore');
-                          await updateDoc(docFn(db, 'loyaltyCards', existingCards[clientId].id), cardData);
-                          updated++;
-                        } else {
-                          const { addDoc } = await import('firebase/firestore');
-                          await addDoc(col(db, 'loyaltyCards'), { ...cardData, createdAt: new Date().toISOString() });
-                          created++;
-                        }
-                      }
-
-                      setReprocessMsg({ ok: true, txt: `✅ Concluído! ${created} cartões criados, ${updated} atualizados.` });
-                    } catch (e: any) {
-                      setReprocessMsg({ ok: false, txt: `Erro: ${e.message || 'Tente novamente.'}` });
-                    }
-                    setReprocessing(false);
-                  }}
-                  className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50"
-                >
-                  {reprocessing ? '⏳ Processando...' : '🔄 Reprocessar Selos Agora'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-        </aside>
-      </div>
+        </div>
+      )}
 
       {/* ── Modal Plano VIP ── */}
       {showVipPlanModal && (
