@@ -511,9 +511,9 @@ const Appointments: React.FC = () => {
       <div className={`flex-1 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border ${theme === 'light' ? 'bg-white border-zinc-200' : 'cartao-vidro border-white/5'}`}>
         {viewMode === 'grid' ? (
           <div className="overflow-auto h-full scrollbar-hide" style={{WebkitOverflowScrolling:'touch', overflowX:'auto', overflowY:'auto'}}>
-            <div style={{minWidth: compactView ? `${Math.max(280, 60 + professionals.length * 90)}px` : `${Math.max(400, 80 + professionals.length * 150)}px`, width:'max-content', minHeight:'100%'}}>
-              {/* CABEÇALHO: Reduzido padding vertical */}
-              <div className={`border-b sticky top-0 z-10 ${theme === 'light' ? 'border-zinc-200 bg-zinc-50' : 'border-white/5 bg-white/[0.02]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 88px)` : `80px repeat(${professionals.length}, 148px)`}}>
+            <div style={{minWidth: '100%', width:'100%', minHeight:'100%'}}>
+              {/* CABEÇALHO */}
+              <div className={`border-b sticky top-0 z-10 ${theme === 'light' ? 'border-zinc-200 bg-zinc-50' : 'border-white/5 bg-white/[0.02]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, minmax(80px, 1fr))` : `80px repeat(${professionals.length}, minmax(120px, 1fr))`}}>
                 <div className={`flex items-center justify-center text-zinc-500 ${compactView ? 'p-2' : 'p-3'}`}><Clock size={compactView ? 14 : 18} /></div>
                 {professionals.map(prof => (
                   <div key={prof.id} className={`flex items-center justify-center gap-3 border-r border-white/5 ${compactView ? 'p-2 flex-col' : 'p-3'}`}>
@@ -524,7 +524,7 @@ const Appointments: React.FC = () => {
               </div>
               {/* LINHAS DE HORÁRIO: Altura reduzida de 100px/50px para 60px/35px */}
               {hours.map(hour => (
-                <div key={hour} className={`border-b ${theme === 'light' ? 'border-zinc-100' : 'border-white/[0.03]'} ${compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, 88px)` : `80px repeat(${professionals.length}, 148px)`}}>
+                <div key={hour} className={`border-b ${theme === 'light' ? 'border-zinc-100' : 'border-white/[0.03]'} ${compactView ? 'min-h-[32px]' : 'min-h-[64px]'}`} style={{display:'grid', gridTemplateColumns: compactView ? `60px repeat(${professionals.length}, minmax(80px, 1fr))` : `80px repeat(${professionals.length}, minmax(120px, 1fr))`}}>
                   <div className={`flex items-center justify-center border-r ${theme === 'light' ? 'border-zinc-200 bg-zinc-50/50' : 'border-white/5 bg-white/[0.01]'}`}><span className={`font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'} ${compactView ? 'text-[9px]' : 'text-[10px]'}`}>{hour}</span></div>
                   {professionals.map(prof => {
                     const app = appointmentsToday.find(a => a.professionalId === prof.id && a.startTime.split(':')[0] === hour.split(':')[0] && a.status !== 'CANCELADO');
