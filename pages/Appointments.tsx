@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, Check, X, CreditCard,
-  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, UserX, Camera, ImagePlus, Trash2
+  Calendar, Scissors, LayoutGrid, List, UserPlus, DollarSign, RefreshCw, Filter, CalendarRange, Phone, Mail, User, Banknote, UserX, Camera, ImagePlus, Trash2, Search, Crown
 } from 'lucide-react';
 
 const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
@@ -163,6 +163,7 @@ const Appointments: React.FC = () => {
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [modoAvulso, setModoAvulso] = useState(false);
   const [avulsoNome, setAvulsoNome] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
   const [newApp, setNewApp] = useState({ clientId: '', serviceId: '', professionalId: '', startTime: '09:00' });
   const [quickClient, setQuickClient] = useState({
     name: '', phone: '', email: '', password: '',
@@ -173,7 +174,7 @@ const Appointments: React.FC = () => {
   // ── Modal Finalização ──────────────────────────────────────
   const [finModal, setFinModal] = useState<any>(null);
   const [finAdditionals, setFinAdditionals] = useState<{id:string;name:string;price:number;qty:number}[]>([]);
-  const [finPayMethod, setFinPayMethod] = useState<'PIX'|'DEBITO'|'CREDITO'|'FIADO'|'DINHEIRO'>('PIX');
+  const [finPayMethod, setFinPayMethod] = useState<'PIX'|'DEBITO'|'CREDITO'|'FIADO'|'DINHEIRO'|'PLANO_VIP'>('PIX');
   const [finNewItem, setFinNewItem] = useState({ name: '', price: '' });
   // ── Fotos do corte ─────────────────────────────────────────
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -239,15 +240,31 @@ const Appointments: React.FC = () => {
   };
 
   // ── Desconto VIP do cliente sendo finalizado ──────────────────────────
-  const clientVipDiscount = useMemo(() => {
-    if (!finModal) return 0;
+  const clientVipSub = useMemo(() => {
+    if (!finModal?.clientId) return null;
     const sub = (subscriptions || []).find((s: any) =>
       s.clientId === finModal.clientId && s.status === 'ATIVA'
     );
-    if (!sub) return 0;
+    if (!sub) return null;
     const plan = ((config as any)?.vipPlans || []).find((p: any) => p.id === sub.planId);
-    return plan?.discount || 0; // % de desconto em produtos
+    return plan ? { sub, plan } : null;
   }, [finModal, subscriptions, config]);
+
+  const clientVipDiscount = useMemo(() => {
+    return clientVipSub?.plan?.discount || 0;
+  }, [clientVipSub]);
+
+  // Auto-seleciona PLANO_VIP se cliente é assinante com cortes disponíveis
+  React.useEffect(() => {
+    if (clientVipSub && finModal) {
+      const { sub, plan } = clientVipSub;
+      const cutsUsed = sub.cutsThisPeriod || 0;
+      const maxCuts = plan.maxCuts || 0;
+      if (maxCuts === 0 || cutsUsed < maxCuts) {
+        setFinPayMethod('PLANO_VIP');
+      }
+    }
+  }, [finModal?.id, clientVipSub]);
 
   const handleFinalize = async () => {
     if (!finModal) return;
@@ -843,10 +860,51 @@ const Appointments: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                  <select required value={newApp.clientId} onChange={e => setNewApp({...newApp, clientId: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black uppercase">
-                    <option value="" className="bg-zinc-950">Selecione o Cliente</option>
-                    {clients.map(c => <option key={c.id} value={c.id} className="bg-zinc-950">{c.name}</option>)}
-                  </select>
+                  {/* Busca de cliente */}
+                  <div className="relative">
+                    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C58A4A] pointer-events-none"/>
+                    <input
+                      type="text"
+                      placeholder="Buscar por nome, telefone ou e-mail..."
+                      value={clientSearch}
+                      onChange={e => { setClientSearch(e.target.value); setNewApp({...newApp, clientId: ''}); }}
+                      className="w-full bg-white/5 border border-white/10 p-4 pl-10 rounded-xl outline-none text-xs font-black uppercase placeholder:normal-case placeholder:font-normal focus:border-[#C58A4A] transition-all"
+                    />
+                  </div>
+                  {clientSearch && (
+                    <div className={`rounded-xl border overflow-hidden max-h-40 overflow-y-auto ${isDark ? 'bg-zinc-900 border-white/10' : 'bg-white border-zinc-200 shadow-lg'}`}>
+                      {clients
+                        .filter((c: any) =>
+                          c.name?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+                          c.phone?.includes(clientSearch) ||
+                          c.email?.toLowerCase().includes(clientSearch.toLowerCase())
+                        )
+                        .slice(0, 8)
+                        .map((c: any) => (
+                          <button key={c.id} type="button"
+                            onClick={() => { setNewApp({...newApp, clientId: c.id}); setClientSearch(c.name); }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between transition-all border-b last:border-b-0 ${newApp.clientId === c.id ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : isDark ? 'text-white hover:bg-white/5 border-white/5' : 'text-zinc-900 hover:bg-zinc-50 border-zinc-100'}`}
+                          >
+                            <span>{c.name}</span>
+                            <span className={`text-[9px] font-normal ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>{c.phone}</span>
+                          </button>
+                        ))
+                      }
+                      {clients.filter((c: any) =>
+                        c.name?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+                        c.phone?.includes(clientSearch) ||
+                        c.email?.toLowerCase().includes(clientSearch.toLowerCase())
+                      ).length === 0 && (
+                        <p className={`px-4 py-3 text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Nenhum cliente encontrado</p>
+                      )}
+                    </div>
+                  )}
+                  {newApp.clientId && (
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl ${isDark ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                      <span className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">✅ {clients.find((c:any)=>c.id===newApp.clientId)?.name}</span>
+                      <button type="button" onClick={() => { setNewApp({...newApp, clientId: ''}); setClientSearch(''); }} className="text-zinc-500 hover:text-red-400 text-[10px]">✕</button>
+                    </div>
+                  )}
                   <button type="button" onClick={() => setShowQuickClient(v => !v)}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#C58A4A]/40 text-[#C58A4A] bg-[#C58A4A]/5 hover:bg-[#C58A4A]/15 transition-all font-black text-[10px] uppercase tracking-widest">
                     <UserPlus size={14}/> Cadastrar Novo Cliente
@@ -900,7 +958,7 @@ const Appointments: React.FC = () => {
                   <input required type="time" value={newApp.startTime} onChange={e => setNewApp({...newApp, startTime: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none text-xs font-black" />
                </div>
                <div className="flex gap-3">
-                  <button type="button" onClick={() => { setShowAddModal(false); setModoAvulso(false); setAvulsoNome(''); }} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
+                  <button type="button" onClick={() => { setShowAddModal(false); setModoAvulso(false); setAvulsoNome(''); setClientSearch(''); }} className="flex-1 bg-white/5 py-4 rounded-xl font-black uppercase text-[10px] text-zinc-500">Cancelar</button>
                   <button type="button" onClick={handleCreateAppointment} onTouchEnd={e => { e.preventDefault(); handleCreateAppointment(); }} className="flex-1 gradiente-ouro text-black py-4 rounded-xl font-black uppercase text-[10px]">Agendar Agora</button>
                </div>
             </div>
@@ -1235,6 +1293,42 @@ const Appointments: React.FC = () => {
                     <p className="font-black text-xl text-[#C58A4A]">R$ {finTotal.toFixed(2)}</p>
                   </div>
 
+                  {/* ── Plano VIP ativo ── */}
+                  {clientVipSub && (() => {
+                    const { sub, plan } = clientVipSub;
+                    const cutsUsed = sub.cutsThisPeriod || 0;
+                    const maxCuts = plan.maxCuts || 0;
+                    const available = maxCuts === 0 || cutsUsed < maxCuts;
+                    return (
+                      <div className={`p-4 rounded-2xl border-2 ${available ? 'border-[#C58A4A]/50 bg-[#C58A4A]/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Crown size={14} className="text-[#C58A4A]"/>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C58A4A]">{plan.name}</p>
+                          </div>
+                          {available
+                            ? <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">CORTE INCLUÍDO</span>
+                            : <span className="text-[8px] font-black text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">LIMITE ATINGIDO</span>
+                          }
+                        </div>
+                        {maxCuts > 0 && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`flex-1 h-1.5 rounded-full ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`}>
+                              <div className={`h-full rounded-full ${cutsUsed >= maxCuts ? 'bg-red-500' : 'bg-[#C58A4A]'}`} style={{width:`${Math.min((cutsUsed/maxCuts)*100,100)}%`}}/>
+                            </div>
+                            <span className={`text-[9px] font-black ${cutsUsed >= maxCuts ? 'text-red-400' : 'text-[#C58A4A]'}`}>{cutsUsed}/{maxCuts}</span>
+                          </div>
+                        )}
+                        <button type="button"
+                          onClick={() => setFinPayMethod('PLANO_VIP')}
+                          disabled={!available}
+                          className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${finPayMethod === 'PLANO_VIP' ? 'gradiente-ouro text-black' : available ? `${isDark ? 'bg-white/5 border border-white/10 text-zinc-300' : 'bg-zinc-100 border border-zinc-200 text-zinc-600'} hover:border-[#C58A4A]/40` : 'opacity-40 cursor-not-allowed bg-white/5 text-zinc-600'}`}>
+                          {finPayMethod === 'PLANO_VIP' ? '✅ Corte pelo Plano Selecionado' : available ? '👑 Usar Corte do Plano' : '⛔ Limite de Cortes Atingido'}
+                        </button>
+                      </div>
+                    );
+                  })()}
+
                   {/* ── Forma de pagamento ── */}
                   <div className="space-y-2">
                     <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Forma de pagamento — recebido na barbearia</p>
@@ -1303,6 +1397,7 @@ const Appointments: React.FC = () => {
                     'gradiente-ouro text-black'
                   }`}>
                   {finLoading ? '⟳ Processando...' :
+                   finPayMethod === 'PLANO_VIP' ? `👑 Finalizar — Corte do Plano ${clientVipSub?.plan?.name || ''}` :
                    finPayMethod === 'PIX' ? `📱 Receber R$ ${finTotal.toFixed(2)} via PIX` :
                    finPayMethod === 'DINHEIRO' ? `💵 Receber R$ ${finTotal.toFixed(2)} em Dinheiro` :
                    finPayMethod === 'DEBITO' ? `💳 Receber R$ ${finTotal.toFixed(2)} no Débito` :
