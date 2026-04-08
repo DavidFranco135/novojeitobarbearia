@@ -572,12 +572,21 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
 
   const turnos = useMemo(() => {
     const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = selecao.date === today;
+    const nowMinutes = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : 0;
+    const available = isToday
+      ? times.filter(t => {
+          const [h, m] = t.split(':').map(Number);
+          return (h * 60 + m) > nowMinutes;
+        })
+      : times;
     return {
-      manha: times.filter(t => parseInt(t.split(':')[0]) < 12),
-      tarde: times.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
-      noite: times.filter(t => parseInt(t.split(':')[0]) >= 18)
+      manha: available.filter(t => parseInt(t.split(':')[0]) < 12),
+      tarde: available.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
+      noite: available.filter(t => parseInt(t.split(':')[0]) >= 18)
     };
-  }, []);
+  }, [selecao.date]);
 
   const categories = useMemo(() => ['Todos', ...Array.from(new Set(services.map(s => s.category)))], [services]);
   const filteredServices = useMemo(() => selectedCategory === 'Todos' ? services : services.filter(s => s.category === selectedCategory), [services, selectedCategory]);
@@ -1776,21 +1785,37 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                        </button>
                      </div>
                      {/* Cartão de selos visual */}
-                     <div className={`rounded-[2rem] p-6 border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                       <p className={`text-[10px] font-black uppercase tracking-widest mb-4 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Seu Cartão Digital</p>
-                       <p className={`text-lg font-black italic mb-6 ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Acumule selos a cada visita</p>
-                       <div className="grid grid-cols-5 gap-2 mb-6">
-                         {Array.from({ length: (config as any).stampsForFreeCut || 10 }).map((_, i) => (
-                           <div key={i} className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-all ${i < 3 ? 'gradiente-ouro border-transparent' : theme === 'light' ? 'bg-zinc-100 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
-                             {i < 3 ? <Scissors size={14} className="text-black" /> : <span className={`text-[10px] font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{i + 1}</span>}
+                     {(() => {
+                       const myCard = loyaltyCards?.find((lc: any) => lc.clientId === loggedClient.id);
+                       const stampsTotal = (config as any).stampsForFreeCut || 10;
+                       const stampsUsed = myCard?.stamps || 0;
+                       const freeCutsPending = myCard?.freeCutsPending || 0;
+                       const credits = myCard?.credits || 0;
+                       return (
+                         <div className={`rounded-[2rem] p-6 border ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                           <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>Seu Cartão de Fidelidade</p>
+                           {freeCutsPending > 0 && (
+                             <div className="mb-4 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 inline-flex items-center gap-2">
+                               <span className="text-emerald-400 font-black text-[11px]">🎁 {freeCutsPending} corte{freeCutsPending > 1 ? 's' : ''} grátis disponível{freeCutsPending > 1 ? 'is' : ''}!</span>
+                             </div>
+                           )}
+                           <div className="grid grid-cols-5 gap-2 mb-4 mt-4">
+                             {Array.from({ length: stampsTotal }).map((_, i) => (
+                               <div key={i} className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-all ${i < stampsUsed ? 'gradiente-ouro border-transparent' : theme === 'light' ? 'bg-zinc-100 border-zinc-200' : 'bg-white/5 border-white/10'}`}>
+                                 {i < stampsUsed
+                                   ? <Scissors size={14} className="text-black" />
+                                   : <span className={`text-[10px] font-black ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>{i + 1}</span>}
+                               </div>
+                             ))}
                            </div>
-                         ))}
-                       </div>
-                       <div className={`flex items-center justify-between text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                         <span>3/{(config as any).stampsForFreeCut || 10} selos</span>
-                         <span className="text-[#C58A4A] font-black">{(config as any).cashbackPercent || 5}% cashback por visita</span>
-                       </div>
-                     </div>
+                           <div className={`flex items-center justify-between text-sm ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                             <span className="font-black">{stampsUsed}/{stampsTotal} selos</span>
+                             {credits > 0 && <span className="text-emerald-400 font-black">R$ {credits.toFixed(2)} créditos</span>}
+                             <span className="text-[#C58A4A] font-black">{(config as any).cashbackPercent || 5}% cashback</span>
+                           </div>
+                         </div>
+                       );
+                     })()}
                    </div>
                  </div>
                  </div>
