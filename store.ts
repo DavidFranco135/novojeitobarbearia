@@ -789,9 +789,14 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
         const cashbackValue = parseFloat(((appointment.price * cashbackPct) / 100).toFixed(2));
 
         const loyaltySnapshot = await getDocs(collection(db, COLLECTIONS.LOYALTY_CARDS));
-        const cardDoc = loyaltySnapshot.docs.find(d => d.data().clientId === appointment.clientId);
+        // Busca por clientId OU por telefone (para clientes cadastrados sem ID no agendamento)
+        const cardDoc = loyaltySnapshot.docs.find(d =>
+          (appointment.clientId && d.data().clientId === appointment.clientId) ||
+          (appointment.clientPhone && d.data().clientPhone === appointment.clientPhone)
+        );
 
         if (cardDoc) {
+          // Atualiza card existente
           const card = cardDoc.data();
           const newStamps = (card.stamps || 0) + 1;
           const cycled = newStamps >= stampsLimit;
@@ -801,6 +806,22 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
             credits: parseFloat(((card.credits || 0) + cashbackValue).toFixed(2)),
             freeCutsPending: cycled ? (card.freeCutsPending || 0) + 1 : (card.freeCutsPending || 0),
             freeCutsEarned: cycled ? (card.freeCutsEarned || 0) + 1 : (card.freeCutsEarned || 0),
+            updatedAt: new Date().toISOString(),
+          });
+        } else if (appointment.clientId) {
+          // Cria card novo se cliente cadastrado ainda não tem um
+          const newStamps = 1;
+          const cycled = newStamps >= stampsLimit;
+          await addDoc(collection(db, COLLECTIONS.LOYALTY_CARDS), {
+            clientId: appointment.clientId,
+            clientName: appointment.clientName,
+            clientPhone: appointment.clientPhone || '',
+            stamps: cycled ? 0 : newStamps,
+            totalStamps: 1,
+            credits: cashbackValue,
+            freeCutsPending: cycled ? 1 : 0,
+            freeCutsEarned: cycled ? 1 : 0,
+            createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
         }
