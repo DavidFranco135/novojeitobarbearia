@@ -8,7 +8,7 @@ import { useBarberStore } from '../store';
 import { VipPlan } from '../types';
 
 const Settings: React.FC = () => {
-  const { config, updateConfig, user, updateUser, resetAllLikes, theme } = useBarberStore();
+  const { config, updateConfig, user, updateUser, resetAllLikes, theme, appointments, clients } = useBarberStore() as any;
   const [formData, setFormData] = useState({ ...config });
   const [userData, setUserData] = useState({
     name: user?.name || '',
@@ -18,6 +18,8 @@ const Settings: React.FC = () => {
   const [cutGalleryDesc, setCutGalleryDesc] = useState('');
   const [cutGalleryLoading, setCutGalleryLoading] = useState(false);
   const [newAdminPass, setNewAdminPass] = useState('');
+  const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessMsg, setReprocessMsg] = useState<{ok:boolean;txt:string}|null>(null);
   const [confirmAdminPass, setConfirmAdminPass] = useState('');
   const [passMsg, setPassMsg] = useState<{ok:boolean;txt:string}|null>(null);
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
@@ -671,6 +673,106 @@ const Settings: React.FC = () => {
               >
                 🔒 Alterar Senha
               </button>
+            </div>
+          </div>
+
+          {/* ── Manutenção ── */}
+          <div className={card}>
+            <h3 className={h3}>🔧 Manutenção</h3>
+            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Ferramentas administrativas para corrigir dados do sistema.
+            </p>
+
+            <div className="space-y-3">
+              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+                <p className="text-amber-400 font-black text-[10px] uppercase tracking-widest mb-1">⚠️ Reprocessar Selos de Fidelidade</p>
+                <p className={`text-[10px] mb-3 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  Recalcula os selos de todos os clientes com base nos agendamentos finalizados. Use apenas uma vez para corrigir selos antigos. Nenhum dado é deletado.
+                </p>
+                {reprocessMsg && (
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${reprocessMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+                    {reprocessMsg.txt}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={reprocessing}
+                  onClick={async () => {
+                    if (!confirm('Confirma o reprocessamento de selos? Isso vai recalcular todos os cartões de fidelidade.')) return;
+                    setReprocessing(true);
+                    setReprocessMsg(null);
+                    try {
+                      const { getFirestore, collection: col, getDocs, doc, setDoc, query, where } = await import('firebase/firestore');
+                      const { getApp } = await import('firebase/app');
+                      const db = getFirestore(getApp());
+
+                      // Busca todos agendamentos finalizados
+                      const apptSnap = await getDocs(col(db, 'appointments'));
+                      const finalized = apptSnap.docs
+                        .map(d => ({ id: d.id, ...d.data() } as any))
+                        .filter(a => a.status === 'CONCLUIDO_PAGO' && a.clientId);
+
+                      // Agrupa por clientId
+                      const byClient: Record<string, any[]> = {};
+                      for (const a of finalized) {
+                        if (!byClient[a.clientId]) byClient[a.clientId] = [];
+                        byClient[a.clientId].push(a);
+                      }
+
+                      const stampsLimit = (config as any).stampsForFreeCut ?? 10;
+                      const cashbackPct = (config as any).cashbackPercent ?? 5;
+
+                      // Busca cards existentes
+                      const cardSnap = await getDocs(col(db, 'loyaltyCards'));
+                      const existingCards: Record<string, any> = {};
+                      cardSnap.docs.forEach(d => { existingCards[d.data().clientId] = { id: d.id, ...d.data() }; });
+
+                      let updated = 0;
+                      let created = 0;
+
+                      for (const [clientId, appts] of Object.entries(byClient)) {
+                        const totalStamps = appts.length;
+                        const stamps = totalStamps % stampsLimit;
+                        const freeCutsEarned = Math.floor(totalStamps / stampsLimit);
+                        const totalRevenue = appts.reduce((s: number, a: any) => s + (a.price || 0), 0);
+                        const credits = parseFloat(((totalRevenue * cashbackPct) / 100).toFixed(2));
+                        const clientName = appts[0].clientName || '';
+                        const clientPhone = appts[0].clientPhone || '';
+
+                        const cardData = {
+                          clientId,
+                          clientName,
+                          clientPhone,
+                          stamps,
+                          totalStamps,
+                          credits,
+                          freeCutsPending: freeCutsEarned,
+                          freeCutsEarned,
+                          updatedAt: new Date().toISOString(),
+                        };
+
+                        if (existingCards[clientId]) {
+                          const { doc: docFn, updateDoc } = await import('firebase/firestore');
+                          await updateDoc(docFn(db, 'loyaltyCards', existingCards[clientId].id), cardData);
+                          updated++;
+                        } else {
+                          const { addDoc } = await import('firebase/firestore');
+                          await addDoc(col(db, 'loyaltyCards'), { ...cardData, createdAt: new Date().toISOString() });
+                          created++;
+                        }
+                      }
+
+                      setReprocessMsg({ ok: true, txt: `✅ Concluído! ${created} cartões criados, ${updated} atualizados.` });
+                    } catch (e: any) {
+                      setReprocessMsg({ ok: false, txt: `Erro: ${e.message || 'Tente novamente.'}` });
+                    }
+                    setReprocessing(false);
+                  }}
+                  className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50"
+                >
+                  {reprocessing ? '⏳ Processando...' : '🔄 Reprocessar Selos Agora'}
+                </button>
+              </div>
             </div>
           </div>
 
