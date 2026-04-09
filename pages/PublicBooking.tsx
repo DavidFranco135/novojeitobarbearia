@@ -571,11 +571,16 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   };
 
   const turnos = useMemo(() => {
-    // Usa horário de abertura e fechamento definido nas Configurações
-    const openHour  = parseInt((config.openingTime || '08:00').split(':')[0]);
-    const closeHour = parseInt((config.closingTime  || '20:00').split(':')[0]);
+    // Horário do barbeiro selecionado — tem prioridade sobre o config global
+    const selectedProf = professionals.find((p: any) => p.id === selecao.professionalId);
+    const profStart = selectedProf?.workingHours?.start;
+    const profEnd   = selectedProf?.workingHours?.end;
 
-    // Gera slots apenas dentro do horário de funcionamento
+    // Fallback para config global se barbeiro não tiver horário definido
+    const openHour  = parseInt((profStart || config.openingTime || '08:00').split(':')[0]);
+    const closeHour = parseInt((profEnd   || config.closingTime  || '20:00').split(':')[0]);
+
+    // Gera slots apenas dentro do horário de funcionamento do barbeiro
     const allTimes: string[] = [];
     for (let h = openHour; h <= closeHour; h++) {
       allTimes.push(`${h.toString().padStart(2, '0')}:00`);
@@ -594,7 +599,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       tarde: times.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
       noite: times.filter(t => parseInt(t.split(':')[0]) >= 18)
     };
-  }, [selecao.date, config.openingTime, config.closingTime]);
+  }, [selecao.date, selecao.professionalId, professionals, config.openingTime, config.closingTime]);
 
   const categories = useMemo(() => ['Todos', ...Array.from(new Set(services.map(s => s.category)))], [services]);
   const filteredServices = useMemo(() => selectedCategory === 'Todos' ? services : services.filter(s => s.category === selectedCategory), [services, selectedCategory]);
