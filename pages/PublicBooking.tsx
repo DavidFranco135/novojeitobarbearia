@@ -571,19 +571,30 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   };
 
   const turnos = useMemo(() => {
-    const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+    // Usa horário de abertura e fechamento definido nas Configurações
+    const openHour  = parseInt((config.openingTime || '08:00').split(':')[0]);
+    const closeHour = parseInt((config.closingTime  || '20:00').split(':')[0]);
+
+    // Gera slots apenas dentro do horário de funcionamento
+    const allTimes: string[] = [];
+    for (let h = openHour; h <= closeHour; h++) {
+      allTimes.push(`${h.toString().padStart(2, '0')}:00`);
+    }
+
+    // Filtra horários passados se for hoje
     const today = new Date().toISOString().split('T')[0];
     const isToday = selecao.date === today;
     const nowHour = isToday ? new Date().getHours() : 0;
-    const available = isToday
-      ? times.filter(t => parseInt(t.split(':')[0]) >= nowHour)
-      : times;
+    const times = isToday
+      ? allTimes.filter(t => parseInt(t.split(':')[0]) >= nowHour)
+      : allTimes;
+
     return {
-      manha: available.filter(t => parseInt(t.split(':')[0]) < 12),
-      tarde: available.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
-      noite: available.filter(t => parseInt(t.split(':')[0]) >= 18)
+      manha: times.filter(t => parseInt(t.split(':')[0]) < 12),
+      tarde: times.filter(t => parseInt(t.split(':')[0]) >= 12 && parseInt(t.split(':')[0]) < 18),
+      noite: times.filter(t => parseInt(t.split(':')[0]) >= 18)
     };
-  }, [selecao.date]);
+  }, [selecao.date, config.openingTime, config.closingTime]);
 
   const categories = useMemo(() => ['Todos', ...Array.from(new Set(services.map(s => s.category)))], [services]);
   const filteredServices = useMemo(() => selectedCategory === 'Todos' ? services : services.filter(s => s.category === selectedCategory), [services, selectedCategory]);
