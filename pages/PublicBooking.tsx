@@ -571,16 +571,32 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   };
 
   const turnos = useMemo(() => {
-    // Horário do barbeiro selecionado — tem prioridade sobre o config global
     const selectedProf = professionals.find((p: any) => p.id === selecao.professionalId);
-    const profStart = selectedProf?.workingHours?.start;
-    const profEnd   = selectedProf?.workingHours?.end;
 
-    // Fallback para config global se barbeiro não tiver horário definido
-    const openHour  = parseInt((profStart || config.openingTime || '08:00').split(':')[0]);
-    const closeHour = parseInt((profEnd   || config.closingTime  || '20:00').split(':')[0]);
+    // Pega o dia da semana da data selecionada (0=Dom, 1=Seg... 4=Qui, 5=Sex, 6=Sáb)
+    let openHour  = parseInt((config.openingTime  || '08:00').split(':')[0]);
+    let closeHour = parseInt((config.closingTime   || '20:00').split(':')[0]);
 
-    // Gera slots apenas dentro do horário de funcionamento do barbeiro
+    if (selectedProf && selecao.date) {
+      const [y, m, d] = selecao.date.split('-').map(Number);
+      const dayOfWeek = new Date(y, m - 1, d).getDay(); // 0=Dom...6=Sáb
+      const ws = (selectedProf as any).weekSchedule;
+      if (ws && ws[dayOfWeek]) {
+        const day = ws[dayOfWeek];
+        if (!day.active) {
+          // Barbeiro de folga nesse dia — sem horários
+          return { manha: [], tarde: [], noite: [] };
+        }
+        openHour  = parseInt((day.start || '08:00').split(':')[0]);
+        closeHour = parseInt((day.end   || '20:00').split(':')[0]);
+      } else if (selectedProf.workingHours) {
+        // Fallback para workingHours genérico
+        openHour  = parseInt((selectedProf.workingHours.start || '08:00').split(':')[0]);
+        closeHour = parseInt((selectedProf.workingHours.end   || '20:00').split(':')[0]);
+      }
+    }
+
+    // Gera slots apenas dentro do horário do barbeiro naquele dia
     const allTimes: string[] = [];
     for (let h = openHour; h <= closeHour; h++) {
       allTimes.push(`${h.toString().padStart(2, '0')}:00`);
