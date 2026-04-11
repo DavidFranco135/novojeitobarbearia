@@ -741,6 +741,18 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           isSubscriptionService: !!clientSub,
           subscriptionId: clientSub?.id || null,
         });
+
+        // ── Atualiza totalSpent do cliente ───────────────────────────
+        if (appointment.clientId) {
+          const clientDoc = clients.find((c: any) => c.id === appointment.clientId);
+          if (clientDoc) {
+            const newTotal = parseFloat(((clientDoc.totalSpent || 0) + revenueAmount).toFixed(2));
+            await updateDoc(doc(db, COLLECTIONS.CLIENTS, appointment.clientId), {
+              totalSpent: newTotal,
+              lastVisit: appointment.date || new Date().toISOString().split('T')[0],
+            });
+          }
+        }
         
         console.log(`💰 RECEITA criada: R$ ${revenueAmount.toFixed(2)} - Agendamento #${id.substring(0, 8)}`);
 
