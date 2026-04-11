@@ -17,6 +17,7 @@ const Settings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [cutGalleryDesc, setCutGalleryDesc] = useState('');
   const [cutGalleryLoading, setCutGalleryLoading] = useState(false);
+  const [currentAdminPass, setCurrentAdminPass] = useState('');
   const [newAdminPass, setNewAdminPass] = useState('');
   const [reprocessing, setReprocessing] = useState(false);
   const [reprocessMsg, setReprocessMsg] = useState<{ok:boolean;txt:string}|null>(null);
@@ -33,6 +34,7 @@ const Settings: React.FC = () => {
   const [loyaltySaveMsg, setLoyaltySaveMsg] = useState<{ok:boolean;txt:string}|null>(null);
   const [confirmAdminPass, setConfirmAdminPass] = useState('');
   const [passMsg, setPassMsg] = useState<{ok:boolean;txt:string}|null>(null);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [showVipPlanModal, setShowVipPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<VipPlan | null>(null);
   const [newPlan, setNewPlan] = useState<Partial<VipPlan>>({
@@ -894,20 +896,117 @@ const Settings: React.FC = () => {
         <div className="max-w-lg space-y-6">
           <div className={card}>
             <h3 className={h3}>🔐 Senha Admin</h3>
-            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Troque a senha de acesso ao painel administrativo.</p>
+            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Para alterar a senha você precisa confirmar a senha atual primeiro.
+            </p>
             <div className="space-y-3">
-              <input type="password" placeholder="Nova senha" value={newAdminPass} onChange={e => { setNewAdminPass(e.target.value); setPassMsg(null); }} className={inp}/>
-              <input type="password" placeholder="Confirmar nova senha" value={confirmAdminPass} onChange={e => { setConfirmAdminPass(e.target.value); setPassMsg(null); }} className={inp}/>
-              {passMsg && <p className={`text-[10px] font-black uppercase tracking-widest ${passMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>{passMsg.txt}</p>}
+              {/* Senha atual — obrigatória */}
+              <div className="space-y-1">
+                <label className={lbl}>Senha Atual *</label>
+                <input type="password" placeholder="Digite sua senha atual" value={currentAdminPass}
+                  onChange={e => { setCurrentAdminPass(e.target.value); setPassMsg(null); }}
+                  className={inp}/>
+              </div>
+              <div className="space-y-1">
+                <label className={lbl}>Nova Senha *</label>
+                <input type="password" placeholder="Mínimo 4 caracteres" value={newAdminPass}
+                  onChange={e => { setNewAdminPass(e.target.value); setPassMsg(null); }}
+                  className={inp}/>
+              </div>
+              <div className="space-y-1">
+                <label className={lbl}>Confirmar Nova Senha *</label>
+                <input type="password" placeholder="Repita a nova senha" value={confirmAdminPass}
+                  onChange={e => { setConfirmAdminPass(e.target.value); setPassMsg(null); }}
+                  className={inp}/>
+              </div>
+              {passMsg && (
+                <p className={`text-[10px] font-black uppercase tracking-widest ${passMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+                  {passMsg.txt}
+                </p>
+              )}
               <button type="button" onClick={async () => {
-                if (!newAdminPass || newAdminPass.length < 4) { setPassMsg({ ok: false, txt: 'Senha precisa ter pelo menos 4 caracteres.' }); return; }
+                if (!currentAdminPass) { setPassMsg({ ok: false, txt: 'Digite a senha atual.' }); return; }
+                if (!newAdminPass || newAdminPass.length < 4) { setPassMsg({ ok: false, txt: 'Nova senha precisa ter pelo menos 4 caracteres.' }); return; }
                 if (newAdminPass !== confirmAdminPass) { setPassMsg({ ok: false, txt: 'As senhas não coincidem.' }); return; }
-                try { await updateConfig({ adminPassword: newAdminPass } as any); setPassMsg({ ok: true, txt: '✅ Senha alterada com sucesso!' }); setNewAdminPass(''); setConfirmAdminPass(''); }
-                catch { setPassMsg({ ok: false, txt: 'Erro ao salvar. Tente novamente.' }); }
+                try {
+                  // ── Verifica senha atual direto no Firestore ──────────────
+                  const { getFirestore, doc: docFn, getDoc, addDoc, collection } = await import('firebase/firestore');
+                  const { getApp } = await import('firebase/app');
+                  const db = getFirestore(getApp());
+                  const configSnap = await getDoc(docFn(db, 'config', 'main'));
+                  const storedPass = configSnap.data()?.adminPassword;
+                  if (currentAdminPass !== storedPass) {
+                    setPassMsg({ ok: false, txt: '❌ Senha atual incorreta.' });
+                    return;
+                  }
+                  // ── Salva nova senha ──────────────────────────────────────
+                  await updateConfig({ adminPassword: newAdminPass } as any);
+                  // ── Registra log de auditoria ─────────────────────────────
+                  await addDoc(collection(db, 'auditLog'), {
+                    action: 'PASSWORD_CHANGED',
+                    changedBy: user?.name || 'Admin',
+                    changedByEmail: user?.email || 'novojeitoadm@gmail.com',
+                    timestamp: new Date().toISOString(),
+                    device: navigator.userAgent,
+                    ip: await fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => d.ip).catch(() => 'desconhecido'),
+                  });
+                  setPassMsg({ ok: true, txt: '✅ Senha alterada e log registrado!' });
+                  setCurrentAdminPass('');
+                  setNewAdminPass('');
+                  setConfirmAdminPass('');
+                } catch (e: any) {
+                  setPassMsg({ ok: false, txt: `Erro: ${e.message || 'Tente novamente.'}` });
+                }
               }} className="w-full gradiente-ouro text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
-                🔒 Alterar Senha
+                🔒 Alterar Senha com Segurança
               </button>
             </div>
+          </div>
+
+          {/* ── Log de Auditoria ──────────────────────────────── */}
+          <div className={card}>
+            <h3 className={h3}>📋 Log de Alterações de Senha</h3>
+            <p className={`text-[10px] mt-1 mb-4 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Histórico de todas as trocas de senha do painel.
+            </p>
+            <button type="button" onClick={async () => {
+              try {
+                const { getFirestore, collection: col, getDocs, query, orderBy, limit } = await import('firebase/firestore');
+                const { getApp } = await import('firebase/app');
+                const db = getFirestore(getApp());
+                const q = query(col(db, 'auditLog'), orderBy('timestamp', 'desc'), limit(20));
+                const snap = await getDocs(q);
+                const logs = snap.docs.map(d => d.data());
+                setAuditLogs(logs);
+              } catch (e) {
+                setAuditLogs([]);
+              }
+            }} className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase border transition-all mb-4 ${isDark ? 'bg-white/5 border-white/10 text-zinc-400 hover:border-[#C58A4A]' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:border-[#C58A4A]'}`}>
+              🔄 Carregar Histórico
+            </button>
+            {auditLogs.length === 0 && (
+              <p className={`text-center py-6 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                Nenhum registro ainda
+              </p>
+            )}
+            {auditLogs.map((log: any, i: number) => (
+              <div key={i} className={`p-4 rounded-2xl border mb-3 ${isDark ? 'bg-white/3 border-white/5' : 'bg-zinc-50 border-zinc-100'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                      🔑 Senha alterada por <span className="text-[#C58A4A]">{log.changedBy}</span>
+                    </p>
+                    <p className={`text-[9px] mt-1 font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      {new Date(log.timestamp).toLocaleString('pt-BR')}
+                    </p>
+                    <p className={`text-[9px] mt-0.5 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                      IP: {log.ip} • {log.device?.substring(0, 60)}...
+                    </p>
+                  </div>
+                  <span className="text-[8px] font-black text-amber-400 bg-amber-500/10 px-2 py-1 rounded-full shrink-0">AUDITADO</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
