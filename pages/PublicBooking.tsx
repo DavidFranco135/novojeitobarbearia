@@ -3007,7 +3007,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                        const dow = d.getDay();
                        // Folga semanal (weekSchedule)
                        const ws = (selProf as any)?.weekSchedule;
-                       const isWeeklyOff = ws ? !ws[dow]?.active : false;
+                       // Firestore salva chaves como string — tenta número E string
+                       const dayData = ws ? (ws[dow] || ws[String(dow)]) : null;
+                       const isWeeklyOff = ws ? (dayData ? !dayData.active : false) : false;
                        // Folga pontual do mês (offDays)
                        const offDays: string[] = (selProf as any)?.offDays || [];
                        const isDayOff = isWeeklyOff || offDays.includes(dateStr);
