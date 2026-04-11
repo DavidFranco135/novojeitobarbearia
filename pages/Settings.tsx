@@ -921,14 +921,21 @@ const Settings: React.FC = () => {
                   }
 
                   let updated = 0;
+                  let skipped = 0;
                   for (const [clientId, data] of Object.entries(byClient)) {
-                    await updateDoc(docFn(db, 'clients', clientId), {
-                      totalSpent: parseFloat(data.total.toFixed(2)),
-                      lastVisit: data.lastDate,
-                    });
-                    updated++;
+                    try {
+                      // Verifica se o documento existe antes de atualizar
+                      const { getDoc } = await import('firebase/firestore');
+                      const clientSnap = await getDoc(docFn(db, 'clients', clientId));
+                      if (!clientSnap.exists()) { skipped++; continue; }
+                      await updateDoc(docFn(db, 'clients', clientId), {
+                        totalSpent: parseFloat((data as any).total.toFixed(2)),
+                        lastVisit: (data as any).lastDate,
+                      });
+                      updated++;
+                    } catch { skipped++; }
                   }
-                  setReprocessMsg({ ok: true, txt: `✅ gasto: ${updated} clientes atualizados com histórico real.` });
+                  setReprocessMsg({ ok: true, txt: `✅ gasto: ${updated} clientes atualizados. ${skipped > 0 ? `(${skipped} ignorados — avulsos)` : ''}` });
                 } catch (e: any) {
                   setReprocessMsg({ ok: false, txt: `Erro gasto: ${e.message}` });
                 }
