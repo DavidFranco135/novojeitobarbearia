@@ -888,6 +888,56 @@ const Settings: React.FC = () => {
               {reprocessing ? '⏳ Processando...' : '🔄 Reprocessar Selos Agora'}
             </button>
           </div>
+
+          {/* Reprocessar totalSpent */}
+          <div className={card}>
+            <h3 className={h3}>💰 Recalcular Histórico de Gastos</h3>
+            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Recalcula o total gasto de cada cliente com base nos agendamentos finalizados. Use uma vez para corrigir clientes com R$ 0,00.
+            </p>
+            {reprocessMsg?.txt?.includes('gasto') && <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${reprocessMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>{reprocessMsg.txt}</p>}
+            <button type="button" disabled={reprocessing}
+              onClick={async () => {
+                if (!confirm('Recalcular total gasto de todos os clientes?')) return;
+                setReprocessing(true);
+                try {
+                  const { getFirestore, collection: col, getDocs, doc: docFn, updateDoc } = await import('firebase/firestore');
+                  const { getApp } = await import('firebase/app');
+                  const db = getFirestore(getApp());
+
+                  const apptSnap = await getDocs(col(db, 'appointments'));
+                  const finalized = apptSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() } as any))
+                    .filter(a => a.status === 'CONCLUIDO_PAGO' && a.clientId);
+
+                  // Agrupa por clientId somando preços
+                  const byClient: Record<string, { total: number; lastDate: string }> = {};
+                  for (const a of finalized) {
+                    if (!byClient[a.clientId]) byClient[a.clientId] = { total: 0, lastDate: '' };
+                    byClient[a.clientId].total += (a.totalPrice ?? a.price ?? 0);
+                    if (!byClient[a.clientId].lastDate || a.date > byClient[a.clientId].lastDate) {
+                      byClient[a.clientId].lastDate = a.date;
+                    }
+                  }
+
+                  let updated = 0;
+                  for (const [clientId, data] of Object.entries(byClient)) {
+                    await updateDoc(docFn(db, 'clients', clientId), {
+                      totalSpent: parseFloat(data.total.toFixed(2)),
+                      lastVisit: data.lastDate,
+                    });
+                    updated++;
+                  }
+                  setReprocessMsg({ ok: true, txt: `✅ gasto: ${updated} clientes atualizados com histórico real.` });
+                } catch (e: any) {
+                  setReprocessMsg({ ok: false, txt: `Erro gasto: ${e.message}` });
+                }
+                setReprocessing(false);
+              }}
+              className="w-full py-4 rounded-2xl font-black text-[10px] uppercase border transition-all bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50">
+              {reprocessing ? '⏳ Processando...' : '💰 Recalcular Gastos Agora'}
+            </button>
+          </div>
         </div>
       )}
 
