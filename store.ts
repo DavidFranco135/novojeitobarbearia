@@ -1182,6 +1182,37 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
     await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), data);
   };
 
+  // ── Marca fiado como pago ─────────────────────────────────────
+  const markFiadoPago = async (id: string, paymentMethod: string) => {
+    await updateDoc(doc(db, COLLECTIONS.APPOINTMENTS, id), {
+      status: 'CONCLUIDO_PAGO',
+      paymentMethod,
+      fiadoPaidAt: new Date().toISOString(),
+      completedByBarber: true,
+    });
+    // Registra entrada financeira
+    const appointment = appointments.find(a => a.id === id);
+    if (appointment) {
+      await addDoc(collection(db, COLLECTIONS.FINANCIAL), {
+        description: `Fiado recebido — ${appointment.clientName} (${appointment.serviceName})`,
+        amount: (appointment as any).totalPrice ?? appointment.price ?? 0,
+        type: 'RECEITA',
+        category: 'Serviços',
+        date: appointment.date || new Date().toISOString().split('T')[0],
+        appointmentId: id,
+      });
+      // Atualiza totalSpent do cliente
+      if (appointment.clientId) {
+        const clientDoc = clients.find((c: any) => c.id === appointment.clientId);
+        if (clientDoc) {
+          await updateDoc(doc(db, COLLECTIONS.CLIENTS, appointment.clientId), {
+            totalSpent: parseFloat(((clientDoc.totalSpent || 0) + ((appointment as any).totalPrice ?? appointment.price ?? 0)).toFixed(2)),
+          });
+        }
+      }
+    }
+  };
+
   // ── Fila de Espera ────────────────────────────────────────────
   const addToWaitQueue = async (data: { name: string; profId: string; profName: string; since: string; status?: string }) => {
     await addDoc(collection(db, COLLECTIONS.WAIT_QUEUE), { ...data, status: 'AGUARDANDO', createdAt: new Date().toISOString() });
@@ -1496,7 +1527,7 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       addClient, updateClient, deleteClient,
       addService, updateService, deleteService,
       addProfessional, updateProfessional, deleteProfessional, likeProfessional, resetAllLikes,
-      addAppointment, markNoShow, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment, updateAppointment,
+      addAppointment, markNoShow, markFiadoPago, updateAppointmentStatus, finalizeAppointment, rescheduleAppointment, deleteAppointment, updateAppointment,
       addFinancialEntry, deleteFinancialEntry,
       addSuggestion, updateSuggestion, deleteSuggestion,
       markNotificationAsRead, clearNotifications,
