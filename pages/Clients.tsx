@@ -476,8 +476,8 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                   </button>
                 </div>
                 {formData.password
-                  ? <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>🔑 Senha definida — clique no olho para visualizar.</p>
-                  : <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>💡 Sem senha: o cliente define no primeiro acesso ao portal.</p>
+                  ? <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>🔑 Senha definida — clique no 👁 para visualizar.</p>
+                  : <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>⚠️ Este cliente ainda não tem senha cadastrada. Defina uma abaixo ou peça para ele criar no primeiro acesso ao portal.</p>
                 }
               </div>
 
