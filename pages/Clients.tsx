@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, UserPlus, Phone, Mail, Trash2, Edit2, X, Clock, Calendar, Scissors, CheckCircle2, History, Camera, NotebookPen, Instagram, MapPin, Briefcase, Heart, Trophy, Users, Check, ImagePlus } from 'lucide-react';
+import { Search, UserPlus, Phone, Mail, Trash2, Edit2, X, Clock, Calendar, Scissors, CheckCircle2, History, Camera, NotebookPen, Instagram, MapPin, Briefcase, Heart, Trophy, Users, Check, Eye, EyeOff } from 'lucide-react';
 import { useBarberStore } from '../store';
 import { Client, Appointment } from '../types';
 
@@ -10,6 +10,7 @@ const Clients: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '', phone: '', email: '', password: '',
     cpfCnpj: '', birthdate: '', gender: '',
@@ -18,56 +19,40 @@ const Clients: React.FC = () => {
   });
 
   const IMGBB_KEY = 'da736db48f154b9108b23a36d4393848';
+  const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  // Comprime a imagem via canvas antes de enviar (muito mais rápido no upload)
-  const compressImage = (file: File, maxWidth = 1200, quality = 0.82): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = e => { img.src = e.target?.result as string; };
-      img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => blob ? resolve(blob) : reject('Falha ao comprimir'), 'image/jpeg', quality);
-      };
-      img.onerror = reject;
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleUploadPhoto = async (file: File) => {
-    if (!selectedClient) return;
+  const handleUploadClientPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedClient) return;
     setPhotoUploading(true);
-    try {
-      const compressed = await compressImage(file);
-      const fd = new FormData();
-      fd.append('image', compressed, 'photo.jpg');
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: fd });
-      const data = await res.json();
-      const url: string = data?.data?.url;
-      if (!url) throw new Error('Upload falhou');
-      const existing: string[] = selectedClient.photos || [];
-      const updated = [url, ...existing];
-      await updateClient(selectedClient.id, { photos: updated });
-      setSelectedClient({ ...selectedClient, photos: updated });
-    } catch {
-      alert('Erro ao enviar foto. Verifique sua conexão e tente novamente.');
-    } finally {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = async () => {
+      const MAX = 800;
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.width  * ratio;
+      canvas.height = img.height * ratio;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL('image/jpeg', 0.78);
+      URL.revokeObjectURL(url);
+      const updatedPhotos = [...(selectedClient.photos || []), compressed];
+      await updateClient(selectedClient.id, { photos: updatedPhotos });
+      setSelectedClient({ ...selectedClient, photos: updatedPhotos } as any);
       setPhotoUploading(false);
-    }
+    };
+    img.onerror = () => setPhotoUploading(false);
+    img.src = url;
+    e.target.value = '';
   };
 
-  const handleDeletePhoto = async (photoUrl: string) => {
-    if (!selectedClient || !window.confirm('Remover esta foto?')) return;
-    const updated = (selectedClient.photos || []).filter((p: string) => p !== photoUrl);
-    await updateClient(selectedClient.id, { photos: updated });
-    setSelectedClient({ ...selectedClient, photos: updated });
+  const handleDeleteClientPhoto = async (idx: number) => {
+    if (!selectedClient || !window.confirm('Excluir esta foto?')) return;
+    const updatedPhotos = (selectedClient.photos || []).filter((_, i) => i !== idx);
+    await updateClient(selectedClient.id, { photos: updatedPhotos });
+    setSelectedClient({ ...selectedClient, photos: updatedPhotos } as any);
+    setPhotoLightbox(null);
   };
 
   const filteredClients = useMemo(() => {
@@ -328,54 +313,65 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
                   {clientAppointments.past.length === 0 && <p className="text-[10px] text-zinc-600 py-2 italic">Nenhum histórico encontrado.</p>}
                </div>
 
-               {/* ── Galeria de Fotos do Corte ── */}
-               <div className="space-y-4">
-                 <div className="flex items-center justify-between">
-                   <h3 className="text-[10px] font-black text-[#C58A4A] uppercase tracking-[0.2em] flex items-center gap-2">
-                     <Camera size={14}/> Galeria de Fotos
-                   </h3>
-                   <label className={`flex items-center gap-1.5 px-3 py-2 rounded-xl cursor-pointer text-[9px] font-black uppercase transition-all border ${photoUploading ? 'opacity-50 pointer-events-none border-white/5 text-zinc-600' : 'border-[#C58A4A]/30 text-[#C58A4A] hover:bg-[#C58A4A]/10'}`}>
-                     <ImagePlus size={12}/>
-                     {photoUploading ? 'Enviando…' : 'Adicionar Foto'}
-                     <input
-                       type="file"
-                       accept="image/*"
-                       className="hidden"
-                       onChange={e => {
-                         const file = e.target.files?.[0];
-                         if (file) handleUploadPhoto(file);
-                         e.target.value = '';
-                       }}
-                     />
-                   </label>
-                 </div>
-                 {(selectedClient.photos || []).length === 0 ? (
-                   <div className="flex flex-col items-center justify-center py-8 rounded-2xl border border-white/5 bg-white/[0.02]">
-                     <Camera size={32} className="text-zinc-700 mb-2"/>
-                     <p className="text-[10px] text-zinc-600 italic">Nenhuma foto de corte registrada.</p>
-                   </div>
-                 ) : (
-                   <div className="grid grid-cols-3 gap-2">
-                     {(selectedClient.photos || []).map((url: string, i: number) => (
-                       <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden border border-white/10">
-                         <img
-                           src={url}
-                           alt={`Corte ${i + 1}`}
-                           className="w-full h-full object-cover cursor-pointer"
-                           onClick={() => setLightboxUrl(url)}
-                         />
-                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all pointer-events-none"/>
-                         <button
-                           onClick={e => { e.stopPropagation(); handleDeletePhoto(url); }}
-                           className="absolute top-1.5 right-1.5 bg-black/70 text-red-400 rounded-xl p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 hover:text-white"
-                         >
-                           <Trash2 size={11}/>
-                         </button>
-                       </div>
-                     ))}
-                   </div>
-                 )}
+               {/* ── FOTOS DE CORTE (admin) ─────────────────────────────── */}
+               <div className="space-y-4 mt-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-400'}`}>
+                      <Camera size={14} className="text-[#C58A4A]"/> Fotos dos Cortes
+                    </h3>
+                    <label className={`flex items-center gap-1.5 px-3 py-2 rounded-xl cursor-pointer font-black text-[9px] uppercase tracking-widest transition-all ${photoUploading ? 'opacity-60 pointer-events-none bg-zinc-800 text-zinc-500' : 'gradiente-ouro text-black hover:scale-105'}`}>
+                      {photoUploading ? <><span className="animate-spin inline-block">⟳</span> Salvando</> : <><Camera size={11}/> Adicionar</>}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleUploadClientPhoto} disabled={photoUploading} />
+                    </label>
+                  </div>
+                  {(!selectedClient.photos || (selectedClient.photos as string[]).length === 0) ? (
+                    <div className={`flex flex-col items-center justify-center py-8 rounded-2xl border-2 border-dashed ${theme === 'light' ? 'border-zinc-200 text-zinc-400' : 'border-white/10 text-zinc-600'}`}>
+                      <Camera size={24} className="mb-2 opacity-30"/>
+                      <p className="text-[9px] font-black uppercase tracking-widest opacity-50">Nenhuma foto ainda</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {(selectedClient.photos as string[]).map((photo, idx) => (
+                        <div
+                          key={idx}
+                          className="relative aspect-square rounded-xl overflow-hidden cursor-pointer group"
+                          onClick={() => setPhotoLightbox(photo)}
+                        >
+                          <img src={photo} alt={`Corte ${idx+1}`} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500"/>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                            <span className="text-white opacity-0 group-hover:opacity-100 transition-all text-lg">🔍</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIGHTBOX FOTO (admin) ─────────────────────────────────────── */}
+      {photoLightbox && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 animate-in fade-in"
+          onClick={() => setPhotoLightbox(null)}
+        >
+          <div className="relative max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <img src={photoLightbox} alt="Foto corte" className="w-full rounded-3xl object-contain max-h-[75vh]"/>
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => selectedClient && handleDeleteClientPhoto((selectedClient.photos as string[]).indexOf(photoLightbox))}
+                className="flex-1 py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-black text-[10px] uppercase tracking-widest hover:bg-red-500/30 transition-all"
+              >
+                🗑 Excluir Foto
+              </button>
+              <button
+                onClick={() => setPhotoLightbox(null)}
+                className="flex-1 py-3 rounded-2xl bg-white/5 border border-white/10 text-zinc-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
@@ -462,8 +458,27 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
               {/* Acesso ao portal */}
               <div className="space-y-2">
                 <p className={`text-[9px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>Acesso ao Portal</p>
-                <input type="password" placeholder="Senha (opcional — cliente define no 1º acesso)" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className={`w-full border p-4 rounded-2xl outline-none text-sm font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]/50'}`}/>
-                {!formData.password && <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>💡 Sem senha: o cliente define no primeiro acesso ao portal.</p>}
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Senha (opcional — cliente define no 1º acesso)"
+                    value={formData.password}
+                    onChange={e => setFormData({...formData, password: e.target.value})}
+                    className={`w-full border p-4 pr-12 rounded-2xl outline-none text-sm font-bold transition-all ${theme === 'light' ? 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-[#C58A4A]' : 'bg-white/5 border-white/10 text-white focus:border-[#C58A4A]/50'}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors ${theme === 'light' ? 'text-zinc-400 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-300'}`}
+                    title={showPassword ? 'Ocultar senha' : 'Ver senha'}
+                  >
+                    {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+                </div>
+                {formData.password
+                  ? <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>🔑 Senha definida — clique no olho para visualizar.</p>
+                  : <p className={`text-[9px] font-bold ml-1 ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-600'}`}>💡 Sem senha: o cliente define no primeiro acesso ao portal.</p>
+                }
               </div>
 
             </div>
@@ -476,25 +491,6 @@ ${r.referrerName} receberá R$ ${r.rewardAmount} na carteira.`)) validateReferra
               </button>
             </div>
           </div>
-        </div>
-      )}
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-[500] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <button
-            onClick={() => setLightboxUrl(null)}
-            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all"
-          >
-            <X size={22}/>
-          </button>
-          <img
-            src={lightboxUrl}
-            alt="Foto do corte"
-            className="max-w-[92vw] max-h-[88vh] rounded-3xl shadow-2xl object-contain"
-            onClick={e => e.stopPropagation()}
-          />
         </div>
       )}
     </div>
