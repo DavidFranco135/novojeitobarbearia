@@ -934,9 +934,13 @@ const Settings: React.FC = () => {
                   const { getApp } = await import('firebase/app');
                   const db = getFirestore(getApp());
                   const configSnap = await getDoc(docFn(db, 'config', 'main'));
-                  const storedPass = configSnap.data()?.adminPassword;
-                  if (currentAdminPass !== storedPass) {
-                    setPassMsg({ ok: false, txt: '❌ Senha atual incorreta.' });
+                  // Compara com Firestore E com config carregado no store (fallback)
+                  const storedPassFirestore = configSnap.data()?.adminPassword;
+                  const storedPassStore = (config as any).adminPassword;
+                  const storedPass = storedPassFirestore || storedPassStore;
+                  const inputPass = currentAdminPass.trim(); // remove espaços invisíveis
+                  if (inputPass !== storedPass) {
+                    setPassMsg({ ok: false, txt: `❌ Senha atual incorreta. (esperada: ${storedPass?.length} caracteres)` });
                     return;
                   }
                   // ── Salva nova senha ──────────────────────────────────────
