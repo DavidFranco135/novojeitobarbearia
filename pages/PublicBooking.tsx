@@ -581,8 +581,9 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       const [y, m, d] = selecao.date.split('-').map(Number);
       const dayOfWeek = new Date(y, m - 1, d).getDay(); // 0=Dom...6=Sáb
       const ws = (selectedProf as any).weekSchedule;
-      if (ws && ws[dayOfWeek]) {
-        const day = ws[dayOfWeek];
+      // Firestore salva chaves como string — tenta número E string
+      const day = ws && (ws[dayOfWeek] || ws[String(dayOfWeek)]);
+      if (day) {
         if (!day.active) {
           // Barbeiro de folga nesse dia — sem horários
           return { manha: [], tarde: [], noite: [] };
