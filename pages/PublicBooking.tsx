@@ -603,10 +603,11 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       allTimes.push(`${h.toString().padStart(2, '0')}:00`);
     }
 
-    // Filtra horários passados se for hoje
-    const today = new Date().toISOString().split('T')[0];
-    const isToday = selecao.date === today;
-    const nowHour = isToday ? new Date().getHours() : 0;
+    // Filtra horários passados se for hoje — usa data LOCAL (não UTC)
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const isToday = selecao.date === localToday;
+    const nowHour = isToday ? now.getHours() : 0;
     const times = isToday
       ? allTimes.filter(t => parseInt(t.split(':')[0]) >= nowHour)
       : allTimes;
