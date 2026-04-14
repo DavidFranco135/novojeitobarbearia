@@ -88,7 +88,39 @@ const FilaEspera: React.FC = () => {
       </div>
 
       {/* STEP: FORM */}
-      {step === 'form' && (
+      {step === 'form' && (() => {
+        // Verifica se a barbearia está aberta
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const [openH, openM] = (config?.openingTime || '08:00').split(':').map(Number);
+        const [closeH, closeM] = (config?.closingTime || '20:00').split(':').map(Number);
+        const isOpen = nowMinutes >= (openH * 60 + openM) && nowMinutes < (closeH * 60 + closeM);
+
+        // Verifica se há barbeiro disponível hoje
+        const todayDow = now.getDay();
+        const hasBarber = (activePros || []).some((p: any) => {
+          const ws = (p as any).weekSchedule;
+          const day = ws ? (ws[todayDow] || ws[String(todayDow)]) : null;
+          return day ? day.active !== false : true;
+        });
+
+        if (!isOpen || !hasBarber) {
+          return (
+            <div className={`w-full max-w-sm rounded-[2.5rem] p-8 space-y-5 text-center ${card}`}>
+              <div className="text-5xl">🔒</div>
+              <h2 className={`text-xl font-black font-display italic ${txt}`}>
+                {!isOpen ? 'Barbearia Fechada' : 'Sem Barbeiros Hoje'}
+              </h2>
+              <p className={`text-sm ${sub}`}>
+                {!isOpen
+                  ? `Funcionamos das ${config?.openingTime || '08:00'} às ${config?.closingTime || '20:00'}. Volte em breve!`
+                  : 'Todos os barbeiros estão de folga hoje. Volte em outro dia!'}
+              </p>
+            </div>
+          );
+        }
+
+        return (
         <div className={`w-full max-w-sm rounded-[2.5rem] p-8 space-y-5 ${card}`}>
           <div>
             <h2 className={`text-xl font-black font-display italic ${txt}`}>Entre na fila ✂️</h2>
@@ -138,7 +170,8 @@ const FilaEspera: React.FC = () => {
             {loading ? '⏳ Entrando...' : '✂️ Entrar na fila'}
           </button>
         </div>
-      )}
+        );
+      })()}
 
       {/* STEP: AGUARDANDO */}
       {step === 'waiting' && (
