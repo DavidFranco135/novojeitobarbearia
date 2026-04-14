@@ -2787,6 +2787,29 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   onTouchEnd={async e => {
                     e.preventDefault();
                     if (!filaName.trim()) return alert('Digite seu nome.');
+                    // Valida barbeiro específico se selecionado
+                    if (filaProfId) {
+                      const selProf = (professionals || []).find((p: any) => p.id === filaProfId);
+                      if (selProf) {
+                        const nowD = new Date();
+                        const dowD = nowD.getDay();
+                        const wsD = (selProf as any).weekSchedule;
+                        const dayD = wsD ? (wsD[dowD] || wsD[String(dowD)]) : null;
+                        if (dayD && dayD.active === false) {
+                          alert(`${selProf.name} está de folga hoje. Escolha outro barbeiro ou "Qualquer barbeiro".`);
+                          return;
+                        }
+                        if (dayD?.start && dayD?.end) {
+                          const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
+                          const [sh2, sm2] = dayD.start.split(':').map(Number);
+                          const [eh2, em2] = dayD.end.split(':').map(Number);
+                          if (nowMin < sh2 * 60 + sm2 || nowMin >= eh2 * 60 + em2) {
+                            alert(`${selProf.name} não está disponível agora. Horário: ${dayD.start} às ${dayD.end}.`);
+                            return;
+                          }
+                        }
+                      }
+                    }
                     setFilaLoading(true);
                     const prof = (professionals || []).find((p: any) => p.id === filaProfId);
                     const since = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -2800,6 +2823,29 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   }}
                   onClick={async () => {
                     if (!filaName.trim()) return alert('Digite seu nome.');
+                    // Valida barbeiro específico se selecionado
+                    if (filaProfId) {
+                      const selProf = (professionals || []).find((p: any) => p.id === filaProfId);
+                      if (selProf) {
+                        const nowD = new Date();
+                        const dowD = nowD.getDay();
+                        const wsD = (selProf as any).weekSchedule;
+                        const dayD = wsD ? (wsD[dowD] || wsD[String(dowD)]) : null;
+                        if (dayD && dayD.active === false) {
+                          alert(`${selProf.name} está de folga hoje. Escolha outro barbeiro ou "Qualquer barbeiro".`);
+                          return;
+                        }
+                        if (dayD?.start && dayD?.end) {
+                          const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
+                          const [sh2, sm2] = dayD.start.split(':').map(Number);
+                          const [eh2, em2] = dayD.end.split(':').map(Number);
+                          if (nowMin < sh2 * 60 + sm2 || nowMin >= eh2 * 60 + em2) {
+                            alert(`${selProf.name} não está disponível agora. Horário: ${dayD.start} às ${dayD.end}.`);
+                            return;
+                          }
+                        }
+                      }
+                    }
                     setFilaLoading(true);
                     const prof = (professionals || []).find((p: any) => p.id === filaProfId);
                     const since = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
