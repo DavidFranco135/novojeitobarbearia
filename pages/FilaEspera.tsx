@@ -35,6 +35,31 @@ const FilaEspera: React.FC = () => {
 
   const handleEntrar = async () => {
     if (!name.trim()) return alert('Digite seu nome.');
+    // Valida barbeiro específico se selecionado
+    if (profId) {
+      const selectedProf = activePros.find((p: any) => p.id === profId);
+      if (selectedProf) {
+        const now = new Date();
+        const todayDow = now.getDay();
+        const ws = (selectedProf as any).weekSchedule;
+        const day = ws ? (ws[todayDow] || ws[String(todayDow)]) : null;
+        const isBarberOff = day ? day.active === false : false;
+        if (isBarberOff) {
+          alert(`${selectedProf.name} está de folga hoje. Escolha outro barbeiro ou selecione "Qualquer barbeiro".`);
+          return;
+        }
+        // Verifica horário do barbeiro
+        if (day?.start && day?.end) {
+          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          const [sh, sm] = day.start.split(':').map(Number);
+          const [eh, em] = day.end.split(':').map(Number);
+          if (nowMinutes < sh * 60 + sm || nowMinutes >= eh * 60 + em) {
+            alert(`${selectedProf.name} não está disponível agora. Horário: ${day.start} às ${day.end}.`);
+            return;
+          }
+        }
+      }
+    }
     setLoading(true);
     try {
       const prof = activePros.find((p: any) => p.id === profId);
@@ -141,9 +166,17 @@ const FilaEspera: React.FC = () => {
             className={inp}
           >
             <option value="">Qualquer barbeiro</option>
-            {activePros.map((p: any) => (
-              <option key={p.id} value={p.id} className="bg-zinc-950">{p.name}</option>
-            ))}
+            {activePros.map((p: any) => {
+              const nowDow = new Date().getDay();
+              const wsP = (p as any).weekSchedule;
+              const dayP = wsP ? (wsP[nowDow] || wsP[String(nowDow)]) : null;
+              const isOff = dayP ? dayP.active === false : false;
+              return (
+                <option key={p.id} value={p.id} disabled={isOff} className="bg-zinc-950">
+                  {p.name}{isOff ? ' (folga hoje)' : ''}
+                </option>
+              );
+            })}
           </select>
 
           {/* Fila atual */}
