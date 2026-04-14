@@ -466,7 +466,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
     }
 
     // Prioridade 2: restaurar sessão salva no localStorage
-    if (!sessionRestored) {
+    // Não restaura se usuário admin está logado no painel
+    if (!sessionRestored && !(user && user.role !== 'CLIENTE')) {
       const session = getStoredSession();
       if (session?.clientId) {
         const client = clients.find((c: any) => c.id === session.clientId);
@@ -2712,7 +2713,46 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
           <div className={`w-full max-w-sm rounded-[2.5rem] p-8 space-y-5 ${theme === 'light' ? 'bg-white border border-zinc-200 shadow-lg' : 'cartao-vidro border-[#C58A4A]/10'}`}>
 
             {/* FORM */}
-            {filaStep === 'form' && (
+            {filaStep === 'form' && (() => {
+              // Verifica se a barbearia está aberta agora
+              const now = new Date();
+              const nowMinutes = now.getHours() * 60 + now.getMinutes();
+              const [openH, openM] = (config?.openingTime || '08:00').split(':').map(Number);
+              const [closeH, closeM] = (config?.closingTime || '20:00').split(':').map(Number);
+              const openMinutes = openH * 60 + openM;
+              const closeMinutes = closeH * 60 + closeM;
+              const isOpen = nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+
+              // Verifica se há pelo menos um barbeiro disponível hoje (não de folga)
+              const todayDow = now.getDay();
+              const hasAvailableBarber = (professionals || []).some((p: any) => {
+                const ws = p.weekSchedule;
+                const day = ws ? (ws[todayDow] || ws[String(todayDow)]) : null;
+                if (day) return day.active !== false;
+                return true; // sem weekSchedule = disponível
+              });
+
+              if (!isOpen || !hasAvailableBarber) {
+                return (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="text-5xl">🔒</div>
+                    <h3 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>
+                      {!isOpen ? 'Barbearia Fechada' : 'Sem Barbeiros Disponíveis'}
+                    </h3>
+                    <p className={`text-sm ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      {!isOpen
+                        ? `Nosso horário de funcionamento é das ${config?.openingTime || '08:00'} às ${config?.closingTime || '20:00'}. Volte em breve!`
+                        : 'Todos os barbeiros estão de folga hoje. Volte em outro dia!'}
+                    </p>
+                    <button onClick={() => setView('HOME')}
+                      className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase border transition-all ${theme === 'light' ? 'bg-zinc-100 border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                      ← Voltar
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
               <>
                 <div>
                   <h3 className={`text-xl font-black font-display italic ${theme === 'light' ? 'text-zinc-900' : 'text-white'}`}>Entre na fila ✂️</h3>
@@ -2781,7 +2821,8 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
                   ← Voltar
                 </button>
               </>
-            )}
+              );
+            })()}
 
             {/* AGUARDANDO */}
             {filaStep === 'waiting' && (
