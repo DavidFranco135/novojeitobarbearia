@@ -100,10 +100,10 @@ async function send(
     const result = await res.json() as any;
 
     if (!res.ok) {
-      console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result));
+      console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result?.error || result));
       return false;
     } else {
-      console.log(`✅ Enviado [${template}] → ${number} | resposta Meta:`, JSON.stringify(result));
+      console.log(`✅ Enviado [${template}] → ${number}`);
       return true;
     }
   } catch (err) {
@@ -164,9 +164,8 @@ export const onAppointmentCompleted = onDocumentUpdated(
     if (before.status === "CONCLUIDO_PAGO") return;
     if (after.status  !== "CONCLUIDO_PAGO") return;
     if (!after.clientPhone) return;
-    // Dispara para QUALQUER forma de pagamento ao mudar para CONCLUIDO_PAGO
-    // Exceção: pagamento online via Asaas (já tratado no webhook asaasWebhook)
-    if (after.awaitingOnlinePayment) return;
+    // Só envia pós-atendimento quando o barbeiro clica em Concluir (não quando cliente paga online)
+    if (!after.completedByBarber) return;
 
     await send(after.clientPhone, T.posAtendimento, [
       { name: "cliente_nome",   value: after.clientName       || "Cliente"  },
@@ -275,7 +274,7 @@ export const sendReminders1h = onSchedule(
 // SCHEDULED 3 — Agenda diária para cada barbeiro (07:00)
 // ─────────────────────────────────────────────────────────────
 export const sendDailyAgenda = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
+  { schedule: "0 8 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] }, // ← mude para "0 7 * * *" em produção
   async () => {
     const todayStr       = new Date().toISOString().split("T")[0];
     const todayFormatted = fmt(todayStr);
@@ -676,64 +675,6 @@ export const asaasProxy = onRequest(
   }
 );
 
-
-// ─────────────────────────────────────────────────────────────
-// SCHEDULED 10 — Verifica saúde do webhook Meta (todo dia 06:50)
-// Se o webhook estiver com problema, avisa o admin no WhatsApp
-// ─────────────────────────────────────────────────────────────
-export const checkWebhookHealth = onSchedule(
-  { schedule: "50 6 * * *", timeZone: "America/Sao_Paulo", secrets: [SECRET_PHONE_ID, SECRET_TOKEN] },
-  async () => {
-    const phoneId = SECRET_PHONE_ID.value();
-    const token   = SECRET_TOKEN.value();
-
-    if (!phoneId || !token) {
-      console.warn("⚠️ Secrets não configurados — pulando verificação.");
-      return;
-    }
-
-    try {
-      // Verifica se a API do WhatsApp responde com o token atual
-      const res = await fetch(
-        `https://graph.facebook.com/v20.0/${phoneId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const data = await res.json() as any;
-
-      if (!res.ok) {
-        console.error("❌ Webhook/API com problema:", JSON.stringify(data));
-
-        // Avisa o admin pessoalmente
-        await sendTextMessage(ADMIN_PERSONAL_PHONE,
-          `⚠️ *ALERTA — Sistema Novo Jeito*
-
-A API do WhatsApp está com problema e as mensagens automáticas podem não estar chegando.
-
-Erro: ${data?.error?.message || JSON.stringify(data)}
-
-Acesse: https://developers.facebook.com/apps/ e verifique o webhook.
-
-_Verificação automática — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}_`
-        );
-      } else {
-        console.log(`✅ API WhatsApp OK — phone: ${data.display_phone_number || phoneId}`);
-      }
-    } catch (err) {
-      console.error("❌ Erro ao verificar webhook:", err);
-      await sendTextMessage(ADMIN_PERSONAL_PHONE,
-        `⚠️ *ALERTA — Sistema Novo Jeito*
-
-Não foi possível verificar a API do WhatsApp.
-
-Verifique: https://developers.facebook.com/apps/
-
-_${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}_`
-      );
-    }
-  }
-);
-
 // ─────────────────────────────────────────────────────────────
 // WEBHOOK — Asaas pagamento confirmado
 // Cadastrar no Asaas: Configurações → Integrações → Webhooks
@@ -991,6 +932,24 @@ export const whatsappInbox = onRequest(
             }
           } else if (type === "audio" || type === "voice") {
             text = "[🎤 Áudio]";
+            const audioId = msg.audio?.id || msg.voice?.id;
+            if (audioId) {
+              try {
+                const metaToken = SECRET_TOKEN.value();
+                const metaRes = await fetch(
+                  `https://graph.facebook.com/v18.0/${audioId}`,
+                  { headers: { Authorization: `Bearer ${metaToken}` } }
+                );
+                if (metaRes.ok) {
+                  const metaData = await metaRes.json();
+                  // Salva a URL temporária da Meta — suficiente para ouvir
+                  // (expira em ~5 min mas o arquivo fica acessível via Authorization)
+                  mediaUrl = metaData.url || "";
+                }
+              } catch (audioErr) {
+                console.error("Erro ao buscar áudio:", audioErr);
+              }
+            }
           } else if (type === "document") {
             text = `[📄 ${msg.document?.filename || "Documento"}]`;
           } else if (type === "video") {
