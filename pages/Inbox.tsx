@@ -153,7 +153,7 @@ const Inbox: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 overflow-y-auto scrollbar-hide" style={{WebkitOverflowScrolling:"touch", overflowY:"auto"}}>
         {filteredConvs.length === 0 && (
           <div className="p-8 text-center">
             <MessageCircle size={32} className={`mx-auto mb-3 ${sub}`} />
@@ -225,7 +225,7 @@ const Inbox: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide" style={{WebkitOverflowScrolling:"touch", overflowY:"auto"}}>
             {messages.length === 0 && (
               <div className="text-center py-12">
                 <p className={`text-[10px] font-black uppercase tracking-widest ${sub}`}>Nenhuma mensagem</p>
@@ -247,12 +247,29 @@ const Inbox: React.FC = () => {
                   {(msg.text && msg.text !== '[📷 Imagem]' && msg.text !== '[🎭 Sticker]') && (
                     <p className="text-sm font-medium leading-snug whitespace-pre-wrap px-4 pt-2.5">{msg.text}</p>
                   )}
+                  {/* Áudio com player */}
+                  {(msg.type === 'audio' || msg.type === 'voice') && msg.mediaUrl && (
+                    <div className="px-3 pt-2.5 pb-1">
+                      <audio controls controlsList="nodownload" preload="none"
+                        className="w-full max-w-[260px] h-9"
+                        style={{filter: msg.from === 'admin' ? 'invert(0)' : 'none'}}
+                      >
+                        <source src={msg.mediaUrl} type="audio/ogg" />
+                        <source src={msg.mediaUrl} type="audio/mpeg" />
+                        <source src={msg.mediaUrl} type="audio/mp4" />
+                      </audio>
+                    </div>
+                  )}
+                  {/* Áudio sem URL */}
+                  {(msg.type === 'audio' || msg.type === 'voice') && !msg.mediaUrl && (
+                    <p className="text-sm font-medium px-4 pt-2.5">🎤 Áudio</p>
+                  )}
                   {/* Sem URL mas é imagem */}
                   {!msg.mediaUrl && (msg.type === 'image' || msg.type === 'sticker') && (
                     <p className="text-sm font-medium px-4 pt-2.5">{msg.type === 'sticker' ? '🎭 Sticker' : '📷 Imagem'}</p>
                   )}
-                  {/* Outros tipos sem media */}
-                  {!msg.mediaUrl && msg.type !== 'image' && msg.type !== 'sticker' && msg.type !== 'text' && (
+                  {/* Outros tipos sem media (exceto audio que já tratamos) */}
+                  {!msg.mediaUrl && msg.type !== 'image' && msg.type !== 'sticker' && msg.type !== 'text' && msg.type !== 'audio' && msg.type !== 'voice' && (
                     <p className="text-sm font-medium px-4 pt-2.5">{msg.text}</p>
                   )}
                   <p className={`text-[9px] pb-2 px-4 pt-1 text-right ${msg.from === 'admin' ? 'text-black/50' : sub}`}>
@@ -289,7 +306,7 @@ const Inbox: React.FC = () => {
   );
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-500 overflow-hidden">
+    <div className="flex flex-col animate-in fade-in duration-500 overflow-hidden" style={{height:"100%", maxHeight:"100%"}}>
 
       {/* Header desktop */}
       <div className="hidden md:flex items-center justify-between mb-4 shrink-0">
