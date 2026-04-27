@@ -164,7 +164,19 @@ const Inbox: React.FC = () => {
         )}
         {filteredConvs.map(conv => (
           <div key={conv.id} className={`relative border-b group/conv ${divider} ${selectedConv?.id === conv.id ? (isDark ? 'bg-[#C58A4A]/10 border-l-4 border-l-[#C58A4A]' : 'bg-amber-50 border-l-4 border-l-[#C58A4A]') : ''}`}>
-            <button onClick={() => openConv(conv)} onTouchEnd={e => { e.preventDefault(); openConv(conv); }} className={`w-full text-left px-4 py-4 flex items-center gap-3 transition-all ${isDark ? 'hover:bg-white/5' : 'hover:bg-zinc-50'}`}>
+            <button
+              onClick={() => openConv(conv)}
+              onTouchStart={e => { (e.currentTarget as any)._touchStartY = e.touches[0].clientY; }}
+              onTouchEnd={e => {
+                const startY = (e.currentTarget as any)._touchStartY || 0;
+                const endY = e.changedTouches[0].clientY;
+                // Só abre se foi tap (movimento < 10px) — ignora scroll
+                if (Math.abs(endY - startY) < 10) {
+                  e.preventDefault();
+                  openConv(conv);
+                }
+              }}
+              className={`w-full text-left px-4 py-4 flex items-center gap-3 transition-all ${isDark ? 'hover:bg-white/5' : 'hover:bg-zinc-50'}`}>
               <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-black shrink-0 relative ${isDark ? 'bg-[#C58A4A]/20 text-[#C58A4A]' : 'bg-amber-100 text-amber-700'}`}>
                 {resolveClientName(conv)?.charAt(0)?.toUpperCase() || '?'}
                 {isRegistered(conv) && (
