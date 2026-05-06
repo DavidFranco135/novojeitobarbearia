@@ -185,6 +185,8 @@ const Subscriptions: React.FC = () => {
 
   const openEditSub = (sub: any) => {
     setEditingSub(sub);
+    // Busca maxCuts do plano para preencher usageLimit corretamente
+    const plan = ((config as any)?.vipPlans || []).find((p: any) => p.id === sub.planId);
     setFormData({
       clientId: sub.clientId,
       planId: sub.planId,
@@ -192,6 +194,8 @@ const Subscriptions: React.FC = () => {
       endDate: sub.endDate,
       price: sub.price,
       status: sub.status,
+      usageLimit: sub.usageLimit || plan?.maxCuts || 0,
+      paymentMethod: sub.paymentMethod || 'PIX',
     } as any);
     setShowModal(true);
   };
