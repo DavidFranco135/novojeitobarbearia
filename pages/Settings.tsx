@@ -945,6 +945,68 @@ const Settings: React.FC = () => {
               {reprocessing ? '⏳ Processando...' : '💰 Recalcular Gastos Agora'}
             </button>
           </div>
+
+          {/* Reprocessar cortes VIP */}
+          <div className={card}>
+            <h3 className={h3}>👑 Reprocessar Cortes dos Planos VIP</h3>
+            <p className={`text-[10px] mt-1 mb-5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Recalcula os cortes usados de cada assinante com base nos agendamentos finalizados dentro do período ativo do plano. Use uma vez para corrigir assinantes com contador zerado.
+            </p>
+            {reprocessMsg?.txt?.includes('VIP') && (
+              <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${reprocessMsg.ok ? 'text-emerald-500' : 'text-red-400'}`}>{reprocessMsg.txt}</p>
+            )}
+            <button type="button" disabled={reprocessing}
+              onClick={async () => {
+                if (!confirm('Recalcular cortes VIP de todos os assinantes?')) return;
+                setReprocessing(true);
+                try {
+                  const { getFirestore, collection: col, getDocs, doc: docFn, updateDoc } = await import('firebase/firestore');
+                  const { getApp } = await import('firebase/app');
+                  const db = getFirestore(getApp());
+
+                  // Busca todas as assinaturas ativas
+                  const subSnap = await getDocs(col(db, 'subscriptions'));
+                  const subs = subSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+                  // Busca todos agendamentos finalizados
+                  const apptSnap = await getDocs(col(db, 'appointments'));
+                  const appts = apptSnap.docs.map(d => ({ id: d.id, ...d.data() } as any))
+                    .filter(a => a.status === 'CONCLUIDO_PAGO');
+
+                  let updated = 0;
+                  for (const sub of subs) {
+                    if (!sub.clientId || !sub.startDate) continue;
+
+                    // Pega o plano para verificar maxCuts
+                    const plan = ((config as any).vipPlans || []).find((p: any) => p.id === sub.planId);
+                    if (!plan?.maxCuts) continue;
+
+                    // Conta agendamentos do cliente dentro do período da assinatura
+                    const periodStart = sub.periodStartDate || sub.startDate;
+                    const periodEnd = sub.endDate;
+
+                    const cutsInPeriod = appts.filter(a =>
+                      a.clientId === sub.clientId &&
+                      a.date >= periodStart &&
+                      a.date <= periodEnd
+                    ).length;
+
+                    await updateDoc(docFn(db, 'subscriptions', sub.id), {
+                      cutsThisPeriod: cutsInPeriod,
+                    });
+                    updated++;
+                  }
+
+                  setReprocessMsg({ ok: true, txt: `✅ VIP: ${updated} assinaturas atualizadas com cortes reais.` });
+                } catch (e: any) {
+                  setReprocessMsg({ ok: false, txt: `Erro VIP: ${e.message}` });
+                }
+                setReprocessing(false);
+              }}
+              className="w-full py-4 rounded-2xl font-black text-[10px] uppercase border transition-all bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 disabled:opacity-50">
+              {reprocessing ? '⏳ Processando...' : '👑 Reprocessar Cortes VIP Agora'}
+            </button>
+          </div>
         </div>
       )}
 
