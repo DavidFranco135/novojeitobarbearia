@@ -103,7 +103,10 @@ async function send(
       console.error(`❌ Erro [${template}] → ${number}:`, JSON.stringify(result?.error || result));
       return false;
     } else {
-      console.log(`✅ Enviado [${template}] → ${number}`);
+      // Loga resposta completa da Meta para diagnóstico
+      const wamid = result?.messages?.[0]?.id || 'sem_id';
+      const msgStatus = result?.messages?.[0]?.message_status || 'sem_status';
+      console.log(`✅ Enviado [${template}] → ${number} | wamid: ${wamid} | status: ${msgStatus} | resposta Meta: ${JSON.stringify(result)}`);
       return true;
     }
   } catch (err) {
@@ -932,24 +935,6 @@ export const whatsappInbox = onRequest(
             }
           } else if (type === "audio" || type === "voice") {
             text = "[🎤 Áudio]";
-            const audioId = msg.audio?.id || msg.voice?.id;
-            if (audioId) {
-              try {
-                const metaToken = SECRET_TOKEN.value();
-                const metaRes = await fetch(
-                  `https://graph.facebook.com/v18.0/${audioId}`,
-                  { headers: { Authorization: `Bearer ${metaToken}` } }
-                );
-                if (metaRes.ok) {
-                  const metaData = await metaRes.json();
-                  // Salva a URL temporária da Meta — suficiente para ouvir
-                  // (expira em ~5 min mas o arquivo fica acessível via Authorization)
-                  mediaUrl = metaData.url || "";
-                }
-              } catch (audioErr) {
-                console.error("Erro ao buscar áudio:", audioErr);
-              }
-            }
           } else if (type === "document") {
             text = `[📄 ${msg.document?.filename || "Documento"}]`;
           } else if (type === "video") {
