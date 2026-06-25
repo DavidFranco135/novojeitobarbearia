@@ -30,7 +30,7 @@ const T = {
   confirmacao:       "confirmacao_agendamento",
   lembrete24h:       "lembrete_24h",
   lembrete1h:        "lembrete_1h",
-  posAtendimento:    "pos_atendimento_v2",
+  posAtendimento:    "pos_atendimento_v3",
   vip3dias:          "aviso_vencimento_3dia",
   vip1dia:           "aviso_vencimento_1dia",
   vipAtivado:        "ativacao_plano_vip_3",
