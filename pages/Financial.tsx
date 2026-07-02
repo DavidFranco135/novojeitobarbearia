@@ -30,7 +30,8 @@ const Financial: React.FC = () => {
   // ── Calcular intervalo de datas para o filtro ─────────────────
   const dateRange = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    // Usa data LOCAL para evitar bug de fuso horário (UTC vs Brasília)
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -38,9 +39,9 @@ const Financial: React.FC = () => {
 
     switch (filterPeriod) {
       case 'HOJE': return { start: todayStr, end: todayStr };
-      case 'SEMANA': return { start: startOfWeek.toISOString().split('T')[0], end: todayStr };
-      case 'MES': return { start: startOfMonth.toISOString().split('T')[0], end: todayStr };
-      case 'ANO': return { start: startOfYear.toISOString().split('T')[0], end: todayStr };
+      case 'SEMANA': return { start: `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth()+1).padStart(2,'0')}-${String(startOfWeek.getDate()).padStart(2,'0')}`, end: todayStr };
+      case 'MES': return { start: `${startOfMonth.getFullYear()}-${String(startOfMonth.getMonth()+1).padStart(2,'0')}-${String(startOfMonth.getDate()).padStart(2,'0')}`, end: todayStr };
+      case 'ANO': return { start: `${startOfYear.getFullYear()}-${String(startOfYear.getMonth()+1).padStart(2,'0')}-${String(startOfYear.getDate()).padStart(2,'0')}`, end: todayStr };
       case 'CUSTOM': return { start: customStart, end: customEnd };
       default: return { start: '', end: '' };
     }
@@ -102,7 +103,7 @@ const Financial: React.FC = () => {
     for (let i = Math.max(diffDays - 1, 0); i >= 0; i--) {
       const d = new Date(endDate);
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const receita = paidEntries.filter(e => e.date === dateStr && e.type === 'RECEITA').reduce((acc, e) => acc + e.amount, 0);
       const despesa = paidEntries.filter(e => e.date === dateStr && e.type === 'DESPESA').reduce((acc, e) => acc + e.amount, 0);
