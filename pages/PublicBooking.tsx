@@ -865,8 +865,20 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
   // ── ESQUECI SENHA — Portal do Cliente ──────────────────────
   const handleForgotLookup = () => {
     setForgotError(null);
-    const found = clients.find((cl: any) => cl.phone === forgotPhone.replace(/\D/g, '') || cl.phone === forgotPhone);
+    const input = forgotPhone.trim().toLowerCase();
+    // Bloqueia reset se for o email ou telefone do admin
+    const adminEmail = (config as any)?.adminEmail || 'novojeitoadm@gmail.com';
+    if (input === adminEmail.toLowerCase() || input === 'novojeitoadm@gmail.com') {
+      setForgotError('Acesso não permitido. Use o painel administrativo para alterar a senha admin.');
+      return;
+    }
+    const found = clients.find((cl: any) => cl.phone === forgotPhone.replace(/\D/g, '') || cl.phone === forgotPhone || cl.email?.toLowerCase() === input);
     if (!found) { setForgotError('Número não encontrado. Verifique e tente novamente.'); return; }
+    // Bloqueia se o cliente encontrado tiver email de admin
+    if (found.email?.toLowerCase() === adminEmail.toLowerCase()) {
+      setForgotError('Acesso não permitido.');
+      return;
+    }
     setForgotClient(found);
     setForgotStep('reset');
   };
