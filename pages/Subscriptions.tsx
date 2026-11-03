@@ -36,14 +36,46 @@ const Subscriptions: React.FC = () => {
   };
 
   // ── calcula data de fim baseada no período do plano ───────────
-  const calcEndDate = (plan: any): Date => {
-    const end = new Date();
+  const calcEndDate = (plan: any, from?: Date): Date => {
+    const end = from ? new Date(from) : new Date();
     if (plan.period === 'MENSAL')  end.setMonth(end.getMonth() + 1);
     else if (plan.period === 'ANUAL')   end.setFullYear(end.getFullYear() + 1);
     else if (plan.period === 'SEMANAL') end.setDate(end.getDate() + 7);
     else if (plan.period === 'DIAS')    end.setDate(end.getDate() + (plan.customDays || 30));
     else end.setMonth(end.getMonth() + 1);
     return end;
+  };
+
+  // ── data local no formato YYYY-MM-DD (evita pular um dia à noite) ──
+  const ymd = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // ── RENOVAR: novo período a partir de hoje (ou do vencimento, se ainda estiver em dia) ──
+  const handleRenew = async (sub: any) => {
+    const plan = ((config as any)?.vipPlans || []).find((p: any) => p.id === sub.planId);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const endAtual = sub.endDate ? new Date(`${String(sub.endDate).split('T')[0]}T00:00:00`) : null;
+    const partida  = endAtual && endAtual > today ? endAtual : today;
+    const novoFim  = plan ? calcEndDate(plan, partida) : (() => { const d = new Date(partida); d.setMonth(d.getMonth() + 1); return d; })();
+
+    const ok = window.confirm(
+      `Renovar a assinatura de ${sub.clientName}?\n\nNovo vencimento: ${novoFim.toLocaleDateString('pt-BR')}\n(use quando o cliente já pagou o novo período)`
+    );
+    if (!ok) return;
+
+    await updateSubscription(sub.id, {
+      status:          'ATIVA',
+      endDate:         ymd(novoFim),
+      periodStartDate: ymd(new Date()),
+      cutsThisPeriod:  0,
+      usageCount:      0,
+      blockedReason:   null,
+      ...(Array.isArray(sub.memberCuts) ? { memberCuts: sub.memberCuts.map((m: any) => ({ ...m, cutsUsed: 0 })) } : {}),
+      paymentHistory: [
+        ...(sub.paymentHistory || []),
+        { id: `pay_${Date.now()}`, date: new Date().toLocaleDateString('pt-BR'), amount: plan?.price ?? sub.price, method: 'Renovação no painel', status: 'PAGO' },
+      ],
+    } as any);
   };
 
   // ── enriquece assinaturas com status computado e dias restantes
@@ -109,7 +141,10 @@ const Subscriptions: React.FC = () => {
         startDate: (formData as any).startDate,
         endDate: (formData as any).endDate,
         price: Number((formData as any).price),
-        status: (formData as any).status,
+        // Vencimento ajustado para o futuro → volta a ficar ativa
+        status: (formData as any).status === 'VENCIDA' && String((formData as any).endDate || '').split('T')[0] >= ymd(new Date())
+          ? 'ATIVA'
+          : (formData as any).status,
       });
       setEditingSub(null);
     } else {
@@ -119,11 +154,12 @@ const Subscriptions: React.FC = () => {
       planId:      formData.planId,
       planName:    plan.name,
       price:       plan.price,
-      startDate:   startDate.toISOString().split('T')[0],
-      endDate:     endDate.toISOString().split('T')[0],
+      startDate:   ymd(startDate),
+      endDate:     ymd(endDate),
       status:      'ATIVA',
       usageCount:  0,
       usageLimit:  formData.usageLimit || undefined,
+      paymentMethod: formData.paymentMethod,
       paymentHistory: [{
         id:     `pay_${Date.now()}`,
         date:   new Date().toLocaleDateString('pt-BR'),
@@ -458,11 +494,18 @@ const Subscriptions: React.FC = () => {
                       <button onClick={() => updateSubscription(sub.id, { usageCount: (sub.usageCount || 0) + 1 })}
                         className="p-3 gradiente-ouro text-black rounded-xl font-black text-[10px]">+Uso</button>
                     )}
-                    <button onClick={() => updateSubscription(sub.id, { status: sub.status === 'ATIVA' ? 'CANCELADA' : 'ATIVA' })}
-                      className={`p-3 rounded-xl text-[9px] font-black border transition-all
-                        ${isDark ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:bg-zinc-200'}`}>
-                      {sub.status === 'ATIVA' ? 'Cancelar' : 'Reativar'}
+                    <button onClick={() => handleRenew(sub)}
+                      title="Renovar: cliente pagou o novo período"
+                      className="p-3 rounded-xl text-[9px] font-black border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all">
+                      {sub.computedStatus === 'ATIVA' ? 'Renovar' : 'Reativar'}
                     </button>
+                    {sub.status === 'ATIVA' && (
+                      <button onClick={() => { if (window.confirm(`Cancelar a assinatura de ${sub.clientName}?`)) updateSubscription(sub.id, { status: 'CANCELADA' }); }}
+                        className={`p-3 rounded-xl text-[9px] font-black border transition-all
+                          ${isDark ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:bg-zinc-200'}`}>
+                        Cancelar
+                      </button>
+                    )}
                     <button onClick={() => openEditSub(sub)}
                       title="Editar assinatura"
                       className={`p-3 rounded-xl border transition-all ${isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}>
@@ -530,7 +573,7 @@ const Subscriptions: React.FC = () => {
                   <p className="text-[10px] text-amber-500 font-bold">⚠️ Nenhum plano VIP ativo. Crie um em Configurações.</p>
                 )}
                 {/* Preview do plano selecionado */}
-                {formData.planId && (() => {
+                {!editingSub && formData.planId && (() => {
                   const plan = plans.find((p: any) => p.id === formData.planId);
                   if (!plan) return null;
                   const end = calcEndDate(plan);
@@ -543,6 +586,20 @@ const Subscriptions: React.FC = () => {
                   );
                 })()}
               </div>
+
+              {/* Vencimento (só na edição) */}
+              {editingSub && (
+                <div className="space-y-2">
+                  <label className={lbl}>Vencimento</label>
+                  <input
+                    type="date"
+                    value={String((formData as any).endDate || '').split('T')[0]}
+                    onChange={e => setFormData({ ...formData, endDate: e.target.value } as any)}
+                    className={inp}
+                    style={{ colorScheme: isDark ? 'dark' : 'light' }}
+                  />
+                </div>
+              )}
 
               {/* Limite de usos */}
               <div className="space-y-2">
@@ -574,7 +631,7 @@ const Subscriptions: React.FC = () => {
             <div className="flex gap-3">
               <button onClick={() => { setShowModal(false); setEditingSub(null); }} className={btnCancel}>Cancelar</button>
               <button onClick={handleCreate} className="flex-1 gradiente-ouro text-black py-4 rounded-2xl font-black uppercase text-[9px]">
-                Criar Assinatura
+                {editingSub ? 'Salvar' : 'Criar Assinatura'}
               </button>
             </div>
           </div>
