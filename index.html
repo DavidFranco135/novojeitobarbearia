@@ -145,6 +145,13 @@
       .nj-spark { animation: nj-spark 0.95s cubic-bezier(0.15,0.7,0.3,1) both; }
       .nj-thin  { animation: nj-rev 3s linear infinite; }
       .nj-splash.is-loader .nj-spin { animation: nj-loop 1s linear infinite; }
+      /* durante loader: esconde o anel e os elementos da explosão — só o disc fica visível */
+      .nj-splash.is-loader .nj-ring,
+      .nj-splash.is-loader .nj-full,
+      .nj-splash.is-loader .nj-wave,
+      .nj-splash.is-loader .nj-halo,
+      .nj-splash.is-loader .nj-spark { opacity: 0; }
+      .nj-splash.is-loader .nj-spin  { opacity: 0.5; }
 
       @keyframes nj-spin-in { from { transform: rotate(-90deg); } to { transform: rotate(990deg); } }
       @keyframes nj-full    { 0%{opacity:0;transform:scale(1)} 20%{opacity:1;transform:scale(1.06)} 100%{opacity:1;transform:scale(1)} }
