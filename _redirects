@@ -1,2 +1,8 @@
 https://novojeitobarbearia.pages.dev/* https://novojeitobarbearia.com.br/:splat 301
+/*.png /:splat.png 200
+/*.jpg /:splat.jpg 200
+/*.ico /:splat.ico 200
+/*.json /:splat.json 200
+/*.css /:splat.css 200
+/*.tsx /:splat.tsx 200
 /* /index.html 200
