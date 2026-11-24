@@ -27,6 +27,13 @@ const App: React.FC = () => {
   // Sempre começa no dashboard — o index.html já limpa #dashboard antes do React carregar
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  // Avisa o splash que o React montou — dismiss não espera mais o Firestore
+  React.useEffect(() => {
+    if (typeof (window as any).appReady === 'function') {
+      (window as any).appReady();
+    }
+  }, []);
+
   // Atualiza a URL hash apenas quando admin/staff estiver logado
   React.useEffect(() => {
     if (user && user.role !== 'CLIENTE') {
