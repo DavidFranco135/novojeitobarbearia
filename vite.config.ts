@@ -19,6 +19,22 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
-      publicDir: 'public'
+      publicDir: 'public',
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              // Firebase separado — carrega em paralelo com o app
+              'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+              // Gráficos só carregam quando a tela de financeiro abrir
+              'recharts': ['recharts', 'react-is'],
+              // Ícones
+              'icons': ['lucide-react'],
+              // React core
+              'react-vendor': ['react', 'react-dom'],
+            }
+          }
+        }
+      }
     };
 });
