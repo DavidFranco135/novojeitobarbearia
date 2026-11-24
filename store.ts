@@ -213,9 +213,9 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
       onSnapshot(doc(db, COLLECTIONS.CONFIG, 'main'), docSnap => {
         if (docSnap.exists()) {
           const configData = docSnap.data() as ShopConfig;
-          // Usa imagens locais (servidas pelo Cloudflare CDN) em vez do ImgBB externo
-          if (configData.logo && configData.logo.includes('ibb.co')) configData.logo = '/logo.png';
-          if ((configData as any).coverImage && (configData as any).coverImage.includes('ibb.co')) (configData as any).coverImage = '/cover.jpg';
+          // Usa imagens locais (Cloudflare CDN) — substitui ImgBB ou campo vazio
+          if (!configData.logo || configData.logo.includes('ibb.co')) configData.logo = '/logo.png';
+          if (!(configData as any).coverImage || (configData as any).coverImage.includes('ibb.co')) (configData as any).coverImage = '/cover.jpg';
           setConfig(configData);
           // Avisa o splash screen que o app está pronto para mostrar
           if (typeof (window as any).appReady === 'function') (window as any).appReady();
