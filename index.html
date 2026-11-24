@@ -31,6 +31,18 @@
 
     <style>
       html, body, #root { background-color: #050505; min-height: 100vh; margin: 0; padding: 0; }
+      /* Placeholder dourado enquanto imagens carregam */
+      img:not([src=""]):not([src^="data"]) {
+        background: linear-gradient(135deg, #1a1a1a 0%, #2a2200 50%, #1a1a1a 100%);
+        background-size: 200% 200%;
+        animation: imgShimmer 1.5s ease infinite;
+      }
+      img.loaded { animation: none; background: none; }
+      @keyframes imgShimmer {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
 
       /* Splash screen visível imediatamente — antes do React */
       #splash {
@@ -80,6 +92,14 @@
     </style>
 
     <!-- Remove hash admin pages antes do React carregar para evitar tela preta -->
+    <script>
+      // Redireciona pages.dev para domínio oficial
+      (function() {
+        if (window.location.hostname === 'novojeitobarbearia.pages.dev') {
+          window.location.replace('https://novojeitobarbearia.com.br' + window.location.pathname + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
     <script>
       (function() {
         var adminPages = ['dashboard','agenda','clientes','servicos','financeiro','produtos','assinaturas','barbeiros','configuracoes','automacoes','inbox'];
