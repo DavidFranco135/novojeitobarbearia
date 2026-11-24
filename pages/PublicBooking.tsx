@@ -1205,7 +1205,7 @@ const PublicBooking: React.FC<PublicBookingProps> = ({ initialView = 'HOME' }) =
       {view === 'HOME' && (
         <div className="animate-in fade-in flex flex-col min-h-screen">
           <header className="relative h-[65vh] overflow-hidden flex flex-col items-center justify-center">
-            <img src={config.coverImage} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Capa" />
+            <img src={config.coverImage || '/cover.jpg'} onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/cover.jpg'; }} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Capa" />
             <div className={`absolute inset-0 bg-gradient-to-t ${theme === 'light' ? 'from-[#F8F9FA] via-transparent to-transparent' : 'from-[#050505] via-transparent to-transparent'}`}></div>
             <div className="absolute top-6 right-6 z-[100]"><button onClick={() => setView('LOGIN')} className="bg-[#C58A4A] text-black px-6 py-3 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl transition-all hover:scale-105 active:scale-95"><History size={16}/> PORTAL DO CLIENTE</button></div>
             <div className="relative z-20 text-center px-6 mt-10">
