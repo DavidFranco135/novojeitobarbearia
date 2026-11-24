@@ -239,7 +239,6 @@
           <img class="nj-logo" id="nj-logo"
                src="/logo.png"
                alt="Novo Jeito" />
-          <span class="nj-initial" id="nj-initial">NJ</span>
         </div>
         <!-- faíscas da explosão (8 direções) -->
         <div class="nj-spark" style="--a:0deg;   --d:28px; --s:7px; animation-delay:2.52s"></div>
@@ -258,7 +257,6 @@
       (function () {
         var splash = document.getElementById('nj-splash');
         var logo   = document.getElementById('nj-logo');
-        var initial = document.getElementById('nj-initial');
         var dismissed = false;
         var appReady = false;
         var introEnded = false;
@@ -289,7 +287,6 @@
         // Logo local carrega rápido
         logo.addEventListener('load', function () {
           logo.classList.add('is-loaded');
-          if (initial) initial.classList.add('is-hidden');
         });
 
         // Intro dura ~3.6s — depois vira spinner até o React avisar
