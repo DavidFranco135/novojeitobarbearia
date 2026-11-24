@@ -1,4 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
+
+// Proxy Cloudflare para imagens ImgBB — redimensiona, converte para WebP e cacheia na borda
+function imgSrc(url: string, width?: number): string {
+  if (!url || !url.includes('i.ibb.co')) return url;
+  return `/img?u=${encodeURIComponent(url)}${width ? `&w=${width}` : ''}`;
+}
 import { 
   Scissors, Calendar, Check, MapPin, ChevronLeft, ChevronRight, ArrowRight, Clock, User, Phone, 
   History, Sparkles, Instagram, Star, Heart, LogOut, MessageSquare, Quote, Mail, Upload, Save, Lock, Send, X, Crown, CheckCircle2, Gift, Trophy, Medal, Share2, Users, Copy, QrCode
@@ -95,10 +101,10 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme, isAdmin,
                     <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Vazia</span>
                   </div>
                 ) : album.photos.length === 1 ? (
-                  <img src={album.photos[0].url} className="w-full h-full object-cover" alt=""/>
+                  <img src={imgSrc(album.photos[0].url, 640)} className="w-full h-full object-cover" alt=""/>
                 ) : (
                   <div className="grid grid-cols-2 h-full">
-                    {album.photos.slice(0,4).map((p,i) => <img key={i} src={p.url} className="w-full h-full object-cover" alt=""/>)}
+                    {album.photos.slice(0,4).map((p,i) => <img key={i} src={imgSrc(p.url, 640)} className="w-full h-full object-cover" alt=""/>)}
                   </div>
                 )}
                 {/* Gradiente + nome sobrepostos */}
@@ -177,7 +183,7 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme, isAdmin,
               {openAlbum.photos.map((photo, idx) => (
                 <div key={idx} className="space-y-1">
                   <div className="aspect-square rounded-xl overflow-hidden cursor-pointer relative group" onClick={() => setLightboxIdx(idx)}>
-                    <img src={photo.url} alt={photo.desc||''} className="w-full h-full object-cover hover:scale-110 transition-all duration-500"/>
+                    <img src={imgSrc(photo.url, 640)} alt={photo.desc||''} className="w-full h-full object-cover hover:scale-110 transition-all duration-500"/>
                     {/* Nome da foto no hover */}
                     {photo.desc && (
                       <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -233,7 +239,7 @@ const GaleriaPublica: React.FC<GaleriaPublicaProps> = ({ albums, theme, isAdmin,
             <div className="text-center mb-3">
               <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">{lightboxIdx+1} / {photos.length}</span>
             </div>
-            <img src={photos[lightboxIdx].url} alt={photos[lightboxIdx].desc} className="w-full rounded-3xl object-contain max-h-[70vh] shadow-2xl" draggable={false}/>
+            <img src={imgSrc(photos[lightboxIdx].url, 1280)} alt={photos[lightboxIdx].desc} className="w-full rounded-3xl object-contain max-h-[70vh] shadow-2xl" draggable={false}/>
             {photos[lightboxIdx].desc && <p className="text-white font-black text-base font-display italic text-center mt-3">{photos[lightboxIdx].desc}</p>}
             {lightboxIdx > 0 && <button onClick={e => {e.stopPropagation();goPrev();}} className="absolute left-0 top-[40%] p-3 bg-black/60 text-white rounded-xl"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg></button>}
             {lightboxIdx < photos.length-1 && <button onClick={e => {e.stopPropagation();goNext();}} className="absolute right-0 top-[40%] p-3 bg-black/60 text-white rounded-xl rotate-180"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg></button>}
