@@ -101,6 +101,7 @@
         background: #000;
         box-shadow: 0 0 0 1px rgba(212,170,100,0.3), 0 0 55px -6px rgba(212,170,100,0.5);
         overflow: hidden;
+        z-index: 2;
       }
       .nj-logo {
         position: absolute; inset: 0;
@@ -114,7 +115,9 @@
         font-family: Georgia, serif; font-size: 3.6rem;
         color: #d4aa64; line-height: 1;
         text-shadow: 0 0 20px rgba(212,170,100,0.6);
+        transition: opacity 0.3s ease;
       }
+      .nj-initial.is-hidden { opacity: 0; pointer-events: none; }
       .nj-name {
         font-size: 10px; font-weight: 700; letter-spacing: 0.42em;
         text-transform: uppercase; color: #e8d4a0; padding-left: 0.42em;
@@ -279,7 +282,7 @@
         // Logo local carrega rápido
         logo.addEventListener('load', function () {
           logo.classList.add('is-loaded');
-          if (initial) initial.style.display = 'none';
+          if (initial) initial.classList.add('is-hidden');
         });
 
         // Intro dura ~3.6s — depois vira spinner até o React avisar
