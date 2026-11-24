@@ -226,7 +226,7 @@
         <!-- disco central com logo -->
         <div class="nj-disc">
           <img class="nj-logo" id="nj-logo"
-               src="https://i.ibb.co/8DjntWsL/Whats-App-Image-2026-02-23-at-23-10-52.jpg"
+               src="/logo.png"
                alt="Novo Jeito" />
           <span class="nj-initial" id="nj-initial">NJ</span>
         </div>
@@ -249,25 +249,43 @@
         var logo   = document.getElementById('nj-logo');
         var initial = document.getElementById('nj-initial');
         var dismissed = false;
+        var appReady = false;
+        var introEnded = false;
 
         function dismiss() {
           if (dismissed) return;
           dismissed = true;
           splash.classList.add('is-exit');
-          setTimeout(function () { splash.remove(); }, 650);
+          setTimeout(function () { splash && splash.remove(); }, 650);
         }
 
-        // Esconde as letras "NJ" quando a logo carregar
+        // Entra no modo spinner contínuo após a intro terminar
+        function enterLoader() {
+          introEnded = true;
+          splash.classList.remove('is-intro');
+          splash.classList.add('is-loader');
+          // Se o React já avisou que está pronto, fecha imediatamente
+          if (appReady) dismiss();
+        }
+
+        // React chama window.appReady() quando o conteúdo estiver pronto
+        window.appReady = function () {
+          appReady = true;
+          // Se a intro já acabou, fecha agora; senão espera a intro
+          if (introEnded) dismiss();
+        };
+
+        // Logo local carrega rápido
         logo.addEventListener('load', function () {
           logo.classList.add('is-loaded');
           if (initial) initial.style.display = 'none';
         });
-        logo.addEventListener('error', function () {
-          // logo falhou — mantém as letras NJ visíveis
-        });
 
-        // Fecha automaticamente após a animação completa (~3.6s) + 0.6s de pausa
-        setTimeout(dismiss, 4200);
+        // Intro dura ~3.6s — depois vira spinner até o React avisar
+        setTimeout(enterLoader, 3650);
+
+        // Segurança: fecha em 8s mesmo que o React não avise
+        setTimeout(dismiss, 8000);
 
         // Clique/toque fecha imediatamente
         splash.addEventListener('click', dismiss);

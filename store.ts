@@ -217,6 +217,8 @@ export function BarberProvider({ children }: { children?: ReactNode }) {
           if (configData.logo && configData.logo.includes('ibb.co')) configData.logo = '/logo.png';
           if ((configData as any).coverImage && (configData as any).coverImage.includes('ibb.co')) (configData as any).coverImage = '/cover.jpg';
           setConfig(configData);
+          // Avisa o splash screen que o app está pronto para mostrar
+          if (typeof (window as any).appReady === 'function') (window as any).appReady();
           const savedUser = localStorage.getItem('brb_user');
           if (savedUser) {
             const parsedUser = JSON.parse(savedUser);
